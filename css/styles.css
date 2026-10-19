@@ -1,0 +1,65 @@
+/**
+ * LayerStudio 3D (LascaStudio 3D) - Main Stylesheet
+ * Copyright (C) 2026 Norberto Martín Afonso <normaafo@gmail.com>
+ * Repository: https://github.com/nmarafo/layerstudio3D
+ *
+ * Licensed under the GNU Affero General Public License v3.0 (AGPL-3.0-or-later)
+ * with mandatory author attribution under Section 7(b).
+ */
+
+body {
+  background-color: #0b0f19;
+  color: #e2e8f0;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  overflow: hidden;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Barras de desplazamiento personalizadas */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Tarjetas de lasca y tablero en la galería inferior */
+.slice-card {
+  transition: transform 0.14s ease, border-color 0.14s ease, background-color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.slice-card:hover {
+  border-color: #64748b;
+  transform: translateY(-1px);
+}
+
+.slice-card.active {
+  border-color: #38bdf8;
+  background-color: rgba(14, 165, 233, 0.18);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
+}
+
+/* Controles deslizantes */
+input[type="range"] {
+  accent-color: #0ea5e9;
+  cursor: pointer;
+}
+
+/* Lienzos 3D y 2D */
+#viewer3D canvas,
+#canvas2D {
+  outline: none;
+  display: block;
+}

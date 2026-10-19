@@ -58,7 +58,7 @@
 
 ## 🚀 Uso Rápido
 
-1. Abran la aplicación directamente en **[https://nmarafo.github.io/layerstudio3D/](https://nmarafo.github.io/layerstudio3D/)** o ejecuten el archivo [`index.html`](index.html) en cualquier navegador moderno.
+1. Abran la aplicación directamente en **[https://nmarafo.github.io/layerstudio3D/](https://nmarafo.github.io/layerstudio3D/)** (servida desde la arquitectura modular optimizada) o la edición monolítica de archivo único en **[https://nmarafo.github.io/layerstudio3D/indexstandalone.html](https://nmarafo.github.io/layerstudio3D/indexstandalone.html)**.
 2. Carguen un modelo `.STL` / `.GLB` o seleccionen uno de los modelos de demostración en la barra superior.
 3. Ajusten las dimensiones de la pieza, el eje de corte (**X / Y / Z**) y el grosor del material o número de capas.
 4. *(Opcional)* Activen **5. Distribución en Tablero** para empaquetar todas las islas en tableros de corte y consulten la **Guía de Corte y Montaje**.
@@ -66,11 +66,26 @@
 
 ---
 
-## 📁 Estructura del Repositorio
+## 📁 Arquitectura y Estructura del Repositorio
+
+El repositorio ofrece dos modalidades sincronizadas:
+- **Versión Modular Optimizada (GitHub Pages)**: Dividida en hojas de estilo y módulos lógicos con carga diferida (`defer`) y pre-conexión CDN para un mantenimiento limpio y máximo rendimiento en navegador.
+- **Versión Monolítica Autónoma (`indexstandalone.html`)**: Un único archivo HTML autocontenido ideal para compartir por correo, usar sin servidor local o desplegar directamente en **Google Apps Script**.
 
 ```text
 layerstudio3D/
-├── index.html                  # Aplicación web completa (Single-Page Application)
+├── index.html                  # Punto de entrada principal (versión modular optimizada para GitHub Pages)
+├── indexstandalone.html        # Versión monolítica en un único archivo (Standalone / Google Apps Script)
+├── css/
+│   └── styles.css              # Estilos personalizados, temas oscuros, barras de desplazamiento e impresión
+├── js/
+│   ├── state.js                # Estado global reactivo y referencias de escena Three.js
+│   ├── viewer3d.js             # Motor 3D, cámara orbital, cargadores STL/GLB/GLTF y modelos paramétricos
+│   ├── slicer.js               # Motor geométrico de corte planar X/Y/Z, filtro de islas, extrusión y guías
+│   ├── nesting.js              # Empaquetado 2D MaxRects multi-tablero, anidado en huecos y ajuste de texto
+│   ├── modals-guide.js         # Modal de tablero individual y guía interactiva de corte y montaje (#1 -> #N)
+│   ├── viewer2d.js             # Inspector 2D interactivo en Canvas, zoom/pan, selección de islas y galería
+│   └── exporters.js            # Exportadores 1:1 (.SVG, .DXF, .STL, .ZIP) y gestión de proyectos (.lasca/.json)
 ├── LICENSE                     # Licencia GNU AGPL-3.0 con cláusula de atribución (Sección 7b)
 ├── README.md                   # Documentación técnica y guía de uso
 ├── .nojekyll                   # Configuración de servicio directo en GitHub Pages
