@@ -1768,26 +1768,65 @@ function generateIllustratedAssemblyGuideHTML() {
   ].join('\n');
 }
 
+function safeGuideBrowserDownload(blob, filename) {
+  if (typeof triggerBrowserDownload === 'function') {
+    triggerBrowserDownload(blob, filename);
+    return;
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
 function downloadIllustratedAssemblyGuideHtml() {
   const htmlContent = generateIllustratedAssemblyGuideHTML();
   const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
-  triggerBrowserDownload(blob, state.modelName + '_GUIA_ILUSTRADA_MONTAJE.html');
+  safeGuideBrowserDownload(blob, (state.modelName || 'Modelo3D') + '_GUIA_ILUSTRADA_MONTAJE.html');
 }
 
 function printIllustratedAssemblyGuide() {
   const htmlContent = generateIllustratedAssemblyGuideHTML();
   const printWin = window.open('', '_blank');
-  if (!printWin) {
-    downloadIllustratedAssemblyGuideHtml();
+  if (printWin && printWin.document) {
+    printWin.document.open();
+    printWin.document.write(htmlContent);
+    printWin.document.close();
+    setTimeout(() => {
+      printWin.focus();
+      printWin.print();
+    }, 350);
     return;
   }
-  printWin.document.open();
-  printWin.document.write(htmlContent);
-  printWin.document.close();
+  // Fallback con iframe oculto si el navegador bloquea ventanas emergentes
+  let printFrame = document.getElementById('illustratedGuidePrintFrame');
+  if (printFrame) {
+    printFrame.remove();
+  }
+  printFrame = document.createElement('iframe');
+  printFrame.id = 'illustratedGuidePrintFrame';
+  printFrame.style.position = 'fixed';
+  printFrame.style.right = '0';
+  printFrame.style.bottom = '0';
+  printFrame.style.width = '0';
+  printFrame.style.height = '0';
+  printFrame.style.border = '0';
+  document.body.appendChild(printFrame);
+  const frameDoc = printFrame.contentWindow || printFrame.contentDocument;
+  const doc = frameDoc.document || frameDoc;
+  doc.open();
+  doc.write(htmlContent);
+  doc.close();
   setTimeout(() => {
-    printWin.focus();
-    printWin.print();
-  }, 350);
+    if (printFrame.contentWindow) {
+      printFrame.contentWindow.focus();
+      printFrame.contentWindow.print();
+    }
+  }, 400);
 }
 
 // Genera el texto completo de la Guía de Corte y Montaje (para descargar en .TXT e incluir en el .ZIP)
@@ -1915,7 +1954,7 @@ function generateFullAssemblyGuideText() {
 function downloadAssemblyGuideTxt() {
   const txt = generateFullAssemblyGuideText();
   const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
-  triggerBrowserDownload(blob, state.modelName + '_GUIA_CORTE_Y_MONTAJE.txt');
+  safeGuideBrowserDownload(blob, (state.modelName || 'Modelo3D') + '_GUIA_CORTE_Y_MONTAJE.txt');
 }
 
 // ============================================================================
@@ -1934,3 +1973,24 @@ function closeCreditsModal() {
   modal.classList.add('hidden');
   modal.classList.remove('flex');
 }
+
+// Exposición explícita en window para garantizar disponibilidad global desde atributos onclick HTML
+if (typeof window !== 'undefined') {
+  window.openBoardInfoModal = openBoardInfoModal;
+  window.closeBoardInfoModal = closeBoardInfoModal;
+  window.openAssemblyGuideModal = openAssemblyGuideModal;
+  window.closeAssemblyGuideModal = closeAssemblyGuideModal;
+  window.switchAssemblyGuideTab = switchAssemblyGuideTab;
+  window.toggleGuideIllustrations = toggleGuideIllustrations;
+  window.toggleSliceAssembledCheck = toggleSliceAssembledCheck;
+  window.resetAssemblyChecklist = resetAssemblyChecklist;
+  window.jumpToSliceAndBoardFromGuide = jumpToSliceAndBoardFromGuide;
+  window.generateIllustratedAssemblyGuideHTML = generateIllustratedAssemblyGuideHTML;
+  window.downloadIllustratedAssemblyGuideHtml = downloadIllustratedAssemblyGuideHtml;
+  window.printIllustratedAssemblyGuide = printIllustratedAssemblyGuide;
+  window.generateFullAssemblyGuideText = generateFullAssemblyGuideText;
+  window.downloadAssemblyGuideTxt = downloadAssemblyGuideTxt;
+  window.openCreditsModal = openCreditsModal;
+  window.closeCreditsModal = closeCreditsModal;
+}
+
