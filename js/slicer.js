@@ -145,6 +145,23 @@ function syncConstructionModeUI() {
       : 'text-[9px] px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 font-semibold';
   }
 
+  // Ocultar opciones exclusivas de apilado (guías #N+1/#N-1 y varillas) cuando está en modo Puzzle 3D
+  const stackedOnlyBox = document.getElementById('stackedOnlyAssemblyBox');
+  if (stackedOnlyBox) stackedOnlyBox.classList.toggle('hidden', isPuzzle);
+  const modalStackedGuides = document.getElementById('modalStackedGuidesBox');
+  if (modalStackedGuides) modalStackedGuides.classList.toggle('hidden', isPuzzle);
+  const nestGuideRow = document.getElementById('nestEngraveGuideTypeRow');
+  if (nestGuideRow) nestGuideRow.classList.toggle('hidden', isPuzzle);
+  const legNext = document.getElementById('legendNextGuide');
+  const legPrev = document.getElementById('legendPrevGuide');
+  const legSlots = document.getElementById('legendPuzzleSlots');
+  if (legNext) legNext.classList.toggle('hidden', isPuzzle);
+  if (legPrev) legPrev.classList.toggle('hidden', isPuzzle);
+  if (legSlots) {
+    legSlots.classList.toggle('hidden', !isPuzzle);
+    legSlots.classList.toggle('flex', isPuzzle);
+  }
+
   ['xy', 'xz', 'yz'].forEach((pair) => {
     const b = document.getElementById('puzzleAxesBtn_' + pair);
     if (!b) return;

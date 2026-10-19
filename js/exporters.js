@@ -166,7 +166,7 @@ function generateSliceSVG(slice, idx) {
   const rodRadius = (state.rodDiameter / 2).toFixed(4);
   const displayCode = slice.puzzleCode ? slice.puzzleCode : ('#' + (idx + 1));
 
-  // Evita que Google Apps Script procese <?xml como etiqueta de plantilla
+  // Construye la cabecera XML estándar del documento SVG
   const xmlHeader = '<' + '?xml version="1.0" encoding="UTF-8" standalone="no"?' + '>';
 
   const lines = [
@@ -581,7 +581,7 @@ function generateSliceSTL(slice, idx) {
   return out.join('\n');
 }
 
-// Descarga compatible con iframes de Google Apps Script
+// Descarga de archivos en el navegador mediante Blob URL
 function triggerBrowserDownload(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

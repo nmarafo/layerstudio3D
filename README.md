@@ -3,7 +3,6 @@
 [![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-Live%20App-0ea5e9.svg?logo=github)](https://nmarafo.github.io/layerstudio3D/)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Three.js](https://img.shields.io/badge/Three.js-r128-black.svg?logo=three.js)](https://threejs.org/)
-[![Apps Script Ready](https://img.shields.io/badge/Google%20Apps%20Script-Ready-34a853.svg?logo=google)](https://nmarafo.github.io/layerstudio3D/)
 
 **LayerStudio 3D** es una aplicación web interactiva de laminado multicapa (**X / Y / Z**) diseñada para convertir modelos tridimensionales (`.STL`, `.GLB`, `.GLTF`) en secuencias de láminas («lascas») listas para **Corte Láser / CNC** (`.SVG` y `.DXF` a escala real `1:1` en milímetros) e **Impresión 3D** (`.STL` extruido por capa), incluyendo empaquetado automático en tableros (**Nesting 2D MaxRects**) y guías paso a paso de ensamblaje.
 
@@ -60,9 +59,9 @@
 
 1. Abran la aplicación directamente en **[https://nmarafo.github.io/layerstudio3D/](https://nmarafo.github.io/layerstudio3D/)** (servida desde la arquitectura modular optimizada) o la edición monolítica de archivo único en **[https://nmarafo.github.io/layerstudio3D/indexstandalone.html](https://nmarafo.github.io/layerstudio3D/indexstandalone.html)**.
 2. Carguen un modelo `.STL` / `.GLB` o seleccionen uno de los modelos de demostración en la barra superior.
-3. Ajusten las dimensiones de la pieza, el eje de corte (**X / Y / Z**) y el grosor del material o número de capas.
-4. *(Opcional)* Activen **5. Distribución en Tablero** para empaquetar todas las islas en tableros de corte y consulten la **Guía de Corte y Montaje**.
-5. Descarguen la lasca/tablero actual en `.SVG`, `.DXF` o `.STL`, o pulsen **Exportar .ZIP** para descargar el paquete completo de fabricación junto con el archivo `LEEME_GUIA_MONTAJE.txt`.
+3. Ajusten las dimensiones de la pieza, el sistema constructivo (**Apilado 1 Eje** o **Puzzle 3D Encajable**) y el grosor del material o número de capas.
+4. *(Opcional)* Activen **5. Distribución en Tablero** para empaquetar todas las islas en tableros de corte y consulten la **🛠️ Guía Ilustrada**.
+5. Descarguen la lasca/tablero actual en `.SVG`, `.DXF` o `.STL`, o pulsen **Exportar .ZIP** para descargar el paquete completo de fabricación junto con la guía ilustrada `.HTML` y `.TXT`.
 
 ---
 
@@ -70,12 +69,12 @@
 
 El repositorio ofrece dos modalidades sincronizadas:
 - **Versión Modular Optimizada (GitHub Pages)**: Dividida en hojas de estilo y módulos lógicos con carga diferida (`defer`) y pre-conexión CDN para un mantenimiento limpio y máximo rendimiento en navegador.
-- **Versión Monolítica Autónoma (`indexstandalone.html`)**: Un único archivo HTML autocontenido ideal para compartir por correo, usar sin servidor local o desplegar directamente en **Google Apps Script**.
+- **Versión Monolítica Autónoma (`indexstandalone.html`)**: Un único archivo HTML autocontenido ideal para compartir o ejecutar localmente sin servidor.
 
 ```text
 layerstudio3D/
 ├── index.html                  # Punto de entrada principal (versión modular optimizada para GitHub Pages)
-├── indexstandalone.html        # Versión monolítica en un único archivo (Standalone / Google Apps Script)
+├── indexstandalone.html        # Versión monolítica autocontenida en un único archivo HTML
 ├── css/
 │   └── styles.css              # Estilos personalizados, temas oscuros, barras de desplazamiento e impresión
 ├── js/

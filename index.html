@@ -35,68 +35,63 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
 
   <!-- Hoja de estilos principal -->
-  <link rel="stylesheet" href="css/styles.css?v=2.5.1" />
+  <link rel="stylesheet" href="css/styles.css?v=2.6.0" />
 
   <!-- Módulos de la aplicación (cargados en orden de dependencia con defer y cache-busting) -->
-  <script src="js/state.js?v=2.5.1" defer></script>
-  <script src="js/viewer3d.js?v=2.5.1" defer></script>
-  <script src="js/slicer.js?v=2.5.1" defer></script>
-  <script src="js/nesting.js?v=2.5.1" defer></script>
-  <script src="js/modals-guide.js?v=2.5.1" defer></script>
-  <script src="js/viewer2d.js?v=2.5.1" defer></script>
-  <script src="js/exporters.js?v=2.5.1" defer></script>
+  <script src="js/state.js?v=2.6.0" defer></script>
+  <script src="js/viewer3d.js?v=2.6.0" defer></script>
+  <script src="js/slicer.js?v=2.6.0" defer></script>
+  <script src="js/nesting.js?v=2.6.0" defer></script>
+  <script src="js/modals-guide.js?v=2.6.0" defer></script>
+  <script src="js/viewer2d.js?v=2.6.0" defer></script>
+  <script src="js/exporters.js?v=2.6.0" defer></script>
 </head>
 <body class="h-screen w-screen flex flex-col">
 
   <!-- BARRA SUPERIOR -->
-  <header class="h-14 bg-slate-900/95 border-b border-slate-800 px-4 flex items-center justify-between shrink-0 z-20">
-    <div class="flex items-center gap-3">
-      <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-sky-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-sky-500/20 font-bold text-white text-lg">
+  <header class="h-14 bg-slate-900/95 border-b border-slate-800 px-4 flex items-center justify-between gap-3 shrink-0 z-20">
+    <div class="flex items-center gap-3 min-w-0">
+      <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-sky-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-sky-500/20 font-bold text-white text-base shrink-0">
         L3D
       </div>
-      <div>
-        <div class="flex items-center gap-2 flex-wrap">
-          <h1 class="font-bold text-sm tracking-wide text-white">LayerStudio 3D</h1>
-          <span class="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/30 font-medium">Apps Script Ready</span>
-          <a href="indexstandalone.html" target="_blank" rel="noopener" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-medium transition" title="Abrir versión autocontenida en un único archivo (indexstandalone.html)">
-            📄 Standalone
-          </a>
-          <button onclick="openCreditsModal()" class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 font-medium transition flex items-center gap-1" title="Ver autoría, licencia GNU AGPL-3.0 y redes sociales">
-            <span>© Norberto Martín Afonso · AGPL-3.0</span>
-          </button>
-        </div>
-        <p class="text-[11px] text-slate-400">Laminador multicapa X/Y/Z para Corte Láser (SVG/DXF) e Impresión 3D (STL)</p>
+      <div class="min-w-0">
+        <h1 class="font-bold text-sm tracking-wide text-white truncate">LayerStudio 3D</h1>
+        <p class="text-[11px] text-slate-400 truncate">Laminador multicapa y Puzzle 3D encajable para Corte Láser (SVG/DXF) e Impresión 3D (STL)</p>
       </div>
     </div>
 
-    <!-- Controles de Proyecto y Carga -->
-    <div class="flex items-center gap-2">
-      <input type="file" id="fileInput3D" accept=".stl,.glb,.gltf" class="hidden" />
-      <button onclick="document.getElementById('fileInput3D').click()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-medium text-slate-200 flex items-center gap-1.5 transition">
-        <span>📂 Cargar .STL / .GLB</span>
-      </button>
+    <!-- Controles de Modelo, Proyecto y Acciones Principales -->
+    <div class="flex items-center gap-2 shrink-0">
+      <!-- Grupo Modelo 3D -->
+      <div class="flex items-center bg-slate-800/90 border border-slate-700 rounded-lg p-0.5">
+        <input type="file" id="fileInput3D" accept=".stl,.glb,.gltf" class="hidden" />
+        <button onclick="document.getElementById('fileInput3D').click()" class="px-2.5 py-1 rounded-md hover:bg-slate-700 text-xs font-medium text-slate-200 flex items-center gap-1.5 transition" title="Cargar archivo 3D (.STL, .GLB, .GLTF)">
+          <span>📂 Cargar 3D</span>
+        </button>
+        <div class="h-4 w-px bg-slate-700 mx-0.5"></div>
+        <select id="presetSelect" onchange="loadPresetModel(this.value)" class="px-2 py-1 rounded-md bg-transparent hover:bg-slate-700 text-xs text-slate-200 outline-none cursor-pointer" title="Modelos 3D de demostración">
+          <option value="torus" class="bg-slate-900">Ejemplo: Nudo Toroidal</option>
+          <option value="vase" class="bg-slate-900">Ejemplo: Jarrón Hueco</option>
+          <option value="gear" class="bg-slate-900">Ejemplo: Engranaje Mecánico</option>
+          <option value="crystal" class="bg-slate-900">Ejemplo: Cristal Facetado</option>
+        </select>
+      </div>
 
-      <select id="presetSelect" onchange="loadPresetModel(this.value)" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-slate-200 outline-none">
-        <option value="torus">Modelo: Nudo Toroidal</option>
-        <option value="vase">Modelo: Jarrón Hueco</option>
-        <option value="gear">Modelo: Engranaje Mecánico</option>
-        <option value="crystal">Modelo: Cristal Facetado</option>
-      </select>
+      <!-- Grupo Proyecto (.lasca) -->
+      <div class="flex items-center bg-slate-800/90 border border-slate-700 rounded-lg p-0.5">
+        <input type="file" id="fileInputProject" accept=".lasca,.json" class="hidden" />
+        <button onclick="document.getElementById('fileInputProject').click()" class="px-2.5 py-1 rounded-md hover:bg-slate-700 text-xs text-slate-300 transition" title="Abrir proyecto guardado (.lasca)">
+          📥 Abrir
+        </button>
+        <div class="h-4 w-px bg-slate-700 mx-0.5"></div>
+        <button onclick="exportProjectFile()" class="px-2.5 py-1 rounded-md hover:bg-slate-700 text-xs text-slate-300 transition" title="Guardar configuración y proyecto (.lasca)">
+          💾 Guardar
+        </button>
+      </div>
 
-      <div class="h-5 w-px bg-slate-800 mx-1"></div>
-
-      <input type="file" id="fileInputProject" accept=".lasca,.json" class="hidden" />
-      <button onclick="document.getElementById('fileInputProject').click()" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-slate-300 transition" title="Importar proyecto .lasca">
-        📥 Abrir Proyecto
-      </button>
-      <button onclick="exportProjectFile()" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-slate-300 transition" title="Guardar proyecto .lasca">
-        💾 Guardar Proyecto
-      </button>
-
-      <div class="h-5 w-px bg-slate-800 mx-1"></div>
-
-      <button onclick="openCreditsModal()" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-indigo-500/40 text-xs font-medium text-indigo-300 hover:text-indigo-200 transition flex items-center gap-1.5" title="Autoría, licencia GNU AGPL-3.0 y redes sociales">
-        <span>👤 Créditos</span>
+      <!-- Acciones Globales de Salida -->
+      <button onclick="openAssemblyGuideModal()" class="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-xs font-semibold text-amber-300 transition flex items-center gap-1.5" title="Abrir Guía Técnica Ilustrada de Corte y Montaje paso a paso">
+        <span>🛠️ Guía Ilustrada</span>
       </button>
 
       <button onclick="openExportModal()" class="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-xs font-semibold text-white shadow-lg shadow-sky-500/20 transition flex items-center gap-1.5">
@@ -109,27 +104,52 @@
   <div class="flex-1 flex overflow-hidden">
 
     <!-- PANEL IZQUIERDO: PARÁMETROS -->
-    <aside class="w-80 bg-slate-900/90 border-r border-slate-800 flex flex-col overflow-y-auto shrink-0 p-3.5 space-y-4">
+    <aside class="w-80 bg-slate-900/90 border-r border-slate-800 flex flex-col overflow-y-auto shrink-0 p-3.5 space-y-3.5">
 
       <!-- 1. DIMENSIONES DE LA PIEZA -->
       <div class="bg-slate-800/50 border border-slate-700/70 rounded-xl p-3 space-y-2.5">
         <div class="flex items-center justify-between">
-          <h2 class="text-xs font-bold uppercase tracking-wider text-sky-400">1. Tamaño de la Pieza</h2>
-          <div class="flex items-center gap-1 bg-slate-900 rounded-md p-0.5 border border-slate-700">
-            <button onclick="setDisplayUnit('mm')" id="unitBtn_mm" class="px-2 py-0.5 text-[10px] rounded font-bold bg-sky-600 text-white">mm</button>
-            <button onclick="setDisplayUnit('cm')" id="unitBtn_cm" class="px-2 py-0.5 text-[10px] rounded font-bold text-slate-400 hover:text-white">cm</button>
-            <button onclick="setDisplayUnit('m')" id="unitBtn_m" class="px-2 py-0.5 text-[10px] rounded font-bold text-slate-400 hover:text-white">m</button>
+          <div class="flex items-center gap-2">
+            <h2 class="text-xs font-bold uppercase tracking-wider text-sky-400">1. Dimensiones</h2>
+            <span id="unitLabelDims" class="hidden">mm</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <label class="flex items-center gap-1 text-[11px] text-slate-300 cursor-pointer" title="Mantener proporción al escalar">
+              <input type="checkbox" id="lockAspectCheckbox" checked class="rounded accent-sky-500" />
+              <span>🔒 Proporcional</span>
+            </label>
+            <div class="flex items-center gap-0.5 bg-slate-900 rounded-md p-0.5 border border-slate-700">
+              <button onclick="setDisplayUnit('mm')" id="unitBtn_mm" class="px-1.5 py-0.5 text-[10px] rounded font-bold bg-sky-600 text-white">mm</button>
+              <button onclick="setDisplayUnit('cm')" id="unitBtn_cm" class="px-1.5 py-0.5 text-[10px] rounded font-bold text-slate-400 hover:text-white">cm</button>
+              <button onclick="setDisplayUnit('m')" id="unitBtn_m" class="px-1.5 py-0.5 text-[10px] rounded font-bold text-slate-400 hover:text-white">m</button>
+            </div>
           </div>
         </div>
 
-        <!-- Entrada rápida dinámica (ej: 2m, 150cm, 450mm) -->
-        <div>
-          <label class="text-[11px] text-slate-400 block mb-1">Tamaño máx. (admite ej: <code class="text-sky-300">2m</code>, <code class="text-sky-300">80cm</code>, <code class="text-sky-300">500mm</code>)</label>
-          <div class="flex gap-1.5">
-            <input type="text" id="quickSizeInput" value="120mm" onkeydown="if(event.key==='Enter') applyQuickSizeInput()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-white focus:border-sky-500 outline-none" />
-            <button onclick="applyQuickSizeInput()" class="px-2.5 py-1 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-semibold shrink-0">Aplicar</button>
+        <!-- Cotas X, Y, Z directas -->
+        <div class="grid grid-cols-3 gap-1.5">
+          <div>
+            <span class="text-[10px] text-rose-400 font-bold block mb-0.5">Ancho X</span>
+            <input type="number" id="dimInputX" step="any" min="0.1" onchange="onAxisDimChange('x', this.value)" class="w-full bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-xs text-white" />
           </div>
-          <div class="flex gap-1 mt-1.5">
+          <div>
+            <span class="text-[10px] text-emerald-400 font-bold block mb-0.5">Fondo Y</span>
+            <input type="number" id="dimInputY" step="any" min="0.1" onchange="onAxisDimChange('y', this.value)" class="w-full bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-xs text-white" />
+          </div>
+          <div>
+            <span class="text-[10px] text-sky-400 font-bold block mb-0.5">Alto Z</span>
+            <input type="number" id="dimInputZ" step="any" min="0.1" onchange="onAxisDimChange('z', this.value)" class="w-full bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-xs text-white" />
+          </div>
+        </div>
+
+        <!-- Escala rápida del lado mayor -->
+        <div class="pt-2 border-t border-slate-700/60 space-y-1.5">
+          <div class="flex items-center gap-1.5">
+            <span class="text-[11px] text-slate-400 shrink-0">Lado máx.:</span>
+            <input type="text" id="quickSizeInput" value="120mm" onkeydown="if(event.key==='Enter') applyQuickSizeInput()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white focus:border-sky-500 outline-none" title="Ej: 150mm, 45cm, 1.5m" />
+            <button onclick="applyQuickSizeInput()" class="px-2.5 py-1 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-semibold shrink-0">Escalar</button>
+          </div>
+          <div class="flex gap-1">
             <button onclick="setMaxDimensionMM(100)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300">10cm</button>
             <button onclick="setMaxDimensionMM(500)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300">50cm</button>
             <button onclick="setMaxDimensionMM(1000)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300">1m</button>
@@ -137,70 +157,33 @@
             <button onclick="setMaxDimensionMM(3000)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300">3m</button>
           </div>
         </div>
-
-        <!-- Cotas X, Y, Z -->
-        <div class="pt-1 border-t border-slate-700/60">
-          <div class="flex items-center justify-between mb-1.5">
-            <span class="text-[11px] text-slate-400">Dimensiones (<span id="unitLabelDims">mm</span>)</span>
-            <label class="flex items-center gap-1 text-[11px] text-slate-300 cursor-pointer">
-              <input type="checkbox" id="lockAspectCheckbox" checked class="rounded accent-sky-500" />
-              <span>🔒 Proporcional</span>
-            </label>
-          </div>
-          <div class="grid grid-cols-3 gap-1.5">
-            <div>
-              <span class="text-[10px] text-rose-400 font-bold block mb-0.5">Ancho X</span>
-              <input type="number" id="dimInputX" step="any" min="0.1" onchange="onAxisDimChange('x', this.value)" class="w-full bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-xs text-white" />
-            </div>
-            <div>
-              <span class="text-[10px] text-emerald-400 font-bold block mb-0.5">Fondo Y</span>
-              <input type="number" id="dimInputY" step="any" min="0.1" onchange="onAxisDimChange('y', this.value)" class="w-full bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-xs text-white" />
-            </div>
-            <div>
-              <span class="text-[10px] text-sky-400 font-bold block mb-0.5">Alto Z</span>
-              <input type="number" id="dimInputZ" step="any" min="0.1" onchange="onAxisDimChange('z', this.value)" class="w-full bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-xs text-white" />
-            </div>
-          </div>
-        </div>
       </div>
 
-      <!-- 2. EJE, MODALIDAD Y PARÁMETROS DE LAMINADO / PUZZLE 3D -->
-      <div class="bg-slate-800/50 border border-slate-700/70 rounded-xl p-3 space-y-3">
-        <div class="flex items-center justify-between">
-          <h2 class="text-xs font-bold uppercase tracking-wider text-sky-400">2. Modalidad y Laminado</h2>
-          <span id="constructionModeBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 font-semibold">Apilado 1 Eje</span>
-        </div>
+      <!-- 2. SISTEMA CONSTRUCTIVO Y PARÁMETROS DE LAMINADO / PUZZLE 3D -->
+      <div class="bg-slate-800/50 border border-slate-700/70 rounded-xl p-3 space-y-2.5">
+        <h2 class="text-xs font-bold uppercase tracking-wider text-sky-400">2. Sistema Constructivo</h2>
 
         <!-- Selector de Modalidad: Apilado 1 Eje vs Puzzle 3D Encajable (Waffle sin pegamento) -->
-        <div>
-          <label class="text-[11px] text-slate-400 block mb-1">Sistema Constructivo</label>
-          <div class="grid grid-cols-2 gap-1.5">
-            <button onclick="setConstructionMode('stacked')" id="constModeBtn_stacked" class="py-1.5 px-2 rounded-lg border border-sky-500 bg-sky-500/20 text-[11px] font-bold text-sky-300 transition flex items-center justify-center gap-1" title="Capas paralelas en un único eje para apilar con pegamento o varillas">
-              <span>🧱 Apilado (1 Eje)</span>
-            </button>
-            <button onclick="setConstructionMode('puzzle3d')" id="constModeBtn_puzzle3d" class="py-1.5 px-2 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 text-[11px] font-bold text-amber-300 transition flex items-center justify-center gap-1" title="Costillas en 2 ejes perpendiculares con ranuras automáticas de encaje a media madera sin pegamento (poliexpan, cartón pluma, MDF)">
-              <span>🧩 Puzzle 3D (Sin cola)</span>
-            </button>
-          </div>
+        <div class="grid grid-cols-2 gap-1.5">
+          <button onclick="setConstructionMode('stacked')" id="constModeBtn_stacked" class="py-1.5 px-2 rounded-lg border border-sky-500 bg-sky-500/20 text-[11px] font-bold text-sky-300 transition flex items-center justify-center gap-1" title="Capas paralelas en un único eje para apilar con pegamento o varillas">
+            <span>🧱 Apilado (1 Eje)</span>
+          </button>
+          <button onclick="setConstructionMode('puzzle3d')" id="constModeBtn_puzzle3d" class="py-1.5 px-2 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 text-[11px] font-bold text-amber-300 transition flex items-center justify-center gap-1" title="Costillas en 2 ejes perpendiculares con ranuras automáticas de encaje a media madera sin pegamento (poliexpan, cartón pluma, MDF)">
+            <span>🧩 Puzzle 3D (Sin cola)</span>
+          </button>
         </div>
 
         <!-- CONTROLES DE MODO APILADO (1 EJE) -->
-        <div id="stackedControlsBox" class="space-y-3">
-          <div>
-            <label class="text-[11px] text-slate-400 block mb-1">Eje de Corte Perpendicular</label>
-            <div class="grid grid-cols-3 gap-1.5">
-              <button onclick="setSliceAxis('x')" id="axisBtn_x" class="py-1.5 rounded-lg border border-slate-700 bg-slate-900 text-xs font-bold text-rose-400 hover:bg-slate-800 transition">Eje X</button>
-              <button onclick="setSliceAxis('y')" id="axisBtn_y" class="py-1.5 rounded-lg border border-slate-700 bg-slate-900 text-xs font-bold text-emerald-400 hover:bg-slate-800 transition">Eje Y</button>
-              <button onclick="setSliceAxis('z')" id="axisBtn_z" class="py-1.5 rounded-lg border border-sky-500 bg-sky-500/20 text-xs font-bold text-sky-300 transition">Eje Z</button>
-            </div>
+        <div id="stackedControlsBox" class="space-y-2.5 pt-1">
+          <div class="grid grid-cols-3 gap-1.5">
+            <button onclick="setSliceAxis('x')" id="axisBtn_x" class="py-1.5 rounded-lg border border-slate-700 bg-slate-900 text-xs font-bold text-rose-400 hover:bg-slate-800 transition">Eje X</button>
+            <button onclick="setSliceAxis('y')" id="axisBtn_y" class="py-1.5 rounded-lg border border-slate-700 bg-slate-900 text-xs font-bold text-emerald-400 hover:bg-slate-800 transition">Eje Y</button>
+            <button onclick="setSliceAxis('z')" id="axisBtn_z" class="py-1.5 rounded-lg border border-sky-500 bg-sky-500/20 text-xs font-bold text-sky-300 transition">Eje Z</button>
           </div>
 
-          <div>
-            <label class="text-[11px] text-slate-400 block mb-1">Modo de Cálculo</label>
-            <div class="grid grid-cols-2 gap-1.5">
-              <button onclick="setSliceMode('count')" id="modeBtn_count" class="py-1 rounded-md border border-sky-500 bg-sky-500/20 text-[11px] font-semibold text-sky-300">Por Nº Capas</button>
-              <button onclick="setSliceMode('thickness')" id="modeBtn_thickness" class="py-1 rounded-md border border-slate-700 bg-slate-900 text-[11px] font-semibold text-slate-400">Por Grosor (mm)</button>
-            </div>
+          <div class="grid grid-cols-2 gap-1.5">
+            <button onclick="setSliceMode('count')" id="modeBtn_count" class="py-1 rounded-md border border-sky-500 bg-sky-500/20 text-[11px] font-semibold text-sky-300">Por Nº Capas</button>
+            <button onclick="setSliceMode('thickness')" id="modeBtn_thickness" class="py-1 rounded-md border border-slate-700 bg-slate-900 text-[11px] font-semibold text-slate-400">Por Grosor (mm)</button>
           </div>
 
           <div id="countControlBox">
@@ -225,17 +208,13 @@
           </div>
 
           <div class="text-[11px] text-slate-400 bg-slate-900/70 rounded-lg p-2 border border-slate-800 flex justify-between">
-            <span>Grosor por lasca:</span>
+            <span>Grosor resultante:</span>
             <span id="computedThicknessInfo" class="text-sky-300 font-semibold">5.00 mm</span>
           </div>
         </div>
 
         <!-- CONTROLES DE MODO PUZZLE 3D ENCAJABLE (2 EJES CON RANURAS A MEDIA MADERA SIN PEGAMENTO) -->
         <div id="puzzle3dControlsBox" class="hidden space-y-2.5 bg-slate-900/80 border border-amber-500/35 rounded-xl p-2.5">
-          <p class="text-[10px] text-slate-300 leading-relaxed">
-            Genera costillas ortogonales en <strong>2 ejes</strong> con <strong>ranuras automáticas a mitad de cruce</strong> para ensamblar a presión sin pegamento (ideal para poliexpan, cartón pluma, MDF o metacrilato).
-          </p>
-
           <div>
             <label class="text-[10px] text-amber-300 font-bold uppercase block mb-1">Ejes de Cruce (Costillas A × B)</label>
             <div class="grid grid-cols-3 gap-1">
@@ -271,7 +250,7 @@
 
           <div class="space-y-1.5 pt-1 border-t border-slate-800">
             <div class="flex items-center justify-between text-[11px]">
-              <span class="text-slate-300">Grosor plancha/poliexpan (mm):</span>
+              <span class="text-slate-300">Grosor material (mm):</span>
               <input type="number" id="puzzleThicknessInput" value="5.0" min="0.5" max="80" step="0.5" onchange="onPuzzleSlotParamsChange()" class="w-16 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-amber-300 font-bold" />
             </div>
             <div class="grid grid-cols-4 gap-1">
@@ -293,9 +272,9 @@
         </div>
       </div>
 
-      <!-- 3. VISUALIZACIÓN 3D, GUÍA DE PEGADO Y VARILLAS -->
+      <!-- 3. VISUALIZACIÓN 3D, GUÍAS Y SUJECIÓN POR PRESIÓN -->
       <div class="bg-slate-800/50 border border-slate-700/70 rounded-xl p-3 space-y-2.5">
-        <h2 class="text-xs font-bold uppercase tracking-wider text-sky-400">3. Vista 3D y Ensamblaje</h2>
+        <h2 class="text-xs font-bold uppercase tracking-wider text-sky-400">3. Vista 3D y Acabado de Corte</h2>
 
         <div>
           <div class="flex justify-between text-xs mb-1">
@@ -307,70 +286,72 @@
 
         <div class="flex flex-col gap-1.5 pt-1">
           <label class="flex items-center justify-between text-xs text-slate-300 cursor-pointer">
-            <span>Mostrar malla original fantasma</span>
+            <span>Mostrar malla 3D fantasma</span>
             <input type="checkbox" id="showGhostCheck" checked onchange="toggleGhostMesh(this.checked)" class="accent-sky-500" />
           </label>
           <label class="flex items-center justify-between text-xs text-slate-300 cursor-pointer">
-            <span>Aislar solo lasca activa en 3D</span>
+            <span>Aislar pieza activa en 3D</span>
             <input type="checkbox" id="isolateSliceCheck" onchange="toggleIsolateSlice(this.checked)" class="accent-sky-500" />
           </label>
           <label class="flex items-center justify-between text-xs text-slate-300 cursor-pointer">
-            <span>Incluir etiquetas de grabado en SVG</span>
+            <span>Grabar código de pieza (#N / X1)</span>
             <input type="checkbox" id="includeLabelsCheck" checked onchange="setIncludeLabels(this.checked)" class="accent-sky-500" />
           </label>
         </div>
 
-        <!-- CONTROL DE GUÍAS DE PEGADO: LÁMINA SUPERIOR (#N+1) E INFERIOR (#N-1) -->
-        <div class="pt-2 border-t border-slate-700/60 space-y-2">
-          <label class="flex items-center justify-between text-xs text-amber-300 font-medium cursor-pointer" title="Dibuja dentro del contorno actual la silueta de la lámina que va pegada encima (#N+1)">
-            <span>Guía lámina encima (#N+1)</span>
-            <input type="checkbox" id="includeNextGuideCheck" checked onchange="setIncludeNextGuide(this.checked)" class="accent-amber-500" />
-          </label>
+        <!-- CONTROLES EXCLUSIVOS DE APILADO 1 EJE: GUÍAS DE PEGADO (#N+1 / #N-1) Y VARILLAS -->
+        <div id="stackedOnlyAssemblyBox" class="space-y-2.5">
+          <div class="pt-2 border-t border-slate-700/60 space-y-2">
+            <label class="flex items-center justify-between text-xs text-amber-300 font-medium cursor-pointer" title="Dibuja dentro del contorno actual la silueta de la lámina que va pegada encima (#N+1)">
+              <span>Guía lámina encima (#N+1)</span>
+              <input type="checkbox" id="includeNextGuideCheck" checked onchange="setIncludeNextGuide(this.checked)" class="accent-amber-500" />
+            </label>
 
-          <label class="flex items-center justify-between text-xs text-fuchsia-300 font-medium cursor-pointer" title="Dibuja dentro del contorno actual la silueta de la lámina que va pegada debajo (#N-1) con otro motivo">
-            <span>Guía lámina debajo (#N-1)</span>
-            <input type="checkbox" id="includePrevGuideCheck" checked onchange="setIncludePrevGuide(this.checked)" class="accent-fuchsia-500" />
-          </label>
+            <label class="flex items-center justify-between text-xs text-fuchsia-300 font-medium cursor-pointer" title="Dibuja dentro del contorno actual la silueta de la lámina que va pegada debajo (#N-1) con otro motivo">
+              <span>Guía lámina debajo (#N-1)</span>
+              <input type="checkbox" id="includePrevGuideCheck" checked onchange="setIncludePrevGuide(this.checked)" class="accent-fuchsia-500" />
+            </label>
 
-          <div id="nextGuideOptionsBox" class="bg-slate-900/80 border border-slate-800 rounded-lg p-2 space-y-1.5">
-            <div class="flex items-center justify-between text-[11px]">
-              <span class="text-amber-300/90">Trazo Sup. (#N+1):</span>
-              <select id="guideUpperStyleSelect" onchange="onGuideSettingsChange()" class="bg-slate-800 border border-slate-700 rounded px-1.5 py-0.5 text-[11px] text-amber-300 outline-none">
-                <option value="solid" selected>Continuo rápido (———)</option>
-                <option value="dashed">Guiones (— — —)</option>
+            <div id="nextGuideOptionsBox" class="bg-slate-900/80 border border-slate-800 rounded-lg p-2 space-y-1.5">
+              <div class="flex items-center justify-between text-[11px]">
+                <span class="text-amber-300/90">Trazo Sup. (#N+1):</span>
+                <select id="guideUpperStyleSelect" onchange="onGuideSettingsChange()" class="bg-slate-800 border border-slate-700 rounded px-1.5 py-0.5 text-[11px] text-amber-300 outline-none">
+                  <option value="solid" selected>Continuo rápido (———)</option>
+                  <option value="dashed">Guiones (— — —)</option>
+                </select>
+              </div>
+              <div class="flex items-center justify-between text-[11px]">
+                <span class="text-fuchsia-300/90">Trazo Inf. (#N-1):</span>
+                <select id="guideLowerStyleSelect" onchange="onGuideSettingsChange()" class="bg-slate-800 border border-slate-700 rounded px-1.5 py-0.5 text-[11px] text-fuchsia-300 outline-none">
+                  <option value="solid" selected>Continuo rápido (———)</option>
+                  <option value="dotted">Punteado (· · · ·)</option>
+                  <option value="dashdot">Raya-Punto (— · —)</option>
+                </select>
+              </div>
+              <label class="flex items-center justify-between text-[11px] text-slate-300 cursor-pointer">
+                <span>Solo contorno exterior en guías</span>
+                <input type="checkbox" id="guideOnlyOuterCheck" onchange="onGuideSettingsChange()" class="accent-amber-500" />
+              </label>
+              <label class="flex items-center justify-between text-[11px] text-slate-300 cursor-pointer" title="Recorta las líneas guía que sobresalgan fuera de la lasca actual">
+                <span>Recortar guías al borde de lasca</span>
+                <input type="checkbox" id="guideClipCheck" checked onchange="onGuideSettingsChange()" class="accent-amber-500" />
+              </label>
+            </div>
+          </div>
+
+          <div class="pt-2 border-t border-slate-700/60 space-y-1.5">
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-slate-300">Perforaciones guía (varilla):</span>
+              <select id="rodCountSelect" onchange="onRodSettingsChange()" class="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-white">
+                <option value="0">Sin varillas</option>
+                <option value="1">1 Central</option>
+                <option value="2">2 Simétricas</option>
               </select>
             </div>
-            <div class="flex items-center justify-between text-[11px]">
-              <span class="text-fuchsia-300/90">Trazo Inf. (#N-1):</span>
-              <select id="guideLowerStyleSelect" onchange="onGuideSettingsChange()" class="bg-slate-800 border border-slate-700 rounded px-1.5 py-0.5 text-[11px] text-fuchsia-300 outline-none">
-                <option value="solid" selected>Continuo rápido (———)</option>
-                <option value="dotted">Punteado (· · · ·)</option>
-                <option value="dashdot">Raya-Punto (— · —)</option>
-              </select>
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-slate-400">Diámetro varilla (mm):</span>
+              <input type="number" id="rodDiameterInput" value="4" min="1" max="50" step="0.5" onchange="onRodSettingsChange()" class="w-16 bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-right text-white" />
             </div>
-            <label class="flex items-center justify-between text-[11px] text-slate-300 cursor-pointer">
-              <span>Solo contorno exterior en guías</span>
-              <input type="checkbox" id="guideOnlyOuterCheck" onchange="onGuideSettingsChange()" class="accent-amber-500" />
-            </label>
-            <label class="flex items-center justify-between text-[11px] text-slate-300 cursor-pointer" title="Recorta las líneas guía que sobresalgan fuera de la lasca actual">
-              <span>Recortar guías al borde de lasca</span>
-              <input type="checkbox" id="guideClipCheck" checked onchange="onGuideSettingsChange()" class="accent-amber-500" />
-            </label>
-          </div>
-        </div>
-
-        <div class="pt-2 border-t border-slate-700/60 space-y-1.5">
-          <div class="flex items-center justify-between text-xs">
-            <span class="text-slate-300">Perforaciones guía (varilla):</span>
-            <select id="rodCountSelect" onchange="onRodSettingsChange()" class="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-white">
-              <option value="0">Sin varillas</option>
-              <option value="1">1 Central</option>
-              <option value="2">2 Simétricas</option>
-            </select>
-          </div>
-          <div class="flex items-center justify-between text-xs">
-            <span class="text-slate-400">Diámetro varilla (mm):</span>
-            <input type="number" id="rodDiameterInput" value="4" min="1" max="50" step="0.5" onchange="onRodSettingsChange()" class="w-16 bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-right text-white" />
           </div>
         </div>
 
@@ -382,10 +363,6 @@
           </label>
 
           <div id="tabsConfigPanel" class="hidden space-y-2 bg-slate-900/80 border border-yellow-500/30 rounded-lg p-2.5">
-            <p class="text-[10px] text-slate-400 leading-relaxed">
-              Deja micro-puentes sin cortar en el contorno láser/CNC para mantener las piezas fijas al tablero y desprenderlas presionando con los dedos.
-            </p>
-
             <!-- Modo de distribución de micro-uniones -->
             <div class="grid grid-cols-2 gap-1">
               <button onclick="setTabMode('count')" id="btnTabModeCount" class="py-1 px-2 rounded bg-amber-500/20 border border-amber-500 text-amber-300 text-[11px] font-semibold">
@@ -411,15 +388,11 @@
               <input type="number" id="tabWidthInput" value="1.0" min="0.15" max="15" step="0.1" onchange="onTabSettingsChange()" class="w-16 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-yellow-300 font-semibold" />
             </div>
 
-            <!-- Ajustes rápidos habituales en corte láser -->
-            <div class="space-y-1">
-              <span class="text-[10px] text-slate-400 block">Ajustes rápidos recomendados:</span>
-              <div class="grid grid-cols-4 gap-1">
-                <button onclick="setPresetTabConfig(4, 0.5)" class="py-1 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-200" title="4 puntos de 0.5 mm (cartón / MDF fino)">4×0.5mm</button>
-                <button onclick="setPresetTabConfig(4, 1.0)" class="py-1 bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/40 rounded text-[9px] text-yellow-300 font-semibold" title="4 puntos de 1.0 mm (estándar MDF / contrachapado 3-5mm)">4×1.0mm</button>
-                <button onclick="setPresetTabConfig(4, 1.5)" class="py-1 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-200" title="4 puntos de 1.5 mm (piezas grandes o pesadas)">4×1.5mm</button>
-                <button onclick="setPresetTabConfig(6, 1.0)" class="py-1 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-200" title="6 puntos de 1.0 mm (perímetros largos)">6×1.0mm</button>
-              </div>
+            <div class="grid grid-cols-4 gap-1">
+              <button onclick="setPresetTabConfig(4, 0.5)" class="py-1 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-200" title="4 puntos de 0.5 mm (cartón / MDF fino)">4×0.5mm</button>
+              <button onclick="setPresetTabConfig(4, 1.0)" class="py-1 bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/40 rounded text-[9px] text-yellow-300 font-semibold" title="4 puntos de 1.0 mm (estándar MDF / contrachapado 3-5mm)">4×1.0mm</button>
+              <button onclick="setPresetTabConfig(4, 1.5)" class="py-1 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-200" title="4 puntos de 1.5 mm (piezas grandes o pesadas)">4×1.5mm</button>
+              <button onclick="setPresetTabConfig(6, 1.0)" class="py-1 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-200" title="6 puntos de 1.0 mm (perímetros largos)">6×1.0mm</button>
             </div>
 
             <label class="flex items-center justify-between text-[11px] text-slate-300 cursor-pointer pt-0.5" title="Mantiene también sujetos los recortes de los agujeros interiores para que no salten durante el corte">
@@ -452,7 +425,7 @@
           <button onclick="selectSlicesByFilter('even')" class="py-1 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-200">Pares</button>
         </div>
 
-        <!-- Filtro para descartar islas inferiores a un tamaño mínimo -->
+        <!-- Filtro único para descartar islas inferiores a un tamaño mínimo -->
         <div class="pt-2 border-t border-slate-700/60 space-y-2">
           <label class="flex items-center justify-between text-xs font-semibold text-rose-300 cursor-pointer" title="Elimina automáticamente las islas o fragmentos sueltos cuyo tamaño sea inferior al mínimo indicado">
             <span>🧹 Eliminar islas pequeñas</span>
@@ -523,7 +496,7 @@
           <!-- Espaciado y optimización -->
           <div class="pt-1.5 border-t border-slate-700/60 space-y-1.5">
             <div class="flex items-center justify-between text-[11px]">
-              <span class="text-slate-300">Separación entre islas (mm):</span>
+              <span class="text-slate-300">Separación entre piezas (mm):</span>
               <input type="number" id="nestSpacingInput" value="3" min="0" max="50" step="0.5" onchange="onBoardSettingsChange()" class="w-14 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-white" />
             </div>
             <div class="flex items-center justify-between text-[11px]">
@@ -531,38 +504,27 @@
               <input type="number" id="nestMarginInput" value="5" min="0" max="50" step="0.5" onchange="onBoardSettingsChange()" class="w-14 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-white" />
             </div>
             <label class="flex items-center justify-between text-[11px] text-slate-300 cursor-pointer">
-              <span>Rotar islas 90° para optimizar</span>
+              <span>Rotar piezas 90° para optimizar</span>
               <input type="checkbox" id="nestRotateCheck" checked onchange="onBoardSettingsChange()" class="accent-emerald-500" />
             </label>
-            <label class="flex items-center justify-between text-[11px] text-slate-300 cursor-pointer" title="Coloca islas pequeñas dentro de los agujeros grandes de otras islas">
+            <label class="flex items-center justify-between text-[11px] text-slate-300 cursor-pointer" title="Coloca piezas pequeñas dentro de los agujeros grandes de otras piezas">
               <span>Aprovechar huecos interiores</span>
               <input type="checkbox" id="nestUseHolesCheck" checked onchange="onBoardSettingsChange()" class="accent-emerald-500" />
             </label>
-            <label class="flex items-center justify-between text-[11px] text-amber-300 font-medium cursor-pointer" title="Si una lámina o isla es más grande que el área útil del tablero, la incluye recortando la parte que sobresale">
-              <span>✂️ Recortar las que no caben</span>
+            <label class="flex items-center justify-between text-[11px] text-amber-300 font-medium cursor-pointer" title="Si una pieza es más grande que el área útil del tablero, la incluye recortando la parte que sobresale">
+              <span>✂️ Recortar piezas mayores al tablero</span>
               <input type="checkbox" id="nestClipOversizedCheck" onchange="setNestClipOversized(this.checked)" class="accent-amber-500" />
             </label>
-            <!-- Acceso directo sincronizado para descartar islas menores a X mm en el tablero -->
-            <div class="flex items-center justify-between text-[11px] pt-0.5">
-              <label class="flex items-center gap-1.5 text-rose-300 font-medium cursor-pointer" title="Descarta automáticamente las islas inferiores al tamaño indicado">
-                <input type="checkbox" id="nestFilterSmallCheck" onchange="setFilterSmallIslands(this.checked)" class="accent-rose-500" />
-                <span>🧹 Omitir islas &lt;</span>
-              </label>
-              <div class="flex items-center gap-1">
-                <input type="number" id="nestMinIslandSizeInput" value="10" min="0.1" max="5000" step="0.5" onkeydown="if(event.key==='Enter') onNestMinIslandInput(this.value)" onchange="onNestMinIslandInput(this.value)" class="w-14 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-white" />
-                <span id="nestMinIslandUnitSpan" class="text-[10px] text-slate-400">mm</span>
-              </div>
-            </div>
           </div>
 
-          <!-- Grabado opcional en cada isla -->
+          <!-- Grabado opcional en cada pieza del tablero -->
           <div class="pt-1.5 border-t border-slate-700/60 space-y-1.5 bg-slate-900/70 p-2 rounded-lg border border-slate-800">
-            <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-400 block">Grabado en cada Isla</span>
+            <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-400 block">Grabado en Tablero</span>
             <label class="flex items-center justify-between text-[11px] text-slate-200 cursor-pointer">
-              <span>Grabar Nº de lámina (<code class="text-emerald-300">#N</code>)</span>
+              <span>Grabar código de pieza (<code class="text-emerald-300">#N / X1</code>)</span>
               <input type="checkbox" id="nestEngraveNumCheck" checked onchange="onNestEngraveSettingsChange()" class="accent-emerald-500" />
             </label>
-            <label class="flex items-center justify-between text-[11px] text-slate-200 cursor-pointer" title="Indica en cada isla si tiene grabado de guía Inferior (Inf), Superior (Sup) o Ambas">
+            <label id="nestEngraveGuideTypeRow" class="flex items-center justify-between text-[11px] text-slate-200 cursor-pointer" title="Indica en cada isla si tiene grabado de guía Inferior (Inf), Superior (Sup) o Ambas">
               <span>Indicar guía (<code class="text-amber-300">Sup</code> / <code class="text-fuchsia-300">Inf</code> / <code class="text-emerald-300">Ambas</code>)</span>
               <input type="checkbox" id="nestEngraveGuideTypeCheck" checked onchange="onNestEngraveSettingsChange()" class="accent-emerald-500" />
             </label>
@@ -570,62 +532,11 @@
 
           <!-- Resumen de empaquetado -->
           <div id="nestingSummaryBadge" class="text-[11px] text-emerald-300 bg-emerald-950/40 border border-emerald-500/30 rounded-lg p-2 font-medium text-center">
-            Desactivado (exportación por lasca)
+            Desactivado (exportación individual por pieza)
           </div>
 
           <button onclick="openBoardInfoModal()" id="btnSidebarBoardInfo" class="hidden w-full py-1.5 px-3 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/40 text-sky-300 text-xs font-semibold transition flex items-center justify-center gap-1.5">
-            <span>ℹ️ Detalle de Láminas en el Tablero</span>
-          </button>
-
-          <button onclick="openAssemblyGuideModal()" id="btnSidebarAssemblyGuide" class="hidden w-full py-1.5 px-3 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-xs font-semibold transition flex items-center justify-center gap-1.5">
-            <span>🛠️ Guía de Corte y Montaje (Abajo → Arriba)</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- 6. CRÉDITOS, AUTORÍA, LICENCIA Y REDES SOCIALES -->
-      <div class="p-3.5 border-t border-slate-800/80 bg-slate-950/60 space-y-2.5">
-        <div class="flex items-center justify-between">
-          <span class="text-xs font-bold uppercase tracking-wider text-indigo-400">6. Créditos y Licencia</span>
-          <a href="LICENSE" target="_blank" rel="noopener" class="text-[10px] px-2 py-0.5 rounded bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/30 font-semibold transition" title="Ver licencia GNU AGPL-3.0 completa">
-            GNU AGPL-3.0
-          </a>
-        </div>
-
-        <div class="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2">
-          <div>
-            <p class="text-[11px] text-slate-300 leading-snug">
-              Creado por <strong class="text-white font-semibold">Norberto Martín Afonso</strong>
-            </p>
-            <p class="text-[10px] text-slate-400 mt-0.5 leading-relaxed">
-              Distribuido bajo licencia <strong class="text-indigo-300">GNU AGPL v3.0</strong> con atribución obligatoria (Sección 7b).
-            </p>
-          </div>
-
-          <div class="pt-1.5 border-t border-slate-800/80 space-y-1.5">
-            <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">Sígueme en mis redes sociales:</span>
-            <div class="grid grid-cols-2 gap-1.5">
-              <a href="https://x.com/NorbertoMartnAf" target="_blank" rel="noopener noreferrer" class="px-2 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-sky-500/40 text-[11px] text-slate-200 hover:text-white flex items-center gap-1.5 transition" title="Seguir en X (@NorbertoMartnAf)">
-                <svg class="w-3.5 h-3.5 text-slate-200 shrink-0" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
-                <span class="truncate font-medium">X / Twitter</span>
-              </a>
-              <a href="https://github.com/nmarafo" target="_blank" rel="noopener noreferrer" class="px-2 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-slate-600 text-[11px] text-slate-200 hover:text-white flex items-center gap-1.5 transition" title="Seguir en GitHub (@nmarafo)">
-                <svg class="w-3.5 h-3.5 text-slate-200 shrink-0" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
-                <span class="truncate font-medium">GitHub</span>
-              </a>
-              <a href="https://huggingface.co/nmarafo" target="_blank" rel="noopener noreferrer" class="px-2 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-amber-500/40 text-[11px] text-slate-200 hover:text-amber-300 flex items-center gap-1.5 transition" title="Seguir en Hugging Face (@nmarafo)">
-                <span class="text-xs leading-none shrink-0">🤗</span>
-                <span class="truncate font-medium">Hugging Face</span>
-              </a>
-              <a href="https://instagram.com/nmar_afo" target="_blank" rel="noopener noreferrer" class="px-2 py-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-pink-500/40 text-[11px] text-slate-200 hover:text-pink-300 flex items-center gap-1.5 transition" title="Seguir en Instagram (@nmar_afo)">
-                <svg class="w-3.5 h-3.5 text-pink-400 shrink-0" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
-                <span class="truncate font-medium">Instagram</span>
-              </a>
-            </div>
-          </div>
-
-          <button onclick="openCreditsModal()" class="w-full py-1.5 px-2.5 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 border border-indigo-500/30 text-indigo-300 text-[11px] font-semibold transition flex items-center justify-center gap-1.5">
-            <span>⚖️ Ver Créditos y Cláusula de Atribución</span>
+            <span>ℹ️ Detalle de Piezas en el Tablero</span>
           </button>
         </div>
       </div>
@@ -640,7 +551,7 @@
         <div class="relative bg-slate-950 border-r border-slate-800 overflow-hidden flex flex-col">
           <div class="absolute top-3 left-3 z-10 flex items-center gap-2 bg-slate-900/85 backdrop-blur border border-slate-800 px-3 py-1.5 rounded-lg">
             <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-            <span class="text-xs font-semibold text-slate-200">Previsualización 3D Laminada</span>
+            <span class="text-xs font-semibold text-slate-200">Previsualización 3D</span>
           </div>
           <div class="absolute top-3 right-3 z-10 flex gap-1.5">
             <button onclick="resetCamera3D()" class="px-2.5 py-1 rounded-lg bg-slate-900/85 hover:bg-slate-800 border border-slate-700 text-[11px] text-slate-300">🎯 Centrar Cámara</button>
@@ -648,46 +559,36 @@
           <div id="viewer3D" class="flex-1 w-full h-full cursor-grab active:cursor-grabbing"></div>
         </div>
 
-        <!-- INSPECTOR 2D LASCA A LASCA -->
+        <!-- INSPECTOR 2D -->
         <div class="relative bg-slate-900 flex flex-col overflow-hidden">
-          <div class="p-3 bg-slate-900/95 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
-            <div>
+          <div class="px-3 py-2.5 bg-slate-900/95 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
+            <div class="min-w-0">
               <div class="flex items-center gap-2 flex-wrap">
                 <span id="slice2DTitle" class="text-xs font-bold text-white">Lasca #1 / 24</span>
-                <span id="slice2DCoord" class="text-[11px] px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30">Z = 0.00 mm</span>
-                <button onclick="setNestingEnabled(!state.nestingEnabled)" id="btnToggleBoardView" class="text-[11px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-semibold transition" title="Alternar distribución de islas en tablero">
-                  🧩 Distribuir en Tablero: OFF
-                </button>
-                <button onclick="openBoardInfoModal()" id="btnInspectorBoardInfo" class="hidden text-[11px] px-2.5 py-0.5 rounded bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 font-semibold transition items-center gap-1" title="Ver el listado detallado de láminas e islas contenidas en este tablero">
-                  <span>ℹ️ Info Láminas</span>
-                </button>
-                <button onclick="openAssemblyGuideModal()" id="btnInspectorAssemblyGuide" class="hidden text-[11px] px-2.5 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-semibold transition items-center gap-1" title="Ver guía paso a paso de orden de corte/impresión y montaje de abajo a arriba">
-                  <span>🛠️ Guía Montaje</span>
-                </button>
+                <span id="slice2DCoord" class="text-[11px] px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 font-mono">Z = 0.00 mm</span>
               </div>
-              <p id="slice2DStats" class="text-[11px] text-slate-400 mt-0.5">Medida corte: -- × -- mm | Contornos: 0</p>
+              <p id="slice2DStats" class="text-[11px] text-slate-400 mt-0.5 truncate">Medida corte: -- × -- mm | Contornos: 0</p>
             </div>
 
             <div class="flex items-center gap-1.5 flex-wrap">
-              <label id="inspectorIncludeSliceLabel" class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-xs cursor-pointer" title="Incluir o excluir esta lasca en la exportación">
+              <button onclick="setNestingEnabled(!state.nestingEnabled)" id="btnToggleBoardView" class="text-[11px] px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-semibold transition" title="Alternar entre vista de pieza individual y distribución en tablero">
+                🧩 Distribuir en Tablero: OFF
+              </button>
+              <button onclick="openBoardInfoModal()" id="btnInspectorBoardInfo" class="hidden text-[11px] px-2.5 py-1 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 font-semibold transition items-center gap-1" title="Ver listado detallado de piezas contenidas en este tablero">
+                <span>ℹ️ Piezas</span>
+              </button>
+              <label id="inspectorIncludeSliceLabel" class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-xs cursor-pointer" title="Incluir o excluir esta pieza de la exportación">
                 <input type="checkbox" id="currentSliceSelectedCheck" checked onchange="toggleCurrentSliceSelection(this.checked)" class="accent-emerald-500" />
                 <span class="text-slate-200 font-medium">Incluir</span>
               </label>
-              <label class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs cursor-pointer" title="Mostrar y exportar la guía de posición de la lámina superior (#N+1)">
-                <input type="checkbox" id="inspectorNextGuideCheck" checked onchange="setIncludeNextGuide(this.checked)" class="accent-amber-500" />
-                <span class="text-amber-300 font-medium">Guía Sup.</span>
-              </label>
-              <label class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-fuchsia-500/10 border border-fuchsia-500/30 text-xs cursor-pointer" title="Mostrar y exportar la guía de posición de la lámina inferior (#N-1)">
-                <input type="checkbox" id="inspectorPrevGuideCheck" checked onchange="setIncludePrevGuide(this.checked)" class="accent-fuchsia-500" />
-                <span class="text-fuchsia-300 font-medium">Guía Inf.</span>
-              </label>
-              <label class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-xs cursor-pointer" title="Activar/desactivar micro-uniones de sujeción (puntos sin cortar para desprender la pieza haciendo presión)">
-                <input type="checkbox" id="inspectorTabsCheck" onchange="setTabsEnabled(this.checked)" class="accent-yellow-400" />
-                <span class="text-yellow-300 font-medium">🔗 Sujeción</span>
-              </label>
-              <button onclick="downloadCurrentSlice('svg')" class="px-2.5 py-1 rounded-lg bg-rose-600/90 hover:bg-rose-500 text-white text-xs font-semibold transition" title="Descargar SVG actual (Lasca o Tablero)">⬇ SVG</button>
-              <button onclick="downloadCurrentSlice('dxf')" class="px-2.5 py-1 rounded-lg bg-amber-600/90 hover:bg-amber-500 text-white text-xs font-semibold transition" title="Descargar DXF actual (Lasca o Tablero)">⬇ DXF</button>
-              <button onclick="downloadCurrentSlice('stl')" class="px-2.5 py-1 rounded-lg bg-indigo-600/90 hover:bg-indigo-500 text-white text-xs font-semibold transition" title="Descargar STL 3D de esta lasca">⬇ STL</button>
+
+              <div class="flex items-center bg-slate-800/90 border border-slate-700 rounded-lg p-0.5">
+                <button onclick="downloadCurrentSlice('svg')" class="px-2 py-0.5 rounded-md hover:bg-rose-600/80 text-rose-300 hover:text-white text-[11px] font-semibold transition" title="Descargar SVG actual (Pieza o Tablero)">⬇ SVG</button>
+                <div class="h-3.5 w-px bg-slate-700 mx-0.5"></div>
+                <button onclick="downloadCurrentSlice('dxf')" class="px-2 py-0.5 rounded-md hover:bg-amber-600/80 text-amber-300 hover:text-white text-[11px] font-semibold transition" title="Descargar DXF actual (Pieza o Tablero)">⬇ DXF</button>
+                <div class="h-3.5 w-px bg-slate-700 mx-0.5"></div>
+                <button onclick="downloadCurrentSlice('stl')" class="px-2 py-0.5 rounded-md hover:bg-indigo-600/80 text-indigo-300 hover:text-white text-[11px] font-semibold transition" title="Descargar STL 3D de esta pieza">⬇ STL</button>
+              </div>
             </div>
           </div>
 
@@ -701,7 +602,7 @@
               <span class="text-slate-600">|</span>
               <span>✋ Arrastrar: <strong class="text-emerald-300">Mover</strong></span>
               <span class="text-slate-600">|</span>
-              <span>👆 Clic: <strong class="text-rose-300">Seleccionar isla</strong></span>
+              <span>👆 Clic: <strong class="text-rose-300">Seleccionar pieza</strong></span>
             </div>
 
             <!-- Barra flotante de Zoom y Encuadre 2D -->
@@ -714,11 +615,12 @@
 
             <div class="absolute bottom-3 left-3 flex flex-wrap items-center gap-3 text-[11px] bg-slate-900/90 px-3 py-1.5 rounded-lg border border-slate-800 pointer-events-none">
               <span class="flex items-center gap-1 text-rose-400"><span class="w-2.5 h-0.5 bg-rose-500 inline-block"></span> Corte Exterior</span>
-              <span class="flex items-center gap-1 text-sky-400"><span class="w-2.5 h-0.5 bg-sky-400 inline-block"></span> Huecos / Varillas</span>
+              <span class="flex items-center gap-1 text-sky-400"><span class="w-2.5 h-0.5 bg-sky-400 inline-block"></span> Huecos Internos</span>
+              <span id="legendPuzzleSlots" class="hidden items-center gap-1 text-amber-300"><span class="w-2.5 h-2.5 rounded-sm border border-amber-400 bg-amber-400/20 inline-block"></span> Ranuras Encaje (⊔ / ⊓)</span>
               <span id="legendHoldingTabs" class="hidden flex items-center gap-1 text-yellow-300"><span class="w-2.5 h-2.5 rounded-full border border-yellow-400 bg-yellow-400/30 inline-block"></span> Micro-uniones (Sin cortar)</span>
-              <span id="legendNextGuide" class="flex items-center gap-1 text-amber-400"><span class="w-3.5 h-0.5 bg-amber-400 inline-block"></span> Guía Superior (#N+1)</span>
-              <span id="legendPrevGuide" class="flex items-center gap-1 text-fuchsia-400"><span class="w-3.5 h-0.5 bg-fuchsia-400 inline-block"></span> Guía Inferior (#N-1)</span>
-              <span class="flex items-center gap-1 text-emerald-400"><span class="w-2.5 h-0.5 bg-emerald-400 inline-block"></span> Grabado (#N / Sup / Inf / Ambas)</span>
+              <span id="legendNextGuide" class="flex items-center gap-1 text-amber-400"><span class="w-3.5 h-0.5 bg-amber-400 inline-block"></span> Guía Sup. (#N+1)</span>
+              <span id="legendPrevGuide" class="flex items-center gap-1 text-fuchsia-400"><span class="w-3.5 h-0.5 bg-fuchsia-400 inline-block"></span> Guía Inf. (#N-1)</span>
+              <span class="flex items-center gap-1 text-emerald-400"><span class="w-2.5 h-0.5 bg-emerald-400 inline-block"></span> Grabado Código</span>
             </div>
           </div>
 
@@ -744,21 +646,24 @@
     </main>
   </div>
 
-  <!-- PIE DE PÁGINA PERSISTENTE: AUTORÍA, LICENCIA Y REDES SOCIALES -->
+  <!-- PIE DE PÁGINA PERSISTENTE ÚNICO: AUTORÍA, LICENCIA, STANDALONE Y REDES SOCIALES -->
   <footer class="h-8 bg-slate-950 border-t border-slate-800/90 px-4 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400 shrink-0 z-20">
     <div class="flex items-center gap-2 flex-wrap">
       <span>Creado por <strong class="text-slate-200 font-semibold">Norberto Martín Afonso</strong></span>
       <span class="text-slate-700">•</span>
       <a href="LICENSE" target="_blank" rel="noopener" class="text-indigo-400 hover:text-indigo-300 font-medium hover:underline" title="Licencia GNU Affero General Public License v3.0 con cláusula de atribución (Sección 7b)">
-        Licencia GNU AGPL-3.0 (Atribución Sección 7b)
+        GNU AGPL-3.0 (Sección 7b)
       </a>
-      <button onclick="openCreditsModal()" class="text-[10px] px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 transition">
-        ⚖️ Ver créditos
+      <button onclick="openCreditsModal()" class="text-[10px] px-2 py-0.5 rounded bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 font-medium transition">
+        ⚖️ Créditos y Licencia
       </button>
+      <a href="indexstandalone.html" target="_blank" rel="noopener" class="text-[10px] px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 transition" title="Abrir versión autocontenida en un único archivo HTML (indexstandalone.html)">
+        📄 Versión Standalone
+      </a>
     </div>
 
     <div class="flex items-center gap-2.5">
-      <span class="text-slate-500 hidden sm:inline">Sígueme en:</span>
+      <span class="text-slate-500 hidden sm:inline">Redes:</span>
       <a href="https://x.com/NorbertoMartnAf" target="_blank" rel="noopener noreferrer" class="hover:text-white flex items-center gap-1 transition" title="X / Twitter (@NorbertoMartnAf)">
         <svg class="w-3 h-3" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
         <span class="font-medium text-sky-400 hover:underline">@NorbertoMartnAf</span>
@@ -785,12 +690,12 @@
   <div id="exportModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
     <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
       <div class="flex items-center justify-between">
-        <h3 class="text-sm font-bold text-white">📦 Exportar Lascas en .ZIP</h3>
+        <h3 class="text-sm font-bold text-white">📦 Exportar Proyecto en .ZIP</h3>
         <button onclick="closeExportModal()" class="text-slate-400 hover:text-white text-sm">✕</button>
       </div>
 
       <div class="space-y-2">
-        <label class="text-xs text-slate-400 block">¿Qué lascas deseas incluir?</label>
+        <label class="text-xs text-slate-400 block">¿Qué piezas deseas incluir?</label>
         <div class="grid grid-cols-3 gap-2">
           <label class="flex items-center gap-1.5 p-2 rounded-lg bg-slate-800 border border-slate-700 text-xs cursor-pointer">
             <input type="radio" name="exportScope" value="selected" checked class="accent-sky-500" />
@@ -802,7 +707,7 @@
           </label>
           <label class="flex items-center gap-1.5 p-2 rounded-lg bg-slate-800 border border-slate-700 text-xs cursor-pointer">
             <input type="radio" name="exportScope" value="current" class="accent-sky-500" />
-            <span>Lasca Actual</span>
+            <span>Pieza Actual</span>
           </label>
         </div>
       </div>
@@ -819,82 +724,49 @@
             <input type="checkbox" id="expFormatDXF" checked class="accent-sky-500" />
           </label>
           <label class="flex items-center justify-between p-2.5 rounded-lg bg-slate-800/80 border border-slate-700 text-xs cursor-pointer">
-            <span><strong>.STL (Impresora 3D)</strong> - Lascas 3D extruidas con su grosor</span>
+            <span><strong>.STL (Impresora 3D)</strong> - Piezas 3D extruidas con su grosor</span>
             <input type="checkbox" id="expFormatSTL" class="accent-sky-500" />
           </label>
         </div>
       </div>
 
-      <!-- OPCIONES DE GUÍA DE PEGADO Y GRABADO EN EXPORTACIÓN SVG/DXF -->
+      <!-- RESUMEN DE OPCIONES 2D Y DISTRIBUCIÓN EN TABLERO -->
       <div class="space-y-2 pt-1 border-t border-slate-800">
-        <label class="text-xs text-slate-400 block">Opciones de grabado en archivos 2D (.SVG / .DXF):</label>
+        <label class="text-xs text-slate-400 block">Ajustes de corte y grabado 2D (.SVG / .DXF):</label>
         <div class="space-y-1.5">
-          <label class="flex items-center justify-between p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs cursor-pointer">
-            <div>
-              <span class="font-semibold text-amber-300 block">Incluir guía de lámina encima (#N+1)</span>
-              <span class="text-[10px] text-slate-400">Capa naranja (#ff8800) en trazo continuo rápido</span>
-            </div>
-            <input type="checkbox" id="modalNextGuideCheck" checked onchange="setIncludeNextGuide(this.checked)" class="accent-amber-500" />
-          </label>
-          <label class="flex items-center justify-between p-2.5 rounded-lg bg-fuchsia-500/10 border border-fuchsia-500/30 text-xs cursor-pointer">
-            <div>
-              <span class="font-semibold text-fuchsia-300 block">Incluir guía de lámina debajo (#N-1)</span>
-              <span class="text-[10px] text-slate-400">Capa violeta (#9900ff) en trazo continuo rápido</span>
-            </div>
-            <input type="checkbox" id="modalPrevGuideCheck" checked onchange="setIncludePrevGuide(this.checked)" class="accent-fuchsia-500" />
-          </label>
+          <div id="modalStackedGuidesBox" class="grid grid-cols-2 gap-1.5">
+            <label class="flex items-center justify-between p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs cursor-pointer">
+              <span class="font-semibold text-amber-300">Guía Sup. (#N+1)</span>
+              <input type="checkbox" id="modalNextGuideCheck" checked onchange="setIncludeNextGuide(this.checked)" class="accent-amber-500" />
+            </label>
+            <label class="flex items-center justify-between p-2 rounded-lg bg-fuchsia-500/10 border border-fuchsia-500/30 text-xs cursor-pointer">
+              <span class="font-semibold text-fuchsia-300">Guía Inf. (#N-1)</span>
+              <input type="checkbox" id="modalPrevGuideCheck" checked onchange="setIncludePrevGuide(this.checked)" class="accent-fuchsia-500" />
+            </label>
+          </div>
           <label class="flex items-center justify-between p-2 rounded-lg bg-slate-800/60 border border-slate-700 text-xs cursor-pointer">
-            <span class="text-slate-300">Incluir etiqueta de número y cota de lasca</span>
+            <span class="text-slate-300">Grabar etiqueta de código y cota en cada pieza</span>
             <input type="checkbox" id="modalIncludeLabelsCheck" checked onchange="setIncludeLabels(this.checked)" class="accent-sky-500" />
           </label>
-          <div class="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-xs">
-            <label class="flex items-center gap-2 text-yellow-300 font-semibold cursor-pointer" title="Deja pequeños puentes sin cortar para que las piezas no se suelten solas y se desprendan haciendo presión">
+          <div class="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-xs">
+            <label class="flex items-center gap-2 text-yellow-300 font-semibold cursor-pointer">
               <input type="checkbox" id="modalTabsEnabledCheck" onchange="setTabsEnabled(this.checked)" class="accent-yellow-400" />
               <span>🔗 Micro-uniones por presión:</span>
             </label>
             <div class="flex items-center gap-1.5 text-[11px]">
-              <input type="number" id="modalTabCountInput" value="4" min="1" max="32" step="1" onchange="onModalTabQuickChange()" class="w-12 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-white" title="Número de puntos sin cortar por pieza" />
+              <input type="number" id="modalTabCountInput" value="4" min="1" max="32" step="1" onchange="onModalTabQuickChange()" class="w-12 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-white" />
               <span class="text-slate-400">pts ×</span>
-              <input type="number" id="modalTabWidthInput" value="1.0" min="0.15" max="15" step="0.1" onchange="onModalTabQuickChange()" class="w-14 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-yellow-300" title="Ancho en mm de cada punto sin cortar" />
+              <input type="number" id="modalTabWidthInput" value="1.0" min="0.15" max="15" step="0.1" onchange="onModalTabQuickChange()" class="w-14 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-yellow-300" />
               <span class="text-slate-400">mm</span>
             </div>
           </div>
-        </div>
-      </div>
-
-      <!-- OPCIONES DE DISTRIBUCIÓN EN TABLERO (NESTING) EN EL MODAL -->
-      <div class="space-y-2 pt-1 border-t border-slate-800">
-        <label class="flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs cursor-pointer">
-          <div>
-            <span class="font-semibold text-emerald-300 block">🧩 Distribuir islas en Tableros (Nesting)</span>
-            <span id="modalBoardInfoSub" class="text-[10px] text-slate-400">Agrupa y maximiza el espacio en tableros de 600×400 mm</span>
-          </div>
-          <input type="checkbox" id="modalNestingEnabledCheck" onchange="setNestingEnabled(this.checked)" class="accent-emerald-500 w-4 h-4" />
-        </label>
-
-        <div id="modalNestingSubOptions" class="hidden pl-2 space-y-1.5">
-          <label class="flex items-center justify-between p-2 rounded-lg bg-slate-800/60 border border-slate-700 text-xs cursor-pointer">
-            <span class="text-slate-200">Grabar en cada isla el número de lámina (<code class="text-emerald-300">#N</code>)</span>
-            <input type="checkbox" id="modalNestEngraveNumCheck" checked onchange="setNestEngraveNum(this.checked)" class="accent-emerald-500" />
-          </label>
-          <label class="flex items-center justify-between p-2 rounded-lg bg-slate-800/60 border border-slate-700 text-xs cursor-pointer">
-            <span class="text-slate-200">Grabar si lleva guía (<code class="text-amber-300">Sup</code>, <code class="text-fuchsia-300">Inf</code> o <code class="text-emerald-300">Ambas</code>)</span>
-            <input type="checkbox" id="modalNestEngraveGuideCheck" checked onchange="setNestEngraveGuideType(this.checked)" class="accent-emerald-500" />
-          </label>
-          <label class="flex items-center justify-between p-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs cursor-pointer">
-            <span class="text-amber-300 font-medium">✂️ Incluir piezas mayores recortando la parte que no cabe</span>
-            <input type="checkbox" id="modalNestClipOversizedCheck" onchange="setNestClipOversized(this.checked)" class="accent-amber-500" />
-          </label>
-          <div class="flex items-center justify-between p-2 rounded-lg bg-rose-500/10 border border-rose-500/30 text-xs">
-            <label class="flex items-center gap-2 text-rose-300 font-medium cursor-pointer">
-              <input type="checkbox" id="modalFilterSmallCheck" onchange="setFilterSmallIslands(this.checked)" class="accent-rose-500" />
-              <span>🧹 Eliminar islas inferiores a:</span>
-            </label>
-            <div class="flex items-center gap-1">
-              <input type="number" id="modalMinIslandSizeInput" value="10" min="0.1" max="5000" step="0.5" onchange="onNestMinIslandInput(this.value)" class="w-16 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-white" />
-              <span class="text-[10px] text-slate-400">mm</span>
+          <label class="flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs cursor-pointer">
+            <div>
+              <span class="font-semibold text-emerald-300 block">🧩 Agrupar piezas en Tableros (Nesting)</span>
+              <span id="modalBoardInfoSub" class="text-[10px] text-slate-400">Empaqueta automáticamente en tableros de 600×400 mm</span>
             </div>
-          </div>
+            <input type="checkbox" id="modalNestingEnabledCheck" onchange="setNestingEnabled(this.checked)" class="accent-emerald-500 w-4 h-4" />
+          </label>
         </div>
       </div>
 
