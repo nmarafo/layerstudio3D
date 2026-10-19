@@ -28,12 +28,13 @@
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
 
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" ></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js" ></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js" ></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js" ></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" ></script>
 
+  <!-- Hoja de estilos principal -->
   <style>
 /**
  * LayerStudio 3D - Main Stylesheet
@@ -221,51 +222,132 @@ input[type="range"] {
         </div>
       </div>
 
-      <!-- 2. EJE Y PARÁMETROS DE LAMINADO -->
+      <!-- 2. EJE, MODALIDAD Y PARÁMETROS DE LAMINADO / PUZZLE 3D -->
       <div class="bg-slate-800/50 border border-slate-700/70 rounded-xl p-3 space-y-3">
-        <h2 class="text-xs font-bold uppercase tracking-wider text-sky-400">2. Eje y Laminado</h2>
-
-        <div>
-          <label class="text-[11px] text-slate-400 block mb-1">Eje de Corte Perpendicular</label>
-          <div class="grid grid-cols-3 gap-1.5">
-            <button onclick="setSliceAxis('x')" id="axisBtn_x" class="py-1.5 rounded-lg border border-slate-700 bg-slate-900 text-xs font-bold text-rose-400 hover:bg-slate-800 transition">Eje X</button>
-            <button onclick="setSliceAxis('y')" id="axisBtn_y" class="py-1.5 rounded-lg border border-slate-700 bg-slate-900 text-xs font-bold text-emerald-400 hover:bg-slate-800 transition">Eje Y</button>
-            <button onclick="setSliceAxis('z')" id="axisBtn_z" class="py-1.5 rounded-lg border border-sky-500 bg-sky-500/20 text-xs font-bold text-sky-300 transition">Eje Z</button>
-          </div>
+        <div class="flex items-center justify-between">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-sky-400">2. Modalidad y Laminado</h2>
+          <span id="constructionModeBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 font-semibold">Apilado 1 Eje</span>
         </div>
 
+        <!-- Selector de Modalidad: Apilado 1 Eje vs Puzzle 3D Encajable (Waffle sin pegamento) -->
         <div>
-          <label class="text-[11px] text-slate-400 block mb-1">Modo de Cálculo</label>
+          <label class="text-[11px] text-slate-400 block mb-1">Sistema Constructivo</label>
           <div class="grid grid-cols-2 gap-1.5">
-            <button onclick="setSliceMode('count')" id="modeBtn_count" class="py-1 rounded-md border border-sky-500 bg-sky-500/20 text-[11px] font-semibold text-sky-300">Por Nº Capas</button>
-            <button onclick="setSliceMode('thickness')" id="modeBtn_thickness" class="py-1 rounded-md border border-slate-700 bg-slate-900 text-[11px] font-semibold text-slate-400">Por Grosor (mm)</button>
+            <button onclick="setConstructionMode('stacked')" id="constModeBtn_stacked" class="py-1.5 px-2 rounded-lg border border-sky-500 bg-sky-500/20 text-[11px] font-bold text-sky-300 transition flex items-center justify-center gap-1" title="Capas paralelas en un único eje para apilar con pegamento o varillas">
+              <span>🧱 Apilado (1 Eje)</span>
+            </button>
+            <button onclick="setConstructionMode('puzzle3d')" id="constModeBtn_puzzle3d" class="py-1.5 px-2 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 text-[11px] font-bold text-amber-300 transition flex items-center justify-center gap-1" title="Costillas en 2 ejes perpendiculares con ranuras automáticas de encaje a media madera sin pegamento (poliexpan, cartón pluma, MDF)">
+              <span>🧩 Puzzle 3D (Sin cola)</span>
+            </button>
           </div>
         </div>
 
-        <div id="countControlBox">
-          <div class="flex justify-between text-xs mb-1">
-            <span class="text-slate-300">Número de Lascas:</span>
-            <span id="sliceCountLabel" class="font-bold text-sky-400">24</span>
+        <!-- CONTROLES DE MODO APILADO (1 EJE) -->
+        <div id="stackedControlsBox" class="space-y-3">
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Eje de Corte Perpendicular</label>
+            <div class="grid grid-cols-3 gap-1.5">
+              <button onclick="setSliceAxis('x')" id="axisBtn_x" class="py-1.5 rounded-lg border border-slate-700 bg-slate-900 text-xs font-bold text-rose-400 hover:bg-slate-800 transition">Eje X</button>
+              <button onclick="setSliceAxis('y')" id="axisBtn_y" class="py-1.5 rounded-lg border border-slate-700 bg-slate-900 text-xs font-bold text-emerald-400 hover:bg-slate-800 transition">Eje Y</button>
+              <button onclick="setSliceAxis('z')" id="axisBtn_z" class="py-1.5 rounded-lg border border-sky-500 bg-sky-500/20 text-xs font-bold text-sky-300 transition">Eje Z</button>
+            </div>
           </div>
-          <input type="range" id="sliceCountSlider" min="2" max="300" value="24" oninput="onSliceCountInput(this.value)" class="w-full" />
+
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Modo de Cálculo</label>
+            <div class="grid grid-cols-2 gap-1.5">
+              <button onclick="setSliceMode('count')" id="modeBtn_count" class="py-1 rounded-md border border-sky-500 bg-sky-500/20 text-[11px] font-semibold text-sky-300">Por Nº Capas</button>
+              <button onclick="setSliceMode('thickness')" id="modeBtn_thickness" class="py-1 rounded-md border border-slate-700 bg-slate-900 text-[11px] font-semibold text-slate-400">Por Grosor (mm)</button>
+            </div>
+          </div>
+
+          <div id="countControlBox">
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-slate-300">Número de Lascas:</span>
+              <span id="sliceCountLabel" class="font-bold text-sky-400">24</span>
+            </div>
+            <input type="range" id="sliceCountSlider" min="2" max="300" value="24" oninput="onSliceCountInput(this.value)" class="w-full" />
+          </div>
+
+          <div id="thicknessControlBox" class="hidden space-y-1.5">
+            <div class="flex justify-between items-center text-xs">
+              <span class="text-slate-300">Grosor Material (mm):</span>
+              <input type="number" id="thicknessInput" value="4" min="0.2" max="500" step="0.5" onchange="onThicknessInput(this.value)" class="w-20 bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-right text-white" />
+            </div>
+            <div class="flex gap-1">
+              <button onclick="onThicknessInput(3)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300">3mm</button>
+              <button onclick="onThicknessInput(4)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300">4mm</button>
+              <button onclick="onThicknessInput(5)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300">5mm</button>
+              <button onclick="onThicknessInput(10)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300">10mm</button>
+            </div>
+          </div>
+
+          <div class="text-[11px] text-slate-400 bg-slate-900/70 rounded-lg p-2 border border-slate-800 flex justify-between">
+            <span>Grosor por lasca:</span>
+            <span id="computedThicknessInfo" class="text-sky-300 font-semibold">5.00 mm</span>
+          </div>
         </div>
 
-        <div id="thicknessControlBox" class="hidden space-y-1.5">
-          <div class="flex justify-between items-center text-xs">
-            <span class="text-slate-300">Grosor Material (mm):</span>
-            <input type="number" id="thicknessInput" value="4" min="0.2" max="500" step="0.5" onchange="onThicknessInput(this.value)" class="w-20 bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-right text-white" />
-          </div>
-          <div class="flex gap-1">
-            <button onclick="onThicknessInput(3)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300">3mm</button>
-            <button onclick="onThicknessInput(4)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300">4mm</button>
-            <button onclick="onThicknessInput(5)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300">5mm</button>
-            <button onclick="onThicknessInput(10)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300">10mm</button>
-          </div>
-        </div>
+        <!-- CONTROLES DE MODO PUZZLE 3D ENCAJABLE (2 EJES CON RANURAS A MEDIA MADERA SIN PEGAMENTO) -->
+        <div id="puzzle3dControlsBox" class="hidden space-y-2.5 bg-slate-900/80 border border-amber-500/35 rounded-xl p-2.5">
+          <p class="text-[10px] text-slate-300 leading-relaxed">
+            Genera costillas ortogonales en <strong>2 ejes</strong> con <strong>ranuras automáticas a mitad de cruce</strong> para ensamblar a presión sin pegamento (ideal para poliexpan, cartón pluma, MDF o metacrilato).
+          </p>
 
-        <div class="text-[11px] text-slate-400 bg-slate-900/70 rounded-lg p-2 border border-slate-800 flex justify-between">
-          <span>Grosor por lasca:</span>
-          <span id="computedThicknessInfo" class="text-sky-300 font-semibold">5.00 mm</span>
+          <div>
+            <label class="text-[10px] text-amber-300 font-bold uppercase block mb-1">Ejes de Cruce (Costillas A × B)</label>
+            <div class="grid grid-cols-3 gap-1">
+              <button onclick="setPuzzleAxes('xy')" id="puzzleAxesBtn_xy" class="py-1 px-1.5 rounded border border-amber-500 bg-amber-500/20 text-[10px] font-bold text-amber-300 transition" title="Costillas X e Y que encajan verticalmente a lo largo de Z">
+                X × Y (Encaje Z)
+              </button>
+              <button onclick="setPuzzleAxes('xz')" id="puzzleAxesBtn_xz" class="py-1 px-1.5 rounded border border-slate-700 bg-slate-950 text-[10px] font-semibold text-slate-300 hover:bg-slate-800 transition" title="Costillas X y Z que encajan a lo largo de Y">
+                X × Z (Encaje Y)
+              </button>
+              <button onclick="setPuzzleAxes('yz')" id="puzzleAxesBtn_yz" class="py-1 px-1.5 rounded border border-slate-700 bg-slate-950 text-[10px] font-semibold text-slate-300 hover:bg-slate-800 transition" title="Costillas Y y Z que encajan a lo largo de X">
+                Y × Z (Encaje X)
+              </button>
+            </div>
+          </div>
+
+          <div class="space-y-1.5 pt-1 border-t border-slate-800">
+            <div>
+              <div class="flex justify-between text-[11px] mb-0.5">
+                <span id="puzzleAxisALabel" class="text-sky-300 font-semibold">Costillas Serie A (Eje X · Ranura ⊔):</span>
+                <span id="puzzleCountALabel" class="font-bold text-sky-400">7</span>
+              </div>
+              <input type="range" id="puzzleCountASlider" min="2" max="36" value="7" oninput="onPuzzleCountChange('a', this.value)" class="w-full" />
+            </div>
+
+            <div>
+              <div class="flex justify-between text-[11px] mb-0.5">
+                <span id="puzzleAxisBLabel" class="text-amber-300 font-semibold">Costillas Serie B (Eje Y · Ranura ⊓):</span>
+                <span id="puzzleCountBLabel" class="font-bold text-amber-400">7</span>
+              </div>
+              <input type="range" id="puzzleCountBSlider" min="2" max="36" value="7" oninput="onPuzzleCountChange('b', this.value)" class="w-full" />
+            </div>
+          </div>
+
+          <div class="space-y-1.5 pt-1 border-t border-slate-800">
+            <div class="flex items-center justify-between text-[11px]">
+              <span class="text-slate-300">Grosor plancha/poliexpan (mm):</span>
+              <input type="number" id="puzzleThicknessInput" value="5.0" min="0.5" max="80" step="0.5" onchange="onPuzzleSlotParamsChange()" class="w-16 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-amber-300 font-bold" />
+            </div>
+            <div class="grid grid-cols-4 gap-1">
+              <button onclick="setPuzzleThicknessPreset(3, 0.05)" class="py-0.5 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300" title="MDF / Contrachapado 3 mm">3mm MDF</button>
+              <button onclick="setPuzzleThicknessPreset(5, -0.05)" class="py-0.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 rounded text-[9px] text-amber-300 font-semibold" title="Cartón Pluma / Poliexpan 5 mm (ajuste por presión)">5mm Pluma</button>
+              <button onclick="setPuzzleThicknessPreset(10, -0.15)" class="py-0.5 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300" title="Poliexpan / EPS 10 mm">10mm EPS</button>
+              <button onclick="setPuzzleThicknessPreset(20, -0.25)" class="py-0.5 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300" title="Poliexpan / XPS 20 mm">20mm EPS</button>
+            </div>
+
+            <div class="flex items-center justify-between text-[11px] pt-0.5" title="Negativo (-0.1 mm) para encaje a presión en poliexpan/espuma; Positivo (+0.1 mm) para holgura suave en madera rígida">
+              <span class="text-slate-300">Holgura encaje / Kerf (mm):</span>
+              <input type="number" id="puzzleClearanceInput" value="0.0" min="-2.0" max="3.0" step="0.05" onchange="onPuzzleSlotParamsChange()" class="w-16 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-emerald-300 font-semibold" />
+            </div>
+          </div>
+
+          <div id="puzzleSummaryBadge" class="text-[10px] text-amber-200 bg-amber-950/40 border border-amber-500/30 rounded-lg p-2 text-center font-medium leading-snug">
+            Ranura de encaje: <strong>5.00 mm</strong> · 14 costillas (7 X + 7 Y)
+          </div>
         </div>
       </div>
 
@@ -1117,10 +1199,18 @@ input[type="range"] {
 const state = {
   modelName: 'nudo_toroidal',
   unit: 'mm', // 'mm' | 'cm' | 'm'
-  axis: 'z',  // 'x' | 'y' | 'z'
+  constructionMode: 'stacked', // 'stacked' (Apilado 1 Eje) | 'puzzle3d' (Puzzle 3D Encajable 2 Ejes sin pegamento)
+  axis: 'z',  // 'x' | 'y' | 'z' (para modo apilado 1 eje)
   mode: 'count', // 'count' | 'thickness'
   sliceCount: 24,
   thickness: 5,
+  // Configuración de Modalidad Puzzle 3D (Costillas ortogonales con ranuras de encaje sin pegamento)
+  puzzleAxes: 'xy',            // 'xy' (encaje en Z) | 'xz' (encaje en Y) | 'yz' (encaje en X)
+  puzzleCountA: 7,             // Nº de costillas en el 1º eje (Serie A)
+  puzzleCountB: 7,             // Nº de costillas en el 2º eje (Serie B)
+  puzzleMaterialThicknessMM: 5.0, // Grosor del tablero/poliexpan en mm
+  puzzleSlotClearanceMM: 0.0,  // Holgura/tolerancia de encaje en mm (ancho ranura = grosor + holgura)
+  puzzleTotalSlotsCount: 0,    // Total de ranuras de encaje generadas
   explodeFactor: 0,
   showGhost: true,
   isolateCurrent: false,
@@ -1537,6 +1627,173 @@ function onAxisDimChange(axis, valStr) {
 // =========================================================================
 // MOTOR DE CORTE Y LAMINADO GEOMÉTRICO (X, Y, Z)
 // =========================================================================
+// Devuelve el código identificador visible de una lasca o costilla (ej. "#1" o "X1", "Y2" en modo Puzzle 3D)
+function getSliceDisplayCode(slice, islandIdx, totalIslands) {
+  if (!slice) return '#?';
+  const baseCode = slice.puzzleCode ? slice.puzzleCode : ('#' + (slice.index + 1));
+  if (typeof totalIslands === 'number' && totalIslands > 1 && typeof islandIdx === 'number') {
+    return baseCode + '.' + (islandIdx + 1);
+  }
+  return baseCode;
+}
+
+// Devuelve los ejes (axisA, axisB, axisCommon) para la modalidad Puzzle 3D
+function getPuzzleAxesConfig() {
+  if (state.puzzleAxes === 'xz') {
+    return { axisA: 'x', axisB: 'z', axisCommon: 'y' };
+  }
+  if (state.puzzleAxes === 'yz') {
+    return { axisA: 'y', axisB: 'z', axisCommon: 'x' };
+  }
+  return { axisA: 'x', axisB: 'y', axisCommon: 'z' };
+}
+
+// Determina qué eje 2D ('x' o 'y') del plano de una lasca corresponde al eje de cruce (u) y cuál al eje de deslizamiento de la ranura (v)
+function getPuzzleSlice2DAxes(sliceAxis, otherAxis) {
+  // En sliceTrianglesAtPlane:
+  // sliceAxis === 'x' -> 2D x = Y, 2D y = Z
+  // sliceAxis === 'y' -> 2D x = X, 2D y = Z
+  // sliceAxis === 'z' -> 2D x = X, 2D y = Y
+  if (sliceAxis === 'x') {
+    return otherAxis === 'y'
+      ? { uAxis: 'x', vAxis: 'y' }
+      : { uAxis: 'y', vAxis: 'x' };
+  }
+  if (sliceAxis === 'y') {
+    return otherAxis === 'x'
+      ? { uAxis: 'x', vAxis: 'y' }
+      : { uAxis: 'y', vAxis: 'x' };
+  }
+  return otherAxis === 'x'
+    ? { uAxis: 'x', vAxis: 'y' }
+    : { uAxis: 'y', vAxis: 'x' };
+}
+
+function setConstructionMode(mode) {
+  state.constructionMode = mode === 'puzzle3d' ? 'puzzle3d' : 'stacked';
+  syncConstructionModeUI();
+  rebuildGhostAndSlices();
+}
+
+function setPuzzleAxes(axesPair) {
+  if (axesPair === 'xy' || axesPair === 'xz' || axesPair === 'yz') {
+    state.puzzleAxes = axesPair;
+  }
+  syncConstructionModeUI();
+  if (state.constructionMode === 'puzzle3d') {
+    rebuildGhostAndSlices();
+  }
+}
+
+function onPuzzleCountChange(which, val) {
+  const n = Math.max(2, Math.min(60, parseInt(val, 10) || 7));
+  if (which === 'a') {
+    state.puzzleCountA = n;
+    const lbl = document.getElementById('puzzleCountALabel');
+    if (lbl) lbl.textContent = n;
+  } else {
+    state.puzzleCountB = n;
+    const lbl = document.getElementById('puzzleCountBLabel');
+    if (lbl) lbl.textContent = n;
+  }
+  if (state.constructionMode === 'puzzle3d') {
+    rebuildGhostAndSlices();
+  }
+}
+
+function onPuzzleSlotParamsChange() {
+  const thEl = document.getElementById('puzzleThicknessInput');
+  const clEl = document.getElementById('puzzleClearanceInput');
+  if (thEl) {
+    const th = parseFloat(thEl.value);
+    if (Number.isFinite(th) && th >= 0.3) state.puzzleMaterialThicknessMM = th;
+  }
+  if (clEl) {
+    const cl = parseFloat(clEl.value);
+    if (Number.isFinite(cl) && cl >= -5 && cl <= 10) state.puzzleSlotClearanceMM = cl;
+  }
+  syncConstructionModeUI();
+  if (state.constructionMode === 'puzzle3d') {
+    rebuildGhostAndSlices();
+  }
+}
+
+function setPuzzleThicknessPreset(thMM, clearanceMM) {
+  state.puzzleMaterialThicknessMM = thMM;
+  state.puzzleSlotClearanceMM = clearanceMM;
+  syncConstructionModeUI();
+  if (state.constructionMode === 'puzzle3d') {
+    rebuildGhostAndSlices();
+  }
+}
+
+function syncConstructionModeUI() {
+  const isPuzzle = state.constructionMode === 'puzzle3d';
+  const btnStacked = document.getElementById('constModeBtn_stacked');
+  const btnPuzzle = document.getElementById('constModeBtn_puzzle3d');
+  const boxStacked = document.getElementById('stackedControlsBox');
+  const boxPuzzle = document.getElementById('puzzle3dControlsBox');
+  const badge = document.getElementById('constructionModeBadge');
+
+  if (btnStacked) {
+    btnStacked.className = !isPuzzle
+      ? 'py-1.5 px-2 rounded-lg border border-sky-500 bg-sky-500/20 text-[11px] font-bold text-sky-300 transition flex items-center justify-center gap-1'
+      : 'py-1.5 px-2 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-slate-300 transition flex items-center justify-center gap-1';
+  }
+  if (btnPuzzle) {
+    btnPuzzle.className = isPuzzle
+      ? 'py-1.5 px-2 rounded-lg border border-amber-500 bg-amber-500/20 text-[11px] font-bold text-amber-300 transition flex items-center justify-center gap-1'
+      : 'py-1.5 px-2 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 text-[11px] font-bold text-amber-300/80 transition flex items-center justify-center gap-1';
+  }
+  if (boxStacked) boxStacked.classList.toggle('hidden', isPuzzle);
+  if (boxPuzzle) boxPuzzle.classList.toggle('hidden', !isPuzzle);
+  if (badge) {
+    badge.textContent = isPuzzle ? 'Puzzle 3D (2 Ejes)' : 'Apilado 1 Eje';
+    badge.className = isPuzzle
+      ? 'text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold'
+      : 'text-[9px] px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 font-semibold';
+  }
+
+  ['xy', 'xz', 'yz'].forEach((pair) => {
+    const b = document.getElementById('puzzleAxesBtn_' + pair);
+    if (!b) return;
+    b.className = state.puzzleAxes === pair
+      ? 'py-1 px-1.5 rounded border border-amber-500 bg-amber-500/20 text-[10px] font-bold text-amber-300 transition'
+      : 'py-1 px-1.5 rounded border border-slate-700 bg-slate-950 text-[10px] font-semibold text-slate-300 hover:bg-slate-800 transition';
+  });
+
+  const cfg = getPuzzleAxesConfig();
+  const lblA = document.getElementById('puzzleAxisALabel');
+  const lblB = document.getElementById('puzzleAxisBLabel');
+  if (lblA) lblA.textContent = 'Costillas Serie A (Eje ' + cfg.axisA.toUpperCase() + ' · Ranura ⊔):';
+  if (lblB) lblB.textContent = 'Costillas Serie B (Eje ' + cfg.axisB.toUpperCase() + ' · Ranura ⊓):';
+
+  const sA = document.getElementById('puzzleCountASlider');
+  const sB = document.getElementById('puzzleCountBSlider');
+  const cA = document.getElementById('puzzleCountALabel');
+  const cB = document.getElementById('puzzleCountBLabel');
+  if (sA) sA.value = state.puzzleCountA;
+  if (sB) sB.value = state.puzzleCountB;
+  if (cA) cA.textContent = state.puzzleCountA;
+  if (cB) cB.textContent = state.puzzleCountB;
+
+  const thEl = document.getElementById('puzzleThicknessInput');
+  const clEl = document.getElementById('puzzleClearanceInput');
+  if (thEl) thEl.value = state.puzzleMaterialThicknessMM;
+  if (clEl) clEl.value = state.puzzleSlotClearanceMM;
+
+  const slotW = Math.max(0.4, state.puzzleMaterialThicknessMM + state.puzzleSlotClearanceMM);
+  const sumBadge = document.getElementById('puzzleSummaryBadge');
+  if (sumBadge) {
+    sumBadge.innerHTML =
+      'Ancho ranura: <strong>' + slotW.toFixed(2) + ' mm</strong> · ' +
+      (state.puzzleCountA + state.puzzleCountB) + ' costillas (' +
+      state.puzzleCountA + ' ' + cfg.axisA.toUpperCase() + ' + ' +
+      state.puzzleCountB + ' ' + cfg.axisB.toUpperCase() + ')' +
+      (state.puzzleTotalSlotsCount > 0 ? (' · <strong>' + state.puzzleTotalSlotsCount + ' encajes</strong>') : '');
+  }
+}
+
 function setSliceAxis(ax) {
   state.axis = ax;
   ['x', 'y', 'z'].forEach((k) => {
@@ -1578,6 +1835,362 @@ function onThicknessInput(v) {
   rebuildGhostAndSlices();
 }
 
+// =========================================================================
+// MOTOR GEOMÉTRICO DE RANURAS DE ENCAJE (PUZZLE 3D SIN PEGAMENTO)
+// =========================================================================
+
+// Devuelve los intervalos 1D [vMin, vMax] donde una línea u = uVal atraviesa material sólido en loops
+function getSolidIntervalsAlongLine(loops, uAxis, vAxis, uVal) {
+  const crossings = [];
+  (loops || []).forEach((loop) => {
+    const pts = loop.points;
+    if (!pts || pts.length < 3) return;
+    for (let i = 0, n = pts.length; i < n; i++) {
+      const p1 = pts[i];
+      const p2 = pts[(i + 1) % n];
+      const u1 = p1[uAxis];
+      const u2 = p2[uAxis];
+      if ((u1 <= uVal && u2 > uVal) || (u2 <= uVal && u1 > uVal)) {
+        const t = (uVal - u1) / (u2 - u1);
+        const v = p1[vAxis] + t * (p2[vAxis] - p1[vAxis]);
+        crossings.push(v);
+      }
+    }
+  });
+  crossings.sort((a, b) => a - b);
+  const intervals = [];
+  for (let i = 0; i + 1 < crossings.length; i += 2) {
+    if (crossings[i + 1] - crossings[i] > 1e-3) {
+      intervals.push([crossings[i], crossings[i + 1]]);
+    }
+  }
+  return intervals;
+}
+
+// Interseca dos listas de intervalos 1D ordenados
+function intersect1DIntervalLists(listA, listB) {
+  const out = [];
+  for (let i = 0; i < listA.length; i++) {
+    const a0 = listA[i][0], a1 = listA[i][1];
+    for (let j = 0; j < listB.length; j++) {
+      const b0 = listB[j][0], b1 = listB[j][1];
+      const lo = Math.max(a0, b0);
+      const hi = Math.min(a1, b1);
+      if (hi - lo > 1e-3) {
+        out.push([lo, hi]);
+      }
+    }
+  }
+  return out;
+}
+
+// Comprueba si un punto 2D está dentro del material sólido definido por un conjunto de loops (regla par-impar)
+function isPointInLoopsSolid(pt, loops) {
+  let count = 0;
+  for (let i = 0; i < loops.length; i++) {
+    const pts = loops[i].points;
+    if (pts && pts.length >= 3 && isPointInPolygon(pt, pts)) {
+      count++;
+    }
+  }
+  return (count % 2) === 1;
+}
+
+// Encadena segmentos con coincidencia exacta en los vértices de corte booleano
+function chainExactBooleanSegments(segments) {
+  const used = new Uint8Array(segments.length);
+  const tolSq = 1e-6; // 0.001 mm
+  const loops = [];
+
+  const distSq = (a, b) => {
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    return dx * dx + dy * dy;
+  };
+
+  for (let i = 0; i < segments.length; i++) {
+    if (used[i]) continue;
+    used[i] = 1;
+    const poly = [segments[i][0], segments[i][1]];
+
+    let extended = true;
+    while (extended) {
+      extended = false;
+      const tail = poly[poly.length - 1];
+      let bestIdx = -1;
+      let bestEnd = 0;
+      let bestD = tolSq;
+
+      for (let j = 0; j < segments.length; j++) {
+        if (used[j]) continue;
+        const d0 = distSq(tail, segments[j][0]);
+        if (d0 < bestD) { bestD = d0; bestIdx = j; bestEnd = 0; }
+        const d1 = distSq(tail, segments[j][1]);
+        if (d1 < bestD) { bestD = d1; bestIdx = j; bestEnd = 1; }
+      }
+
+      if (bestIdx !== -1) {
+        used[bestIdx] = 1;
+        poly.push(bestEnd === 0 ? segments[bestIdx][1] : segments[bestIdx][0]);
+        extended = true;
+        if (distSq(poly[0], poly[poly.length - 1]) <= tolSq && poly.length >= 4) {
+          break;
+        }
+      }
+    }
+
+    if (poly.length >= 3) {
+      if (distSq(poly[0], poly[poly.length - 1]) <= tolSq * 4) {
+        poly.pop();
+      }
+      if (poly.length >= 3) {
+        loops.push(poly);
+      }
+    }
+  }
+  return loops;
+}
+
+// Resta booleana 2D exacta de un rectángulo alineado a los ejes [minX, maxX] x [minY, maxY] sobre los contornos de una lasca
+function subtractSingleRectFromLoops(loops, rect) {
+  if (!loops || loops.length === 0) return [];
+  const rx0 = rect.minX, rx1 = rect.maxX, ry0 = rect.minY, ry1 = rect.maxY;
+  const eps = 1e-6;
+
+  // Perturbar ligeramente cualquier vértice del polígono que caiga exactamente sobre las rectas del rectángulo
+  const nudgeVal = (v, lineVal) => (Math.abs(v - lineVal) < eps ? (v >= lineVal ? lineVal + eps : lineVal - eps) : v);
+  const nudgedLoops = loops.map((l) => ({
+    points: l.points.map((p) => ({
+      x: nudgeVal(nudgeVal(p.x, rx0), rx1),
+      y: nudgeVal(nudgeVal(p.y, ry0), ry1)
+    })),
+    isHole: l.isHole,
+    absArea: l.absArea
+  }));
+
+  // Recolectar aristas del polígono
+  const polyEdges = [];
+  nudgedLoops.forEach((l) => {
+    const pts = l.points;
+    for (let i = 0, n = pts.length; i < n; i++) {
+      const a = pts[i];
+      const b = pts[(i + 1) % n];
+      if ((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y) > 1e-10) {
+        polyEdges.push({ a, b, splits: [{ t: 0, pt: a }, { t: 1, pt: b }] });
+      }
+    }
+  });
+
+  // Las 4 aristas del rectángulo de ranura
+  const c00 = { x: rx0, y: ry0 };
+  const c10 = { x: rx1, y: ry0 };
+  const c11 = { x: rx1, y: ry1 };
+  const c01 = { x: rx0, y: ry1 };
+  const rectEdges = [
+    { a: c00, b: c10, splits: [{ t: 0, pt: c00 }, { t: 1, pt: c10 }] },
+    { a: c10, b: c11, splits: [{ t: 0, pt: c10 }, { t: 1, pt: c11 }] },
+    { a: c11, b: c01, splits: [{ t: 0, pt: c11 }, { t: 1, pt: c01 }] },
+    { a: c01, b: c00, splits: [{ t: 0, pt: c01 }, { t: 1, pt: c00 }] }
+  ];
+
+  // Intersecar cada arista del polígono con las 4 aristas del rectángulo compartiendo el objeto vértice exacto
+  for (let i = 0; i < polyEdges.length; i++) {
+    const pe = polyEdges[i];
+    const pMinX = Math.min(pe.a.x, pe.b.x), pMaxX = Math.max(pe.a.x, pe.b.x);
+    const pMinY = Math.min(pe.a.y, pe.b.y), pMaxY = Math.max(pe.a.y, pe.b.y);
+    if (pMaxX < rx0 || pMinX > rx1 || pMaxY < ry0 || pMinY > ry1) continue;
+
+    const rX = pe.b.x - pe.a.x;
+    const rY = pe.b.y - pe.a.y;
+
+    for (let j = 0; j < 4; j++) {
+      const re = rectEdges[j];
+      const sX = re.b.x - re.a.x;
+      const sY = re.b.y - re.a.y;
+      const denom = rX * sY - rY * sX;
+      if (Math.abs(denom) < 1e-11) continue;
+
+      const qpX = re.a.x - pe.a.x;
+      const qpY = re.a.y - pe.a.y;
+      const tP = (qpX * sY - qpY * sX) / denom;
+      const tR = (qpX * rY - qpY * rX) / denom;
+
+      if (tP > 0 && tP < 1 && tR > 0 && tR < 1) {
+        const sharedPt = {
+          x: pe.a.x + tP * rX,
+          y: pe.a.y + tP * rY
+        };
+        pe.splits.push({ t: tP, pt: sharedPt });
+        re.splits.push({ t: tR, pt: sharedPt });
+      }
+    }
+  }
+
+  const outSegments = [];
+  const isStrictlyInsideRect = (pt) => (
+    pt.x > rx0 + 1e-7 && pt.x < rx1 - 1e-7 &&
+    pt.y > ry0 + 1e-7 && pt.y < ry1 - 1e-7
+  );
+
+  // 1. Conservar los subsegmentos del polígono original que quedan FUERA del rectángulo de ranura
+  for (let i = 0; i < polyEdges.length; i++) {
+    const splits = polyEdges[i].splits;
+    splits.sort((x, y) => x.t - y.t);
+    for (let k = 0; k < splits.length - 1; k++) {
+      if (splits[k + 1].t - splits[k].t < 1e-7) continue;
+      const p0 = splits[k].pt;
+      const p1 = splits[k + 1].pt;
+      const mid = { x: (p0.x + p1.x) * 0.5, y: (p0.y + p1.y) * 0.5 };
+      if (!isStrictlyInsideRect(mid)) {
+        outSegments.push([p0, p1]);
+      }
+    }
+  }
+
+  // 2. Conservar los subsegmentos del borde de la ranura que caen DENTRO del material sólido de la lasca
+  for (let j = 0; j < 4; j++) {
+    const splits = rectEdges[j].splits;
+    splits.sort((x, y) => x.t - y.t);
+    for (let k = 0; k < splits.length - 1; k++) {
+      if (splits[k + 1].t - splits[k].t < 1e-7) continue;
+      const p0 = splits[k].pt;
+      const p1 = splits[k + 1].pt;
+      const mid = { x: (p0.x + p1.x) * 0.5, y: (p0.y + p1.y) * 0.5 };
+      if (isPointInLoopsSolid(mid, nudgedLoops)) {
+        outSegments.push([p0, p1]);
+      }
+    }
+  }
+
+  const rawChained = chainExactBooleanSegments(outSegments);
+  return classifyLoopsOuterAndHoles(rawChained);
+}
+
+// Talla todas las ranuras de encaje a media madera entre las costillas de la Serie A y las de la Serie B
+function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB) {
+  const slotW = Math.max(0.4, state.puzzleMaterialThicknessMM + state.puzzleSlotClearanceMM);
+  const halfW = slotW * 0.5;
+  const infoA = getPuzzleSlice2DAxes(axisA, axisB);
+  const infoB = getPuzzleSlice2DAxes(axisB, axisA);
+
+  slicesA.forEach((s) => {
+    if (!s.baseLoops) s.baseLoops = s.loops || [];
+    s.slots = [];
+    s.puzzleSlots = s.slots;
+    s.slotRects = [];
+  });
+  slicesB.forEach((s) => {
+    if (!s.baseLoops) s.baseLoops = s.loops || [];
+    s.slots = [];
+    s.puzzleSlots = s.slots;
+    s.slotRects = [];
+  });
+
+  let totalSlots = 0;
+
+  for (let i = 0; i < slicesA.length; i++) {
+    const sA = slicesA[i];
+    if (!sA.baseLoops || sA.baseLoops.length === 0) continue;
+
+    for (let j = 0; j < slicesB.length; j++) {
+      const sB = slicesB[j];
+      if (!sB.baseLoops || sB.baseLoops.length === 0) continue;
+
+      const intervalsA = getSolidIntervalsAlongLine(sA.baseLoops, infoA.uAxis, infoA.vAxis, sB.coord);
+      const intervalsB = getSolidIntervalsAlongLine(sB.baseLoops, infoB.uAxis, infoB.vAxis, sA.coord);
+      if (intervalsA.length === 0 || intervalsB.length === 0) continue;
+
+      const commonIntervals = intersect1DIntervalLists(intervalsA, intervalsB);
+      for (let k = 0; k < commonIntervals.length; k++) {
+        const vMin = commonIntervals[k][0];
+        const vMax = commonIntervals[k][1];
+        const span = vMax - vMin;
+        if (span < Math.max(1.5, slotW * 0.75)) continue;
+
+        const vMid = (vMin + vMax) * 0.5;
+        const relief = Math.min(0.2, span * 0.02);
+
+        // Extensión exterior segura para abrir completamente la boca de la ranura incluso en bordes inclinados
+        const safeMaxVA = (k + 1 < commonIntervals.length)
+          ? (vMax + commonIntervals[k + 1][0]) * 0.5
+          : (vMax + Math.max(12, slotW * 3));
+        const safeMinVB = (k > 0)
+          ? (vMin + commonIntervals[k - 1][1]) * 0.5
+          : (vMin - Math.max(12, slotW * 3));
+
+        // Rectángulo de ranura en sA (Serie A: abre hacia +v, desde vMid hasta safeMaxVA)
+        const rectA = infoA.uAxis === 'x'
+          ? { minX: sB.coord - halfW, maxX: sB.coord + halfW, minY: vMid - relief, maxY: safeMaxVA }
+          : { minX: vMid - relief, maxX: safeMaxVA, minY: sB.coord - halfW, maxY: sB.coord + halfW };
+
+        sA.slotRects.push(rectA);
+        sA.slots.push({
+          targetCode: sB.puzzleCode,
+          targetSliceIndex: sB.index,
+          uAxis: infoA.uAxis,
+          vAxis: infoA.vAxis,
+          uCenter: sB.coord,
+          vMid: vMid,
+          vMouth: vMax,
+          x: sB.coord,
+          yStart: vMid,
+          yEnd: vMax,
+          mx: infoA.uAxis === 'x' ? sB.coord : vMax,
+          my: infoA.uAxis === 'x' ? vMax : sB.coord,
+          bx: infoA.uAxis === 'x' ? sB.coord : vMid,
+          by: infoA.uAxis === 'x' ? vMid : sB.coord,
+          fromTop: true,
+          openPositive: true,
+          slotWidth: slotW,
+          rect: rectA
+        });
+
+        // Rectángulo de ranura complementaria en sB (Serie B: abre hacia -v, desde safeMinVB hasta vMid)
+        const rectB = infoB.uAxis === 'x'
+          ? { minX: sA.coord - halfW, maxX: sA.coord + halfW, minY: safeMinVB, maxY: vMid + relief }
+          : { minX: safeMinVB, maxX: vMid + relief, minY: sA.coord - halfW, maxY: sA.coord + halfW };
+
+        sB.slotRects.push(rectB);
+        sB.slots.push({
+          targetCode: sA.puzzleCode,
+          targetSliceIndex: sA.index,
+          uAxis: infoB.uAxis,
+          vAxis: infoB.vAxis,
+          uCenter: sA.coord,
+          vMid: vMid,
+          vMouth: vMin,
+          x: sA.coord,
+          yStart: vMin,
+          yEnd: vMid,
+          mx: infoB.uAxis === 'x' ? sA.coord : vMin,
+          my: infoB.uAxis === 'x' ? vMin : sA.coord,
+          bx: infoB.uAxis === 'x' ? sA.coord : vMid,
+          by: infoB.uAxis === 'x' ? vMid : sA.coord,
+          fromTop: false,
+          openPositive: false,
+          slotWidth: slotW,
+          rect: rectB
+        });
+
+        totalSlots += 2;
+      }
+    }
+  }
+
+  // Tallar geométricamente todas las ranuras en los contornos 2D de cada costilla
+  const allPuzzleSlices = slicesA.concat(slicesB);
+  allPuzzleSlices.forEach((slice) => {
+    let currentLoops = slice.baseLoops.slice();
+    for (let r = 0; r < slice.slotRects.length; r++) {
+      currentLoops = subtractSingleRectFromLoops(currentLoops, slice.slotRects[r]);
+    }
+    slice.loops = currentLoops;
+  });
+
+  state.puzzleTotalSlotsCount = totalSlots;
+  return totalSlots;
+}
+
 function rebuildGhostAndSlices() {
   if (!state.baseVertices) return;
   const verts = getScaledTriangles();
@@ -1601,40 +2214,110 @@ function rebuildGhostAndSlices() {
   ghostMesh3D.visible = state.showGhost;
   scene.add(ghostMesh3D);
 
-  // Calcular número de capas y grosor según eje activo
-  const axisSpan = state.dimsMM[state.axis];
-  if (state.mode === 'count') {
-    state.thickness = axisSpan / state.sliceCount;
+  if (state.constructionMode === 'puzzle3d') {
+    const cfg = getPuzzleAxesConfig();
+    const spanA = state.dimsMM[cfg.axisA];
+    const spanB = state.dimsMM[cfg.axisB];
+    const countA = Math.max(2, state.puzzleCountA);
+    const countB = Math.max(2, state.puzzleCountB);
+    const minA = -spanA / 2;
+    const stepA = spanA / countA;
+    const minB = -spanB / 2;
+    const stepB = spanB / countB;
+
+    const slicesA = [];
+    const slicesB = [];
+    let totalRemovedIslands = 0;
+
+    for (let i = 0; i < countA; i++) {
+      const coordA = minA + stepA * (i + 0.5);
+      const rawLoops = sliceTrianglesAtPlane(verts, cfg.axisA, coordA, spanA);
+      const filteredRes = filterLoopsByMinIslandSize(rawLoops);
+      totalRemovedIslands += filteredRes.removedCount;
+      slicesA.push({
+        index: i,
+        coord: coordA,
+        sliceAxis: cfg.axisA,
+        puzzleSeries: 'A',
+        seriesIndex: i,
+        puzzleCode: cfg.axisA.toUpperCase() + (i + 1),
+        selected: true,
+        rawLoops: rawLoops,
+        baseLoops: filteredRes.loops,
+        loops: filteredRes.loops,
+        slots: [],
+        slotRects: []
+      });
+    }
+
+    for (let j = 0; j < countB; j++) {
+      const coordB = minB + stepB * (j + 0.5);
+      const rawLoops = sliceTrianglesAtPlane(verts, cfg.axisB, coordB, spanB);
+      const filteredRes = filterLoopsByMinIslandSize(rawLoops);
+      totalRemovedIslands += filteredRes.removedCount;
+      slicesB.push({
+        index: countA + j,
+        coord: coordB,
+        sliceAxis: cfg.axisB,
+        puzzleSeries: 'B',
+        seriesIndex: j,
+        puzzleCode: cfg.axisB.toUpperCase() + (j + 1),
+        selected: true,
+        rawLoops: rawLoops,
+        baseLoops: filteredRes.loops,
+        loops: filteredRes.loops,
+        slots: [],
+        slotRects: []
+      });
+    }
+
+    carveInterlockingPuzzleSlots(slicesA, slicesB, cfg.axisA, cfg.axisB);
+
+    state.thickness = state.puzzleMaterialThicknessMM;
+    state.slices = slicesA.concat(slicesB);
+    state.filteredIslandsCount = totalRemovedIslands;
+    updateFilteredIslandsUI();
+    syncConstructionModeUI();
   } else {
-    state.sliceCount = Math.max(2, Math.min(450, Math.floor(axisSpan / state.thickness)));
-    document.getElementById('sliceCountSlider').value = state.sliceCount;
-    document.getElementById('sliceCountLabel').textContent = state.sliceCount;
+    state.puzzleTotalSlotsCount = 0;
+    // Calcular número de capas y grosor según eje activo en modo apilado 1 eje
+    const axisSpan = state.dimsMM[state.axis];
+    if (state.mode === 'count') {
+      state.thickness = axisSpan / state.sliceCount;
+    } else {
+      state.sliceCount = Math.max(2, Math.min(450, Math.floor(axisSpan / state.thickness)));
+      document.getElementById('sliceCountSlider').value = state.sliceCount;
+      document.getElementById('sliceCountLabel').textContent = state.sliceCount;
+    }
+    document.getElementById('computedThicknessInfo').textContent = state.thickness.toFixed(2) + ' mm (' + state.sliceCount + ' capas)';
+
+    const minCoord = -axisSpan / 2;
+    const step = axisSpan / state.sliceCount;
+    const newSlices = [];
+    let totalRemovedIslands = 0;
+
+    for (let i = 0; i < state.sliceCount; i++) {
+      const planeCoord = minCoord + step * (i + 0.5);
+      const rawLoops = sliceTrianglesAtPlane(verts, state.axis, planeCoord, axisSpan);
+      const filteredRes = filterLoopsByMinIslandSize(rawLoops);
+      totalRemovedIslands += filteredRes.removedCount;
+      newSlices.push({
+        index: i,
+        coord: planeCoord,
+        sliceAxis: state.axis,
+        puzzleSeries: null,
+        puzzleCode: null,
+        selected: true,
+        rawLoops: rawLoops,
+        loops: filteredRes.loops,
+        slots: []
+      });
+    }
+
+    state.slices = newSlices;
+    state.filteredIslandsCount = totalRemovedIslands;
+    updateFilteredIslandsUI();
   }
-  document.getElementById('computedThicknessInfo').textContent = state.thickness.toFixed(2) + ' mm (' + state.sliceCount + ' capas)';
-
-  // Intersección plano-malla para cada lasca
-  const minCoord = -axisSpan / 2;
-  const step = axisSpan / state.sliceCount;
-  const newSlices = [];
-  let totalRemovedIslands = 0;
-
-  for (let i = 0; i < state.sliceCount; i++) {
-    const planeCoord = minCoord + step * (i + 0.5);
-    const rawLoops = sliceTrianglesAtPlane(verts, state.axis, planeCoord, axisSpan);
-    const filteredRes = filterLoopsByMinIslandSize(rawLoops);
-    totalRemovedIslands += filteredRes.removedCount;
-    newSlices.push({
-      index: i,
-      coord: planeCoord,
-      selected: true,
-      rawLoops: rawLoops,
-      loops: filteredRes.loops
-    });
-  }
-
-  state.slices = newSlices;
-  state.filteredIslandsCount = totalRemovedIslands;
-  updateFilteredIslandsUI();
 
   if (state.activeSliceIndex >= state.slices.length) {
     state.activeSliceIndex = Math.max(0, state.slices.length - 1);
@@ -1724,9 +2407,19 @@ function applyIslandFilterToExistingSlices() {
   state.slices.forEach((slice) => {
     const base = slice.rawLoops || slice.loops || [];
     const res = filterLoopsByMinIslandSize(base);
+    slice.baseLoops = res.loops;
     slice.loops = res.loops;
     totalRemoved += res.removedCount;
   });
+
+  if (state.constructionMode === 'puzzle3d') {
+    const cfg = getPuzzleAxesConfig();
+    const slicesA = state.slices.filter((s) => s.puzzleSeries === 'A');
+    const slicesB = state.slices.filter((s) => s.puzzleSeries === 'B');
+    carveInterlockingPuzzleSlots(slicesA, slicesB, cfg.axisA, cfg.axisB);
+    syncConstructionModeUI();
+  }
+
   state.filteredIslandsCount = totalRemoved;
   updateFilteredIslandsUI();
 
@@ -1973,7 +2666,7 @@ function classifyLoopsOuterAndHoles(rawLoops) {
 }
 
 // =========================================================================
-// CONSTRUCCIÓN DE LASCAS 3D EXTRUIDAS
+// CONSTRUCCIÓN DE LASCAS 3D EXTRUIDAS (APILADO 1 EJE Y PUZZLE 3D 2 EJES)
 // =========================================================================
 function build3DSlicesMesh() {
   while (sliceGroup3D.children.length > 0) {
@@ -1982,7 +2675,10 @@ function build3DSlicesMesh() {
     if (m.material) m.material.dispose();
   }
 
-  const extrudeDepth = Math.max(0.2, state.thickness * 0.92);
+  const isPuzzle = state.constructionMode === 'puzzle3d';
+  const extrudeDepth = isPuzzle
+    ? Math.max(0.3, state.puzzleMaterialThicknessMM)
+    : Math.max(0.2, state.thickness * 0.92);
 
   state.slices.forEach((slice, idx) => {
     const outers = slice.loops.filter((l) => !l.isHole);
@@ -2014,15 +2710,27 @@ function build3DSlicesMesh() {
     const geom = new THREE.ExtrudeGeometry(shapes, { depth: extrudeDepth, bevelEnabled: false });
     geom.translate(0, 0, -extrudeDepth / 2);
 
-    if (state.axis === 'x') {
+    const ax = slice.sliceAxis || state.axis;
+    if (ax === 'x') {
       geom.rotateY(Math.PI / 2);
       geom.rotateZ(Math.PI / 2);
-    } else if (state.axis === 'y') {
+    } else if (ax === 'y') {
       geom.rotateX(Math.PI / 2);
     }
 
-    const hue = 0.55 - (idx / Math.max(1, state.slices.length - 1)) * 0.14;
-    const col = new THREE.Color().setHSL(hue, 0.75, 0.52);
+    let col;
+    if (isPuzzle) {
+      if (slice.puzzleSeries === 'A') {
+        const hueA = 0.54 - ((slice.seriesIndex || 0) / Math.max(1, state.puzzleCountA - 1)) * 0.08;
+        col = new THREE.Color().setHSL(hueA, 0.80, 0.50);
+      } else {
+        const hueB = 0.11 - ((slice.seriesIndex || 0) / Math.max(1, state.puzzleCountB - 1)) * 0.05;
+        col = new THREE.Color().setHSL(hueB, 0.85, 0.54);
+      }
+    } else {
+      const hue = 0.55 - (idx / Math.max(1, state.slices.length - 1)) * 0.14;
+      col = new THREE.Color().setHSL(hue, 0.75, 0.52);
+    }
 
     const mat = new THREE.MeshStandardMaterial({
       color: col,
@@ -2042,17 +2750,39 @@ function build3DSlicesMesh() {
 
 function update3DSlicesTransforms() {
   const exp = state.explodeFactor / 100;
+  const isPuzzle = state.constructionMode === 'puzzle3d';
+  const puzzleCfg = isPuzzle ? getPuzzleAxesConfig() : null;
+
   sliceGroup3D.children.forEach((mesh) => {
     const idx = mesh.userData.sliceIndex;
     const slice = state.slices[idx];
     if (!slice) return;
 
-    const offset = slice.coord * (1 + exp * 1.4);
-    mesh.position.set(
-      state.axis === 'x' ? offset : 0,
-      state.axis === 'y' ? offset : 0,
-      state.axis === 'z' ? offset : 0
-    );
+    const ax = slice.sliceAxis || state.axis;
+    if (isPuzzle && puzzleCfg) {
+      // En modo Puzzle 3D, al aumentar Explosión 3D la Serie B se desliza a lo largo del eje común de encaje saliendo de las ranuras de la Serie A
+      const spreadCoord = slice.coord * (1 + exp * 0.3);
+      const liftSpan = state.dimsMM[puzzleCfg.axisCommon] || 100;
+      const slideOffset = (slice.puzzleSeries === 'B' ? 1 : -0.15) * exp * liftSpan * 0.65;
+
+      let px = 0, py = 0, pz = 0;
+      if (ax === 'x') px = spreadCoord;
+      else if (ax === 'y') py = spreadCoord;
+      else pz = spreadCoord;
+
+      if (puzzleCfg.axisCommon === 'x') px += slideOffset;
+      else if (puzzleCfg.axisCommon === 'y') py += slideOffset;
+      else pz += slideOffset;
+
+      mesh.position.set(px, py, pz);
+    } else {
+      const offset = slice.coord * (1 + exp * 1.4);
+      mesh.position.set(
+        ax === 'x' ? offset : 0,
+        ax === 'y' ? offset : 0,
+        ax === 'z' ? offset : 0
+      );
+    }
 
     const isActive = idx === state.activeSliceIndex;
     if (state.isolateCurrent) {
@@ -2150,6 +2880,8 @@ function onGuideSettingsChange() {
 
 // Devuelve la lasca superior (#N+1) o inferior (#N-1) según dirección ('next' | 'prev')
 function getAdjacentSlice(idx, dir) {
+  // En modo Puzzle 3D las piezas se unen por ranuras ortogonales sin pegamento, no por apilado paralelo
+  if (state.constructionMode === 'puzzle3d') return null;
   if (dir === 'next' && !state.includeNextSliceGuide) return null;
   if (dir === 'prev' && !state.includePrevSliceGuide) return null;
   const targetIdx = dir === 'prev' ? idx - 1 : idx + 1;
@@ -2941,23 +3673,32 @@ function isRectStrictlyInsideIsland(cx, cy, w, h, outerPts, holeLoops, rods, rod
 function getIslandTextLineOptions(item) {
   let numPart = '';
   let guidePart = '';
+  const sliceRef = state.slices && state.slices[item.sliceIndex];
+  const baseCode = (item.puzzleCode || (sliceRef && sliceRef.puzzleCode))
+    ? (item.puzzleCode || sliceRef.puzzleCode)
+    : ('#' + (item.sliceIndex + 1));
 
   if (state.nestEngraveSliceNum) {
     numPart = item.totalIslandsInSlice > 1
-      ? '#' + (item.sliceIndex + 1) + '.' + (item.islandIdxInSlice + 1)
-      : '#' + (item.sliceIndex + 1);
+      ? baseCode + '.' + (item.islandIdxInSlice + 1)
+      : baseCode;
   }
   if (state.nestEngraveGuideType) {
-    const hasSup = state.includeNextSliceGuide && item.upperPolys && item.upperPolys.length > 0;
-    const hasInf = state.includePrevSliceGuide && item.lowerPolys && item.lowerPolys.length > 0;
-    if (hasSup && hasInf) {
-      guidePart = '[Ambas]';
-    } else if (hasSup) {
-      guidePart = '[Sup]';
-    } else if (hasInf) {
-      guidePart = '[Inf]';
+    if (state.constructionMode === 'puzzle3d' || item.puzzleSeries || (sliceRef && sliceRef.puzzleSeries)) {
+      const series = item.puzzleSeries || (sliceRef && sliceRef.puzzleSeries);
+      guidePart = series === 'A' ? '[Base]' : '[Cruce]';
     } else {
-      guidePart = '[Sin guía]';
+      const hasSup = state.includeNextSliceGuide && item.upperPolys && item.upperPolys.length > 0;
+      const hasInf = state.includePrevSliceGuide && item.lowerPolys && item.lowerPolys.length > 0;
+      if (hasSup && hasInf) {
+        guidePart = '[Ambas]';
+      } else if (hasSup) {
+        guidePart = '[Sup]';
+      } else if (hasInf) {
+        guidePart = '[Inf]';
+      } else {
+        guidePart = '[Sin guía]';
+      }
     }
   }
 
@@ -3141,8 +3882,9 @@ function extractIslandsFromSlices(targetSlices) {
     if (outers.length === 0) return;
 
     // Obtener lascas adyacentes reales del modelo para calcular si esta isla tiene guía superior/inferior
-    const nextSlice = (idx + 1 < state.slices.length) ? state.slices[idx + 1] : null;
-    const prevSlice = (idx - 1 >= 0) ? state.slices[idx - 1] : null;
+    const isPuzzle = state.constructionMode === 'puzzle3d';
+    const nextSlice = (!isPuzzle && idx + 1 < state.slices.length) ? state.slices[idx + 1] : null;
+    const prevSlice = (!isPuzzle && idx - 1 >= 0) ? state.slices[idx - 1] : null;
     const sliceRods = getAlignmentHoles2D(slice);
 
     outers.forEach((outer, oIdx) => {
@@ -3178,6 +3920,10 @@ function extractIslandsFromSlices(targetSlices) {
 
       const itemObj = {
         sliceIndex: idx,
+        puzzleCode: slice.puzzleCode || null,
+        puzzleSeries: slice.puzzleSeries || null,
+        sliceAxis: slice.sliceAxis || state.axis,
+        puzzleSlotsCount: slice.puzzleSlots ? slice.puzzleSlots.length : 0,
         islandIdxInSlice: oIdx,
         totalIslandsInSlice: outers.length,
         outerPoints: outer.points,
@@ -3791,18 +4537,29 @@ function update2DInspectorHeader() {
     if (includeLbl) includeLbl.classList.remove('hidden');
     const slice = state.slices[state.activeSliceIndex];
     if (!slice) return;
-    document.getElementById('slice2DTitle').textContent = 'Lasca #' + (state.activeSliceIndex + 1) + ' / ' + state.slices.length;
-    document.getElementById('slice2DCoord').textContent = state.axis.toUpperCase() + ' = ' + slice.coord.toFixed(2) + ' mm';
+    if (state.constructionMode === 'puzzle3d' && slice.puzzleCode) {
+      const seriesLbl = slice.puzzleSeries === 'A' ? 'Serie A ⊔ (Base)' : 'Serie B ⊓ (Cruce)';
+      document.getElementById('slice2DTitle').textContent =
+        'Costilla ' + slice.puzzleCode + ' · ' + seriesLbl + ' (' + (state.activeSliceIndex + 1) + '/' + state.slices.length + ')';
+      document.getElementById('slice2DCoord').textContent =
+        (slice.sliceAxis || state.axis).toUpperCase() + ' = ' + slice.coord.toFixed(2) + ' mm';
+    } else {
+      document.getElementById('slice2DTitle').textContent = 'Lasca #' + (state.activeSliceIndex + 1) + ' / ' + state.slices.length;
+      document.getElementById('slice2DCoord').textContent = state.axis.toUpperCase() + ' = ' + slice.coord.toFixed(2) + ' mm';
+    }
     document.getElementById('currentSliceSelectedCheck').checked = slice.selected;
 
     const b = getSliceBounds2D(slice);
-    const docB = getModelBounds2D();
+    const docB = getModelBounds2D(slice.sliceAxis);
     const f = getUnitFactor();
     const dec = state.unit === 'm' ? 3 : 1;
+    const slotsStr = (state.constructionMode === 'puzzle3d' && slice.puzzleSlots)
+      ? (' | Ranuras de encaje: ' + slice.puzzleSlots.length)
+      : '';
     document.getElementById('slice2DStats').textContent =
       'Corte: ' + (b.width / f).toFixed(dec) + ' × ' + (b.height / f).toFixed(dec) + ' ' + state.unit +
       ' | Doc SVG (Pieza): ' + (docB.width / f).toFixed(dec) + ' × ' + (docB.height / f).toFixed(dec) + ' ' + state.unit +
-      ' | Contornos: ' + slice.loops.length;
+      ' | Contornos: ' + slice.loops.length + slotsStr;
   }
 }
 
@@ -3971,6 +4728,7 @@ function generateBoardIllustrationSVG(board, opts) {
   const totalSlicesCount = Math.max(1, state.slices.length);
   const rodR = Math.max(0.8, state.rodDiameter * 0.5);
   const targetHighlights = [];
+  const isPuzzle = state.constructionMode === 'puzzle3d';
 
   // Dibujar cada isla colocada en el tablero
   (board.placements || []).forEach((pl) => {
@@ -3988,9 +4746,13 @@ function generateBoardIllustrationSVG(board, opts) {
     // Colores según modo vista general vs modo localizador de paso
     let fillCol, fillOp, strokeOuter, strokeHole, strokeW;
     if (highlightSliceIdx === null) {
-      const ratio = sIdx / Math.max(1, totalSlicesCount - 1);
-      const hue = Math.round(160 + ratio * 55); // De verde esmeralda (#1) a azul cielo/índigo (#N)
-      fillCol = 'hsl(' + hue + ', 80%, 48%)';
+      if (isPuzzle && isl.puzzleSeries) {
+        fillCol = isl.puzzleSeries === 'A' ? '#0ea5e9' : '#f59e0b';
+      } else {
+        const ratio = sIdx / Math.max(1, totalSlicesCount - 1);
+        const hue = Math.round(160 + ratio * 55); // De verde esmeralda (#1) a azul cielo/índigo (#N)
+        fillCol = 'hsl(' + hue + ', 80%, 48%)';
+      }
       fillOp = isLight ? '0.22' : '0.24';
       strokeOuter = isLight ? '#dc2626' : '#f87171';
       strokeHole = isLight ? '#2563eb' : '#60a5fa';
@@ -4026,7 +4788,7 @@ function generateBoardIllustrationSVG(board, opts) {
       });
 
       // Guías de pegado grabadas sobre la isla en el tablero
-      if (state.includeNextSliceGuide && pl.upperPolys && pl.upperPolys.length > 0) {
+      if (!isPuzzle && state.includeNextSliceGuide && pl.upperPolys && pl.upperPolys.length > 0) {
         let upD = '';
         pl.upperPolys.forEach((poly) => { upD += buildOpenPolyPathD(poly, toX, toY) + ' '; });
         if (upD.trim()) {
@@ -4035,7 +4797,7 @@ function generateBoardIllustrationSVG(board, opts) {
           );
         }
       }
-      if (state.includePrevSliceGuide && pl.lowerPolys && pl.lowerPolys.length > 0) {
+      if (!isPuzzle && state.includePrevSliceGuide && pl.lowerPolys && pl.lowerPolys.length > 0) {
         let lowD = '';
         pl.lowerPolys.forEach((poly) => { lowD += buildOpenPolyPathD(poly, toX, toY) + ' '; });
         if (lowD.trim()) {
@@ -4068,10 +4830,11 @@ function generateBoardIllustrationSVG(board, opts) {
       }
     }
 
-    // Código de la isla (#N o #N.1)
+    // Código de la isla (#N o X1 / Y1)
+    const baseCode = (isPuzzle && isl.puzzleCode) ? isl.puzzleCode : ('#' + (sIdx + 1));
     const code = isl.totalIslandsInSlice > 1
-      ? '#' + (sIdx + 1) + '.' + (isl.islandIdxInSlice + 1)
-      : '#' + (sIdx + 1);
+      ? baseCode + '.' + (isl.islandIdxInSlice + 1)
+      : baseCode;
     const labelStr = code + (pl.rotated ? '↻' : '');
     const cx = pl.textLayout ? pl.textLayout.x : (pl.x + pl.w * 0.5);
     const cy = pl.textLayout ? pl.textLayout.y : (pl.y + pl.h * 0.5);
@@ -4095,7 +4858,7 @@ function generateBoardIllustrationSVG(board, opts) {
     }
   });
 
-  // Si estamos en modo localizador de paso, dibujar recuadro resaltado y etiqueta flotante sobre las piezas buscadas
+  // Si estamos en modo localizador de paso, dibujar recuadro resaltado sobre las piezas buscadas
   targetHighlights.forEach((item) => {
     const pl = item.pl;
     const rx = (padLeft + pl.x).toFixed(2);
@@ -4115,8 +4878,9 @@ function generateBoardIllustrationSVG(board, opts) {
 
 /**
  * 2. ILUSTRACIÓN VECTORIAL DE ENCAJE Y ALINEACIÓN 2D (ORIENTACIÓN REAL 0°)
- * Muestra cómo debe orientarse y pegarse la Lámina #N sobre la Lámina #N-1 (sombra inferior),
- * dónde quedan los orificios de varilla, los puntos de presión (holding tabs) y la guía naranja superior (#N+1).
+ * - En modo Apilado: muestra la Lámina #N sobre la Lámina #N-1, varillas, holding tabs y guía naranja (#N+1).
+ * - En modo Puzzle 3D: muestra la Costilla (X1/Y1) a 0° con sus ranuras de encaje a media madera y los códigos
+ *   de las costillas perpendiculares que encajan en cada ranura (↳Y1, ↳Y2, etc.).
  */
 function generateStepAlignmentIllustrationSVG(slice, stepIdx, activeSlices, opts) {
   const options = opts || {};
@@ -4125,10 +4889,11 @@ function generateStepAlignmentIllustrationSVG(slice, stepIdx, activeSlices, opts
 
   if (!slice || !slice.loops) return '';
 
-  const docBounds = getModelBounds2D();
+  const isPuzzle = state.constructionMode === 'puzzle3d';
+  const docBounds = getModelBounds2D(slice.sliceAxis);
   const cutBounds = getSliceBounds2D(slice);
-  const prevSlice = stepIdx > 0 ? activeSlices[stepIdx - 1] : null;
-  const nextSlice = stepIdx < activeSlices.length - 1 ? activeSlices[stepIdx + 1] : null;
+  const prevSlice = (!isPuzzle && stepIdx > 0) ? activeSlices[stepIdx - 1] : null;
+  const nextSlice = (!isPuzzle && stepIdx < activeSlices.length - 1) ? activeSlices[stepIdx + 1] : null;
 
   const minX = docBounds.minX;
   const minY = docBounds.minY;
@@ -4136,7 +4901,7 @@ function generateStepAlignmentIllustrationSVG(slice, stepIdx, activeSlices, opts
   const docH = Math.max(10, docBounds.height);
 
   const padX = Math.max(12, docW * 0.08);
-  const padY = Math.max(14, docH * 0.09);
+  const padY = Math.max(16, docH * 0.11);
   const vbW = docW + padX * 2;
   const vbH = docH + padY * 2;
 
@@ -4147,7 +4912,9 @@ function generateStepAlignmentIllustrationSVG(slice, stepIdx, activeSlices, opts
   const frameStroke = isLight ? '#cbd5e1' : '#1e293b';
   const prevFill = isLight ? '#94a3b8' : '#64748b';
   const prevStroke = isLight ? '#64748b' : '#94a3b8';
-  const currFill = isLight ? '#0ea5e9' : '#38bdf8';
+  const currFill = (isPuzzle && slice.puzzleSeries === 'B')
+    ? (isLight ? '#f59e0b' : '#fbbf24')
+    : (isLight ? '#0ea5e9' : '#38bdf8');
   const currOuterStroke = isLight ? '#dc2626' : '#f87171';
   const currHoleStroke = isLight ? '#2563eb' : '#60a5fa';
   const textColor = isLight ? '#0f172a' : '#f8fafc';
@@ -4173,7 +4940,7 @@ function generateStepAlignmentIllustrationSVG(slice, stepIdx, activeSlices, opts
     '<line x1="' + padX.toFixed(2) + '" y1="' + midY + '" x2="' + (padX + docW).toFixed(2) + '" y2="' + midY + '" stroke="' + frameStroke + '" stroke-width="0.5" vector-effect="non-scaling-stroke" />'
   );
 
-  // 1. Silueta de la capa inferior ya montada (#N-1) debajo para referencia visual de apoyo
+  // 1. Silueta de la capa inferior ya montada (#N-1) debajo para referencia visual de apoyo (solo en modo apilado)
   if (prevSlice && prevSlice.loops && prevSlice.loops.length > 0) {
     let prevD = '';
     prevSlice.loops.forEach((loop) => {
@@ -4187,7 +4954,7 @@ function generateStepAlignmentIllustrationSVG(slice, stepIdx, activeSlices, opts
     }
   }
 
-  // 2. Contorno y material sólido de la Lámina Actual (#N) en su orientación real 0°
+  // 2. Contorno y material sólido de la Lámina/Costilla Actual en orientación real 0°
   let currCompoundD = '';
   const outerLoops = [];
   const holeLoops = [];
@@ -4215,8 +4982,32 @@ function generateStepAlignmentIllustrationSVG(slice, stepIdx, activeSlices, opts
     );
   });
 
-  // 3. Guías de pegado (Naranja #N+1 donde aplicar adhesivo para el siguiente paso, y Violeta #N-1)
-  if (state.includePrevSliceGuide && prevSlice && typeof getGuidePolylinesForSlice === 'function') {
+  // 2b. En modo Puzzle 3D: ejes de inserción y etiquetas de cada ranura de encaje (↳Y1, ↳X1...)
+  if (isPuzzle && slice.puzzleSlots && slice.puzzleSlots.length > 0) {
+    const slotFontSz = Math.max(5.5, Math.min(docW, docH) * 0.038).toFixed(1);
+    const slotCol = isLight ? '#d97706' : '#fbbf24';
+    slice.puzzleSlots.forEach((sl) => {
+      const mx = typeof sl.mx === 'number' ? sl.mx : sl.x;
+      const my = typeof sl.my === 'number' ? sl.my : sl.yEnd;
+      const bx = typeof sl.bx === 'number' ? sl.bx : sl.x;
+      const by = typeof sl.by === 'number' ? sl.by : sl.yStart;
+      svg.push(
+        '<line x1="' + toX(bx) + '" y1="' + toY(by) + '" x2="' + toX(mx) + '" y2="' + toY(my) + '" ' +
+        'stroke="' + slotCol + '" stroke-width="1.2" stroke-dasharray="2.5,1.5" vector-effect="non-scaling-stroke" />'
+      );
+      const offDist = Math.max(3.0, Math.min(docW, docH) * 0.032) * (sl.openPositive ? 1 : -1);
+      const lx = sl.uAxis === 'y' ? (mx + offDist) : mx;
+      const ly = sl.uAxis === 'y' ? my : (my + offDist);
+      svg.push(
+        '<text x="' + toX(lx) + '" y="' + toY(ly) + '" text-anchor="middle" dominant-baseline="central" ' +
+        'font-family="monospace, sans-serif" font-weight="bold" font-size="' + slotFontSz + '" fill="' + slotCol + '">' +
+        '↳' + escapeGuideXml(sl.targetCode) + '</text>'
+      );
+    });
+  }
+
+  // 3. Guías de pegado (Naranja #N+1 y Violeta #N-1) en modo Apilado
+  if (!isPuzzle && state.includePrevSliceGuide && prevSlice && typeof getGuidePolylinesForSlice === 'function') {
     const lowPolys = getGuidePolylinesForSlice(slice, prevSlice);
     let lowD = '';
     lowPolys.forEach((poly) => { lowD += buildOpenPolyPathD(poly, toX, toY) + ' '; });
@@ -4227,7 +5018,7 @@ function generateStepAlignmentIllustrationSVG(slice, stepIdx, activeSlices, opts
     }
   }
 
-  if (state.includeNextSliceGuide && nextSlice && typeof getGuidePolylinesForSlice === 'function') {
+  if (!isPuzzle && state.includeNextSliceGuide && nextSlice && typeof getGuidePolylinesForSlice === 'function') {
     const upPolys = getGuidePolylinesForSlice(slice, nextSlice);
     let upD = '';
     upPolys.forEach((poly) => { upD += buildOpenPolyPathD(poly, toX, toY) + ' '; });
@@ -4269,10 +5060,11 @@ function generateStepAlignmentIllustrationSVG(slice, stepIdx, activeSlices, opts
   if (typeof extractIslandsFromSlices === 'function') {
     const sliceIslands = extractIslandsFromSlices([slice]);
     const fontSz = Math.max(6.5, Math.min(docW, docH) * 0.048).toFixed(1);
+    const baseCode = (isPuzzle && slice.puzzleCode) ? slice.puzzleCode : ('#' + (slice.index + 1));
     sliceIslands.forEach((isl) => {
       const code = isl.totalIslandsInSlice > 1
-        ? '#' + (slice.index + 1) + '.' + (isl.islandIdxInSlice + 1)
-        : '#' + (slice.index + 1);
+        ? baseCode + '.' + (isl.islandIdxInSlice + 1)
+        : baseCode;
       const tx = isl.textLayout ? isl.textLayout.x : (isl.bounds.minX + isl.bounds.width * 0.5);
       const ty = isl.textLayout ? isl.textLayout.y : (isl.bounds.minY + isl.bounds.height * 0.5);
       svg.push(
@@ -4284,14 +5076,26 @@ function generateStepAlignmentIllustrationSVG(slice, stepIdx, activeSlices, opts
   }
 
   // Cabecera y leyenda de orientación 0°
-  const titleSz = Math.max(6.5, Math.min(vbW, vbH) * 0.038).toFixed(1);
+  const titleSz = Math.max(6.2, Math.min(vbW, vbH) * 0.036).toFixed(1);
+  const headLabel = isPuzzle && slice.puzzleCode
+    ? ('▲ ORIENTACIÓN 0° (Costilla ' + slice.puzzleCode + ': ' + cutBounds.width.toFixed(1) + '×' + cutBounds.height.toFixed(1) + ' mm)')
+    : ('▲ ORIENTACIÓN 0° (Lámina #' + (slice.index + 1) + ': ' + cutBounds.width.toFixed(1) + '×' + cutBounds.height.toFixed(1) + ' mm)');
   svg.push(
-    '<text x="' + padX.toFixed(2) + '" y="' + (padY * 0.58).toFixed(2) + '" text-anchor="start" dominant-baseline="central" ' +
+    '<text x="' + padX.toFixed(2) + '" y="' + (padY * 0.52).toFixed(2) + '" text-anchor="start" dominant-baseline="central" ' +
     'font-family="monospace, sans-serif" font-weight="bold" font-size="' + titleSz + '" fill="' + subTextColor + '">' +
-    '▲ ORIENTACIÓN 0° (Lámina #' + (slice.index + 1) + ': ' + cutBounds.width.toFixed(1) + '×' + cutBounds.height.toFixed(1) + ' mm)</text>'
+    escapeGuideXml(headLabel) + '</text>'
   );
 
-  if (prevSlice) {
+  if (isPuzzle) {
+    const slotDirNote = slice.puzzleSeries === 'A'
+      ? ('Serie A ⊔ (Base) · ' + (slice.puzzleSlots ? slice.puzzleSlots.length : 0) + ' ranura(s) abiertas ARRIBA')
+      : ('Serie B ⊓ (Cruce) · ' + (slice.puzzleSlots ? slice.puzzleSlots.length : 0) + ' ranura(s) abiertas ABAJO');
+    svg.push(
+      '<text x="' + padX.toFixed(2) + '" y="' + (padY + docH + padY * 0.55).toFixed(2) + '" text-anchor="start" dominant-baseline="central" ' +
+      'font-family="monospace, sans-serif" font-size="' + titleSz + '" fill="' + subTextColor + '">' +
+      escapeGuideXml(slotDirNote) + '</text>'
+    );
+  } else if (prevSlice) {
     svg.push(
       '<text x="' + padX.toFixed(2) + '" y="' + (padY + docH + padY * 0.55).toFixed(2) + '" text-anchor="start" dominant-baseline="central" ' +
       'font-family="monospace, sans-serif" font-size="' + titleSz + '" fill="' + subTextColor + '">' +
@@ -4304,10 +5108,7 @@ function generateStepAlignmentIllustrationSVG(slice, stepIdx, activeSlices, opts
 }
 
 /**
- * 3. ILUSTRACIÓN VECTORIAL DE ALZADO LATERAL DE APILADO (PROGRESO VERTICAL #1 -> #N)
- * Representa la sección transversal de todas las láminas apiladas de abajo a arriba,
- * destacando en verde las capas ya pegadas, en ámbar/cielo la capa actual a colocar,
- * y en línea discontinua las capas superiores pendientes.
+ * 3. ILUSTRACIÓN VECTORIAL DE ALZADO LATERAL (MODO APILADO) O PLANTA DE RETÍCULA ORTOGONAL (MODO PUZZLE 3D)
  */
 function generateStepStackElevationSVG(slice, stepIdx, activeSlices, opts) {
   const options = opts || {};
@@ -4315,6 +5116,110 @@ function generateStepStackElevationSVG(slice, stepIdx, activeSlices, opts) {
   const maxH = options.maxHeightPx || 215;
 
   if (!activeSlices || activeSlices.length === 0) return '';
+
+  // EN MODO PUZZLE 3D: Dibujar Planta de Retícula Ortogonal (Serie A × Serie B) con nudos de encaje
+  if (state.constructionMode === 'puzzle3d' && typeof getPuzzleAxesConfig === 'function') {
+    const cfg = getPuzzleAxesConfig();
+    const spanA = Math.max(20, state.dimsMM[cfg.axisA] || 100);
+    const spanB = Math.max(20, state.dimsMM[cfg.axisB] || 100);
+    const halfA = spanA * 0.5;
+    const halfB = spanB * 0.5;
+
+    const padX = Math.max(18, spanA * 0.16);
+    const padY = Math.max(18, spanB * 0.16);
+    const vbW = spanA + padX * 2;
+    const vbH = spanB + padY * 2;
+
+    const toX = (coordA) => (padX + (Number(coordA) + halfA));
+    const toY = (coordB) => (padY + (spanB - (Number(coordB) + halfB)));
+
+    const bgCanvas = isLight ? '#f8fafc' : '#090d16';
+    const frameCol = isLight ? '#cbd5e1' : '#1e293b';
+    const doneCol = '#10b981';
+    const currCol = '#f59e0b';
+    const pendCol = isLight ? '#94a3b8' : '#334155';
+    const textCol = isLight ? '#0f172a' : '#f8fafc';
+    const subCol = isLight ? '#475569' : '#94a3b8';
+
+    const svg = [];
+    svg.push(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + vbW.toFixed(2) + ' ' + vbH.toFixed(2) + '" ' +
+      'style="width:100%;max-height:' + maxH + 'px;height:auto;display:block;background:' + bgCanvas + ';border-radius:8px;">'
+    );
+
+    svg.push(
+      '<rect x="' + padX.toFixed(2) + '" y="' + padY.toFixed(2) + '" width="' + spanA.toFixed(2) + '" height="' + spanB.toFixed(2) + '" ' +
+      'fill="none" stroke="' + frameCol + '" stroke-width="0.9" stroke-dasharray="3,3" vector-effect="non-scaling-stroke" rx="2" />'
+    );
+
+    const slotW = Math.max(1.2, state.puzzleMaterialThicknessMM);
+    const lblFont = Math.max(6.0, Math.min(vbW, vbH) * 0.042).toFixed(1);
+
+    const infoA = typeof getPuzzleSlice2DAxes === 'function' ? getPuzzleSlice2DAxes(cfg.axisA, cfg.axisB) : { uAxis: 'x' };
+    const infoB = typeof getPuzzleSlice2DAxes === 'function' ? getPuzzleSlice2DAxes(cfg.axisB, cfg.axisA) : { uAxis: 'x' };
+
+    // Dibujar todas las costillas de la retícula en orden
+    activeSlices.forEach((s, k) => {
+      const b2d = getSliceBounds2D(s);
+      const isDone = k < stepIdx;
+      const isCurr = k === stepIdx;
+
+      const col = isCurr ? currCol : (isDone ? doneCol : pendCol);
+      const op = isCurr ? '0.95' : (isDone ? '0.68' : '0.32');
+      const dash = (!isCurr && !isDone) ? ' stroke-dasharray="2,2"' : '';
+
+      if (s.puzzleSeries === 'A') {
+        const cx = toX(s.coord);
+        const minBCoord = infoA.uAxis === 'x' ? b2d.minX : b2d.minY;
+        const maxBCoord = infoA.uAxis === 'x' ? b2d.maxX : b2d.maxY;
+        const y1 = toY(maxBCoord);
+        const y2 = toY(minBCoord);
+        const hBar = Math.max(1, y2 - y1);
+        svg.push(
+          '<rect x="' + (cx - slotW * 0.5).toFixed(2) + '" y="' + y1.toFixed(2) + '" width="' + slotW.toFixed(2) + '" height="' + hBar.toFixed(2) + '" ' +
+          'fill="' + col + '" fill-opacity="' + op + '" stroke="' + col + '" stroke-width="' + (isCurr ? '1.5' : '0.7') + '"' + dash + ' vector-effect="non-scaling-stroke" />'
+        );
+      } else {
+        const cy = toY(s.coord);
+        const minACoord = infoB.uAxis === 'x' ? b2d.minX : b2d.minY;
+        const maxACoord = infoB.uAxis === 'x' ? b2d.maxX : b2d.maxY;
+        const x1 = toX(minACoord);
+        const x2 = toX(maxACoord);
+        const wBar = Math.max(1, x2 - x1);
+        svg.push(
+          '<rect x="' + x1.toFixed(2) + '" y="' + (cy - slotW * 0.5).toFixed(2) + '" width="' + wBar.toFixed(2) + '" height="' + slotW.toFixed(2) + '" ' +
+          'fill="' + col + '" fill-opacity="' + op + '" stroke="' + col + '" stroke-width="' + (isCurr ? '1.5' : '0.7') + '"' + dash + ' vector-effect="non-scaling-stroke" />'
+        );
+      }
+    });
+
+    // Destacar los puntos de cruce (ranuras) de la costilla actual
+    if (slice.puzzleSlots && slice.puzzleSlots.length > 0) {
+      const nodeR = Math.max(1.8, Math.min(spanA, spanB) * 0.024).toFixed(2);
+      slice.puzzleSlots.forEach((sl) => {
+        const nx = slice.puzzleSeries === 'A' ? toX(slice.coord) : toX(sl.x);
+        const ny = slice.puzzleSeries === 'A' ? toY(sl.x) : toY(slice.coord);
+        svg.push(
+          '<circle cx="' + nx.toFixed(2) + '" cy="' + ny.toFixed(2) + '" r="' + nodeR + '" ' +
+          'fill="#fbbf24" stroke="#0f172a" stroke-width="1.0" vector-effect="non-scaling-stroke" />'
+        );
+      });
+    }
+
+    svg.push(
+      '<text x="' + (vbW * 0.5).toFixed(2) + '" y="' + (padY * 0.52).toFixed(2) + '" text-anchor="middle" dominant-baseline="central" ' +
+      'font-family="monospace, sans-serif" font-weight="bold" font-size="' + lblFont + '" fill="' + subCol + '">' +
+      'RETÍCULA ORTOGONAL (' + cfg.axisA.toUpperCase() + ' × ' + cfg.axisB.toUpperCase() + ') — COSTILLA ' + escapeGuideXml(slice.puzzleCode || '') + '</text>'
+    );
+    svg.push(
+      '<text x="' + (vbW * 0.5).toFixed(2) + '" y="' + (padY + spanB + padY * 0.55).toFixed(2) + '" text-anchor="middle" dominant-baseline="central" ' +
+      'font-family="monospace, sans-serif" font-size="' + lblFont + '" fill="' + textCol + '">' +
+      '● Nudos amarillos = Ranuras de encaje sin pegamento</text>'
+    );
+
+    svg.push('</svg>');
+    return svg.join('');
+  }
 
   const docBounds = getModelBounds2D();
   const minX = docBounds.minX;
@@ -4575,14 +5480,23 @@ function renderBoardInfoModalContent(bIdx) {
     sliceGroupsMap.get(sIdx).placements.push(pl);
   });
 
+  const isPuzzle = state.constructionMode === 'puzzle3d';
   const sliceGroups = Array.from(sliceGroupsMap.values()).sort((a, b) => a.sliceIndex - b.sliceIndex);
-  const uniqueSlicesNums = sliceGroups.map((g) => '#' + (g.sliceIndex + 1)).join(', ');
+  const uniqueSlicesNums = sliceGroups.map((g) => {
+    const sl = state.slices[g.sliceIndex];
+    return (isPuzzle && sl && sl.puzzleCode) ? sl.puzzleCode : ('#' + (g.sliceIndex + 1));
+  }).join(', ');
 
   // 3. Resumen de métricas del tablero
+  const modeSummaryTitle = isPuzzle ? ('Puzzle 3D (' + state.puzzleAxes.toUpperCase() + ')') : ('Eje ' + state.axis.toUpperCase());
+  const modeSummarySub = isPuzzle
+    ? ('Espesor: ' + state.puzzleMaterialThicknessMM.toFixed(2) + ' mm (Sin cola)')
+    : (state.thickness.toFixed(2) + ' mm / lámina');
+
   metricsGrid.innerHTML =
     '<div class="bg-slate-800/70 border border-slate-700/70 rounded-xl p-2.5">' +
-      '<span class="text-[10px] text-slate-400 block uppercase font-bold">Láminas Presentes</span>' +
-      '<span class="text-sm font-bold text-sky-300">' + sliceGroups.length + ' lámina(s)</span>' +
+      '<span class="text-[10px] text-slate-400 block uppercase font-bold">' + (isPuzzle ? 'Costillas Presentes' : 'Láminas Presentes') + '</span>' +
+      '<span class="text-sm font-bold text-sky-300">' + sliceGroups.length + (isPuzzle ? ' costilla(s)' : ' lámina(s)') + '</span>' +
       '<span class="text-[10px] text-slate-400 truncate block" title="' + uniqueSlicesNums + '">' + uniqueSlicesNums + '</span>' +
     '</div>' +
     '<div class="bg-slate-800/70 border border-slate-700/70 rounded-xl p-2.5">' +
@@ -4596,9 +5510,9 @@ function renderBoardInfoModalContent(bIdx) {
       '<span class="text-[10px] text-slate-400 block">Área: ' + (board.usedArea / 100).toFixed(1) + ' cm²</span>' +
     '</div>' +
     '<div class="bg-slate-800/70 border border-slate-700/70 rounded-xl p-2.5">' +
-      '<span class="text-[10px] text-slate-400 block uppercase font-bold">Eje y Grosor</span>' +
-      '<span class="text-sm font-bold text-indigo-300">Eje ' + state.axis.toUpperCase() + '</span>' +
-      '<span class="text-[10px] text-slate-400 block">' + state.thickness.toFixed(2) + ' mm / lámina</span>' +
+      '<span class="text-[10px] text-slate-400 block uppercase font-bold">Sistema y Grosor</span>' +
+      '<span class="text-sm font-bold text-indigo-300">' + modeSummaryTitle + '</span>' +
+      '<span class="text-[10px] text-slate-400 block">' + modeSummarySub + '</span>' +
     '</div>';
 
   // 4. Construir vista vectorial del tablero + listado detallado por lámina
@@ -4609,7 +5523,7 @@ function renderBoardInfoModalContent(bIdx) {
   vectorPreviewDiv.innerHTML =
     '<div class="flex items-center justify-between text-[11px]">' +
       '<span class="font-bold text-emerald-400">📐 Mapa Vectorial del Tablero #' + (board.boardIndex + 1) + '</span>' +
-      '<span class="text-slate-400">Escala real 1:1 · Color gradual de base (#1) a cima (#' + state.slices.length + ')</span>' +
+      '<span class="text-slate-400">' + (isPuzzle ? 'Escala real 1:1 · Azul: Serie A ⊔ (Base) · Ámbar: Serie B ⊓ (Cruce)' : ('Escala real 1:1 · Color gradual de base (#1) a cima (#' + state.slices.length + ')')) + '</span>' +
     '</div>' +
     generateBoardIllustrationSVG(board, { highlightSliceIndex: null, theme: 'dark', maxHeightPx: 220 });
   listContainer.appendChild(vectorPreviewDiv);
@@ -4636,6 +5550,9 @@ function renderBoardInfoModalContent(bIdx) {
   sliceGroups.forEach((group) => {
     const isCompleteInThisBoard = group.placements.length === group.totalIslandsInSlice;
     const isActiveSlice = group.sliceIndex === state.activeSliceIndex;
+    const sliceObj = state.slices[group.sliceIndex];
+    const baseSliceCode = (isPuzzle && sliceObj && sliceObj.puzzleCode) ? sliceObj.puzzleCode : ('#' + (group.sliceIndex + 1));
+    const sliceAxisName = ((sliceObj && sliceObj.sliceAxis) || state.axis).toUpperCase();
 
     const card = document.createElement('div');
     card.className =
@@ -4646,22 +5563,30 @@ function renderBoardInfoModalContent(bIdx) {
     card.onclick = () => inspectSliceFromBoardModal(group.sliceIndex, board.boardIndex);
 
     const statusBadge = isCompleteInThisBoard
-      ? '<span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold">Lámina completa (' + group.placements.length + '/' + group.totalIslandsInSlice + ' islas)</span>'
+      ? '<span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold">Completa (' + group.placements.length + '/' + group.totalIslandsInSlice + ' islas)</span>'
       : '<span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold">Parcial en este tablero (' + group.placements.length + ' de ' + group.totalIslandsInSlice + ' islas)</span>';
 
     let islandsRowsHTML = '';
     group.placements.forEach((pl) => {
       const isl = pl.island;
+      const islandBase = (isPuzzle && isl.puzzleCode) ? isl.puzzleCode : ('#' + (isl.sliceIndex + 1));
       const islandCode = isl.totalIslandsInSlice > 1
-        ? '#' + (isl.sliceIndex + 1) + '.' + (isl.islandIdxInSlice + 1)
-        : '#' + (isl.sliceIndex + 1);
+        ? islandBase + '.' + (isl.islandIdxInSlice + 1)
+        : islandBase;
 
-      const hasSup = state.includeNextSliceGuide && pl.upperPolys && pl.upperPolys.length > 0;
-      const hasInf = state.includePrevSliceGuide && pl.lowerPolys && pl.lowerPolys.length > 0;
       let guideTag = '<span class="text-slate-400">Sin guía</span>';
-      if (hasSup && hasInf) guideTag = '<span class="text-emerald-300 font-semibold">Ambas (Sup+Inf)</span>';
-      else if (hasSup) guideTag = '<span class="text-amber-300 font-semibold">Guía Sup (#N+1)</span>';
-      else if (hasInf) guideTag = '<span class="text-fuchsia-300 font-semibold">Guía Inf (#N-1)</span>';
+      if (isPuzzle) {
+        const sCount = sliceObj && sliceObj.puzzleSlots ? sliceObj.puzzleSlots.length : 0;
+        guideTag = isl.puzzleSeries === 'A'
+          ? '<span class="text-sky-300 font-semibold">[Serie A ⊔ · ' + sCount + ' ranura(s)]</span>'
+          : '<span class="text-amber-300 font-semibold">[Serie B ⊓ · ' + sCount + ' ranura(s)]</span>';
+      } else {
+        const hasSup = state.includeNextSliceGuide && pl.upperPolys && pl.upperPolys.length > 0;
+        const hasInf = state.includePrevSliceGuide && pl.lowerPolys && pl.lowerPolys.length > 0;
+        if (hasSup && hasInf) guideTag = '<span class="text-emerald-300 font-semibold">Ambas (Sup+Inf)</span>';
+        else if (hasSup) guideTag = '<span class="text-amber-300 font-semibold">Guía Sup (#N+1)</span>';
+        else if (hasInf) guideTag = '<span class="text-fuchsia-300 font-semibold">Guía Inf (#N-1)</span>';
+      }
 
       const rotTag = pl.rotated
         ? '<span class="px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-[10px]">Rotada 90°</span>'
@@ -4687,11 +5612,12 @@ function renderBoardInfoModalContent(bIdx) {
         '</div>';
     });
 
+    const headerBadgeBg = (isPuzzle && sliceObj && sliceObj.puzzleSeries === 'B') ? 'bg-amber-600' : 'bg-sky-600';
     card.innerHTML =
       '<div class="flex flex-wrap items-center justify-between gap-2 mb-2">' +
         '<div class="flex items-center gap-2">' +
-          '<span class="text-xs font-bold text-white px-2 py-0.5 rounded bg-sky-600">Lámina #' + (group.sliceIndex + 1) + '</span>' +
-          '<span class="text-xs font-mono text-sky-300">' + state.axis.toUpperCase() + ' = ' + group.coord.toFixed(2) + ' mm</span>' +
+          '<span class="text-xs font-bold text-white px-2 py-0.5 rounded ' + headerBadgeBg + '">' + (isPuzzle ? ('Costilla ' + baseSliceCode) : ('Lámina ' + baseSliceCode)) + '</span>' +
+          '<span class="text-xs font-mono text-sky-300">' + sliceAxisName + ' = ' + group.coord.toFixed(2) + ' mm</span>' +
         '</div>' +
         '<div class="flex items-center gap-2">' +
           statusBadge +
@@ -4771,6 +5697,7 @@ function jumpToSliceAndBoardFromGuide(sliceIdx, boardIdx) {
 
 // Construye el mapa de ubicación de cada lámina e isla en los tableros para la guía de montaje
 function buildAssemblyAndCuttingPlan() {
+  const isPuzzle = state.constructionMode === 'puzzle3d';
   const selectedSlices = state.slices.filter((s) => s.selected && s.loops && s.loops.some((l) => !l.isHole));
   // mapa: sliceIndex -> [{ islandCode, islandIdx, boardIndex, rotated, w, h, x, y, hasSup, hasInf, holesCount }]
   const slicePlacementsMap = new Map();
@@ -4782,14 +5709,16 @@ function buildAssemblyAndCuttingPlan() {
       if (!slicePlacementsMap.has(sIdx)) {
         slicePlacementsMap.set(sIdx, []);
       }
+      const baseCode = (isPuzzle && isl.puzzleCode) ? isl.puzzleCode : ('#' + (sIdx + 1));
       const islandCode = isl.totalIslandsInSlice > 1
-        ? '#' + (sIdx + 1) + '.' + (isl.islandIdxInSlice + 1)
-        : '#' + (sIdx + 1);
-      const hasSup = state.includeNextSliceGuide && pl.upperPolys && pl.upperPolys.length > 0;
-      const hasInf = state.includePrevSliceGuide && pl.lowerPolys && pl.lowerPolys.length > 0;
+        ? baseCode + '.' + (isl.islandIdxInSlice + 1)
+        : baseCode;
+      const hasSup = !isPuzzle && state.includeNextSliceGuide && pl.upperPolys && pl.upperPolys.length > 0;
+      const hasInf = !isPuzzle && state.includePrevSliceGuide && pl.lowerPolys && pl.lowerPolys.length > 0;
 
       slicePlacementsMap.get(sIdx).push({
         islandCode: islandCode,
+        puzzleSeries: isl.puzzleSeries || null,
         islandIdx: isl.islandIdxInSlice,
         totalIslandsInSlice: isl.totalIslandsInSlice,
         boardIndex: board.boardIndex,
@@ -4813,7 +5742,7 @@ function buildAssemblyAndCuttingPlan() {
     list.sort((a, b) => a.islandIdx - b.islandIdx);
   });
 
-  // Determinar el orden recomendado de corte de tableros para poder empezar a montar desde abajo (#1 -> #N)
+  // Determinar el orden recomendado de corte de tableros para poder empezar a montar desde el paso 1
   const boardPriorityOrder = [];
   const seenBoards = new Set();
   selectedSlices.forEach((s) => {
@@ -4845,6 +5774,7 @@ function renderAssemblyGuideModalContent() {
   const progBadge = document.getElementById('assemblyProgressBadge');
   if (!container) return;
 
+  const isPuzzle = state.constructionMode === 'puzzle3d';
   const f = getUnitFactor();
   const dec = state.unit === 'm' ? 3 : 1;
   const u = state.unit;
@@ -4856,15 +5786,23 @@ function renderAssemblyGuideModalContent() {
   const doneCount = activeSlices.filter((s) => state.assembledSlicesDone[s.index]).length;
 
   if (progBadge) {
-    progBadge.textContent = 'Progreso montaje: ' + doneCount + ' / ' + totalSteps + ' capas';
+    progBadge.textContent = 'Progreso montaje: ' + doneCount + ' / ' + totalSteps + (isPuzzle ? ' costillas' : ' capas');
   }
 
   const totalIslandsPacked = state.nestedBoards.reduce((acc, b) => acc + b.placements.length, 0);
   if (subEl) {
-    subEl.textContent =
-      'Pieza: ' + state.modelName + ' | Eje ' + axisName + ' (de abajo a arriba) | ' +
-      totalSteps + ' láminas activas (' + totalIslandsPacked + ' islas en ' + state.nestedBoards.length + ' tableros de ' +
-      (state.boardWidthMM / f).toFixed(dec) + '×' + (state.boardHeightMM / f).toFixed(dec) + ' ' + u + ')';
+    if (isPuzzle) {
+      subEl.textContent =
+        'Pieza: ' + state.modelName + ' | Puzzle 3D Encajable (' + state.puzzleAxes.toUpperCase() + ', Sin cola) | ' +
+        totalSteps + ' costillas (' + state.puzzleTotalSlotsCount + ' ranuras de ' +
+        (state.puzzleMaterialThicknessMM + state.puzzleSlotClearanceMM).toFixed(2) + ' mm) en ' +
+        state.nestedBoards.length + ' tableros';
+    } else {
+      subEl.textContent =
+        'Pieza: ' + state.modelName + ' | Eje ' + axisName + ' (de abajo a arriba) | ' +
+        totalSteps + ' láminas activas (' + totalIslandsPacked + ' islas en ' + state.nestedBoards.length + ' tableros de ' +
+        (state.boardWidthMM / f).toFixed(dec) + '×' + (state.boardHeightMM / f).toFixed(dec) + ' ' + u + ')';
+    }
   }
 
   if (state.nestedBoards.length === 0) {
@@ -4892,17 +5830,19 @@ function renderAssemblyGuideModalContent() {
     state.nestedBoards.forEach((board, bIdx) => {
       const bySlice = new Map();
       board.placements.forEach((pl) => {
-        const sNum = pl.island.sliceIndex + 1;
+        const sIdx = pl.island.sliceIndex;
+        const sNum = sIdx + 1;
+        const baseCode = (isPuzzle && pl.island.puzzleCode) ? pl.island.puzzleCode : ('#' + sNum);
         const code = pl.island.totalIslandsInSlice > 1
-          ? '#' + sNum + '.' + (pl.island.islandIdxInSlice + 1)
-          : '#' + sNum;
+          ? baseCode + '.' + (pl.island.islandIdxInSlice + 1)
+          : baseCode;
         if (!bySlice.has(sNum)) bySlice.set(sNum, []);
         bySlice.get(sNum).push({ code, rotated: pl.rotated });
       });
 
       const sortedSliceNums = Array.from(bySlice.keys()).sort((a, b) => a - b);
-      const minSlice = sortedSliceNums[0];
-      const maxSlice = sortedSliceNums[sortedSliceNums.length - 1];
+      const firstCode = sortedSliceNums.length > 0 ? bySlice.get(sortedSliceNums[0])[0].code.split('.')[0] : '#1';
+      const lastCode = sortedSliceNums.length > 0 ? bySlice.get(sortedSliceNums[sortedSliceNums.length - 1])[0].code.split('.')[0] : '#N';
 
       const chipsHTML = sortedSliceNums.map((sNum) => {
         const items = bySlice.get(sNum);
@@ -4921,7 +5861,7 @@ function renderAssemblyGuideModalContent() {
           '<div class="flex flex-wrap items-center justify-between gap-2">' +
             '<div class="flex items-center gap-2">' +
               '<span class="px-2.5 py-0.5 rounded-md bg-emerald-600 text-white text-xs font-bold">Tablero #' + (bIdx + 1) + '</span>' +
-              '<span class="text-xs text-slate-300 font-semibold">' + board.placements.length + ' piezas (' + sortedSliceNums.length + ' láminas: de #' + minSlice + ' a #' + maxSlice + ')</span>' +
+              '<span class="text-xs text-slate-300 font-semibold">' + board.placements.length + ' piezas (' + sortedSliceNums.length + (isPuzzle ? ' costillas' : ' láminas') + ': de ' + firstCode + ' a ' + lastCode + ')</span>' +
             '</div>' +
             '<div class="flex items-center gap-2">' +
               '<span class="text-[11px] text-amber-300 font-mono">Uso: ' + board.efficiency.toFixed(1) + '%</span>' +
@@ -4948,19 +5888,19 @@ function renderAssemblyGuideModalContent() {
           '<div class="grid grid-cols-1 sm:grid-cols-4 gap-2 text-[11px]">' +
             '<div class="p-2 rounded-lg bg-emerald-950/30 border border-emerald-500/30">' +
               '<span class="font-bold text-emerald-400 block">1º GRABADO TEXTO (#008800)</span>' +
-              '<span class="text-slate-400 text-[10px]">Graba primero el código <code>#N</code> e indicador <code>[Sup/Inf/Ambas]</code> mientras el tablero está intacto.</span>' +
+              '<span class="text-slate-400 text-[10px]">Graba primero el código <code>' + (isPuzzle ? 'X1 / Y1' : '#N') + '</code> mientras el tablero está intacto.</span>' +
             '</div>' +
             '<div class="p-2 rounded-lg bg-amber-950/30 border border-amber-500/30">' +
-              '<span class="font-bold text-amber-300 block">2º GUÍAS PEGADO (#ff8800 / #9900ff)</span>' +
-              '<span class="text-slate-400 text-[10px]">Marcado vectorial continuo rápido (alta velocidad, baja potencia) de las siluetas guía.</span>' +
+              '<span class="font-bold text-amber-300 block">' + (isPuzzle ? '2º RANURAS MEDIA MADERA' : '2º GUÍAS PEGADO (#ff8800 / #9900ff)') + '</span>' +
+              '<span class="text-slate-400 text-[10px]">' + (isPuzzle ? 'Las ranuras de encaje a media madera ya van integradas directamente en el contorno rojo de corte.' : 'Marcado vectorial continuo rápido (alta velocidad, baja potencia) de las siluetas guía.') + '</span>' +
             '</div>' +
             '<div class="p-2 rounded-lg bg-sky-950/30 border border-sky-500/30">' +
               '<span class="font-bold text-sky-300 block">3º CORTE HUECOS (#0055ff)</span>' +
-              '<span class="text-slate-400 text-[10px]">Corta siempre los agujeros internos y taladros de varilla antes de soltar el contorno exterior.</span>' +
+              '<span class="text-slate-400 text-[10px]">Corta siempre los agujeros internos antes de soltar el contorno exterior.</span>' +
             '</div>' +
             '<div class="p-2 rounded-lg bg-rose-950/30 border border-rose-500/30">' +
               '<span class="font-bold text-rose-400 block">4º CORTE EXTERIOR (#ff0000)</span>' +
-              '<span class="text-slate-400 text-[10px]">Corta en último lugar el perímetro exterior' + (state.tabsEnabled ? ' (dejando los ' + state.tabWidthMM.toFixed(1) + ' mm de micro-unión para extraer a presión).' : ' de cada isla para evitar que la pieza se mueva.') + '</span>' +
+              '<span class="text-slate-400 text-[10px]">Corta en último lugar el perímetro exterior' + (state.tabsEnabled ? ' (dejando los ' + state.tabWidthMM.toFixed(1) + ' mm de micro-unión para extraer a presión).' : ' de cada pieza.') + '</span>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -4969,7 +5909,9 @@ function renderAssemblyGuideModalContent() {
         '<div class="bg-slate-950/70 border border-slate-800 rounded-xl p-3 space-y-2.5">' +
           '<div class="space-y-1">' +
             '<span class="text-[11px] font-bold text-emerald-300 block">B) Secuencia Recomendada de Tableros y Planos de Distribución:</span>' +
-            '<p class="text-[11px] text-slate-300">Para empezar a ensamblar desde la base (<code>Lámina #1</code>) mientras el láser sigue cortando, procesa los tableros en este orden:</p>' +
+            '<p class="text-[11px] text-slate-300">' + (isPuzzle
+              ? 'Para ensamblar primero todas las costillas portantes de la <strong>Serie A (⊔ Base)</strong> y luego cruzar la <strong>Serie B (⊓ Cruce)</strong>, procesa los tableros en este orden:'
+              : 'Para empezar a ensamblar desde la base (<code>Lámina #1</code>) mientras el láser sigue cortando, procesa los tableros en este orden:') + '</p>' +
           '</div>' +
           '<div class="p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-[11px] space-y-1.5">' +
             '<div class="flex flex-wrap items-center gap-1">' + priorityStr + '</div>' +
@@ -4982,7 +5924,7 @@ function renderAssemblyGuideModalContent() {
   }
 
   // =======================================================================
-  // SECCIÓN 2: GUÍA ILUSTRADA DE MONTAJE DE ABAJO A ARRIBA (CAPA #1 -> CAPA #N)
+  // SECCIÓN 2: GUÍA ILUSTRADA DE MONTAJE PASO A PASO
   // =======================================================================
   if (state.assemblyGuideTab === 'all' || state.assemblyGuideTab === 'assembly') {
     let stepsHTML = '';
@@ -4990,6 +5932,8 @@ function renderAssemblyGuideModalContent() {
     activeSlices.forEach((slice, stepIdx) => {
       const sIdx = slice.index;
       const sNum = sIdx + 1;
+      const sliceTitle = (isPuzzle && slice.puzzleCode) ? ('Costilla ' + slice.puzzleCode) : ('Lámina #' + sNum);
+      const sliceAxisName = (slice.sliceAxis || state.axis).toUpperCase();
       const isBase = stepIdx === 0;
       const isTop = stepIdx === activeSlices.length - 1;
       const isDone = Boolean(state.assembledSlicesDone[sIdx]);
@@ -4997,19 +5941,40 @@ function renderAssemblyGuideModalContent() {
       const accumHeightMM = (stepIdx + 1) * state.thickness;
 
       let roleBadge = '<span class="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 text-[10px] font-semibold">Capa Intermedia</span>';
-      if (isBase) {
+      if (isPuzzle) {
+        if (slice.puzzleSeries === 'A') {
+          roleBadge = '<span class="px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/40 text-[10px] font-bold">🟦 SERIE A ⊔ (Base portante · Ranuras ARRIBA)</span>';
+        } else {
+          roleBadge = '<span class="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold">🟧 SERIE B ⊓ (Cruce transversal · Ranuras ABAJO)</span>';
+        }
+      } else if (isBase) {
         roleBadge = '<span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold">🟢 BASE INFERIOR (1ª en colocar)</span>';
       } else if (isTop) {
         roleBadge = '<span class="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-[10px] font-bold">🏁 CIMA SUPERIOR (Última capa)</span>';
       }
 
-      // Instrucción de cómo extraer, orientar y pegar esta capa respecto a la inferior y superior
       const detachHint = state.tabsEnabled
-        ? 'Presiona suavemente la pieza para desprender sus micro-uniones del tablero y repasa el borde si fuera necesario. '
+        ? 'Presiona suavemente la pieza para desprender sus micro-uniones del tablero. '
         : '';
 
       let instructionText = '';
-      if (isBase) {
+      if (isPuzzle) {
+        const slotTargets = (slice.puzzleSlots || []).map((sl) => sl.targetCode);
+        const uniqueTargets = Array.from(new Set(slotTargets));
+        if (slice.puzzleSeries === 'A') {
+          instructionText =
+            '1. ' + detachHint + 'Extrae la <strong>' + sliceTitle + '</strong> y colócala en posición vertical paralela al eje ' + sliceAxisName + ' con sus <strong>' + (slice.puzzleSlots ? slice.puzzleSlots.length : 0) + ' ranura(s) abiertas mirando hacia ARRIBA (⊔)</strong>. ' +
+            (uniqueTargets.length > 0
+              ? ('2. Sus ranuras superiores recibirán más adelante por presión (sin pegamento) las costillas transversales: <strong>' + uniqueTargets.join(', ') + '</strong>.')
+              : '2. Esta costilla exterior no requiere cruces activos.');
+        } else {
+          instructionText =
+            '1. ' + detachHint + 'Toma la <strong>' + sliceTitle + '</strong> con sus <strong>' + (slice.puzzleSlots ? slice.puzzleSlots.length : 0) + ' ranura(s) abiertas mirando hacia ABAJO (⊓)</strong>. ' +
+            (uniqueTargets.length > 0
+              ? ('2. Deslízala verticalmente de arriba hacia abajo (↓) encajando sus ranuras a media madera sobre las costillas <strong>' + uniqueTargets.join(', ') + '</strong> de la Serie A hasta que ambos bordes queden enrasados sin usar pegamento.')
+              : '2. Sitúala en su posición correspondiente del eje ' + sliceAxisName + '.');
+        }
+      } else if (isBase) {
         instructionText =
           '1. ' + detachHint + 'Localiza ' + (pls.length > 1 ? 'las <strong>' + pls.length + ' islas</strong> de ' : 'la pieza de ') + 'la <strong>Lámina #' + sNum + '</strong> resaltada en verde en el plano del tablero inferior y apóyala plana a <strong>0°</strong> sobre la mesa como <strong>BASE INFERIOR</strong>' +
           (state.rodCount > 0 ? ' (inserta las ' + state.rodCount + ' varillas guía de Ø' + state.rodDiameter + 'mm en sus orificios azules).' : '.') +
@@ -5035,17 +6000,24 @@ function renderAssemblyGuideModalContent() {
       if (pls.length === 0) {
         islandsLocateHTML =
           '<div class="p-2 rounded-lg bg-rose-950/30 border border-rose-500/40 text-rose-300 text-[11px]">' +
-            '⚠️ Esta lámina supera las dimensiones del tablero actual y no ha podido ser anidada.' +
+            '⚠️ Esta pieza supera las dimensiones del tablero actual y no ha podido ser anidada.' +
           '</div>';
       } else {
         islandsLocateHTML = pls.map((p) => {
           let guideBadge = '<span class="text-slate-400">[Sin guía]</span>';
-          if (p.hasSup && p.hasInf) guideBadge = '<span class="text-emerald-300 font-semibold">[Ambas: Sup+Inf]</span>';
-          else if (p.hasSup) guideBadge = '<span class="text-amber-300 font-semibold">[Guía Sup]</span>';
-          else if (p.hasInf) guideBadge = '<span class="text-fuchsia-300 font-semibold">[Guía Inf]</span>';
+          if (isPuzzle) {
+            const sCount = slice.puzzleSlots ? slice.puzzleSlots.length : 0;
+            guideBadge = slice.puzzleSeries === 'A'
+              ? '<span class="text-sky-300 font-semibold">[Ranuras ⊔: ' + sCount + ']</span>'
+              : '<span class="text-amber-300 font-semibold">[Ranuras ⊓: ' + sCount + ']</span>';
+          } else {
+            if (p.hasSup && p.hasInf) guideBadge = '<span class="text-emerald-300 font-semibold">[Ambas: Sup+Inf]</span>';
+            else if (p.hasSup) guideBadge = '<span class="text-amber-300 font-semibold">[Guía Sup]</span>';
+            else if (p.hasInf) guideBadge = '<span class="text-fuchsia-300 font-semibold">[Guía Inf]</span>';
+          }
 
           const rotWarning = p.rotated
-            ? '<span class="px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-semibold" title="Esta pieza se giró 90° en el tablero para optimizar espacio. Gírala 90° al montarla para que coincida con el Plano de Encaje 0°.">🔄 Girada 90° en tablero (enderezar a 0° al pegar)</span>'
+            ? '<span class="px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-semibold" title="Esta pieza se giró 90° en el tablero para optimizar espacio. Gírala 90° al montarla para que coincida con el Plano 0°.">🔄 Girada 90° en tablero (enderezar a 0° al montar)</span>'
             : '<span class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px]">Orientación 0° directa</span>';
 
           const clipBadge = p.isClippedToBoard
@@ -5055,7 +6027,7 @@ function renderAssemblyGuideModalContent() {
           return (
             '<div class="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg bg-slate-900/90 border border-slate-800 text-[11px]">' +
               '<div class="flex items-center gap-2 flex-wrap">' +
-                '<span class="font-mono font-bold text-emerald-400 text-xs">Isla ' + p.islandCode + '</span>' +
+                '<span class="font-mono font-bold text-emerald-400 text-xs">Pieza ' + p.islandCode + '</span>' +
                 '<span class="px-2 py-0.5 rounded bg-sky-500/20 border border-sky-500/40 text-sky-300 font-bold">📍 Extraer de Tablero #' + (p.boardIndex + 1) + '</span>' +
                 '<span class="text-slate-400 font-mono text-[10px]">Pos: (' + (p.x / f).toFixed(dec) + ', ' + (p.y / f).toFixed(dec) + ') ' + u + ' | ' + (p.w / f).toFixed(dec) + '×' + (p.h / f).toFixed(dec) + ' ' + u + '</span>' +
                 clipBadge +
@@ -5070,7 +6042,7 @@ function renderAssemblyGuideModalContent() {
         }).join('');
       }
 
-      // Generar los 3 diagramas vectoriales automáticos del paso (1. Localización en Tablero, 2. Plano de Encaje 2D a 0°, 3. Alzado de Apilado)
+      // Generar los 3 diagramas vectoriales automáticos del paso
       let illustrationsGridHTML = '';
       if (state.guideShowIllustrations) {
         const uniqueBoardIndices = Array.from(new Set(pls.map((p) => p.boardIndex)));
@@ -5108,20 +6080,26 @@ function renderAssemblyGuideModalContent() {
             '</div>' +
             '<div class="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800/90 flex flex-col justify-between gap-1.5">' +
               '<div class="flex items-center justify-between text-[10px]">' +
-                '<span class="font-bold text-sky-400 uppercase tracking-wide">2. Plano de Encaje y Guías (0°)</span>' +
-                '<span class="text-slate-400">Superposición sobre #' + (stepIdx > 0 ? (activeSlices[stepIdx - 1].index + 1) : 'Base') + '</span>' +
+                '<span class="font-bold text-sky-400 uppercase tracking-wide">' + (isPuzzle ? '2. Ranuras de Encaje (0°)' : '2. Plano de Encaje y Guías (0°)') + '</span>' +
+                '<span class="text-slate-400">' + (isPuzzle ? ((slice.puzzleSlots ? slice.puzzleSlots.length : 0) + ' encaje(s) a media madera') : ('Superposición sobre #' + (stepIdx > 0 ? (activeSlices[stepIdx - 1].index + 1) : 'Base'))) + '</span>' +
               '</div>' +
               alignSvg +
             '</div>' +
             '<div class="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800/90 flex flex-col justify-between gap-1.5">' +
               '<div class="flex items-center justify-between text-[10px]">' +
-                '<span class="font-bold text-amber-400 uppercase tracking-wide">3. Alzado de Apilado</span>' +
-                '<span class="text-slate-400">Cota ' + axisName + ' = ' + slice.coord.toFixed(1) + ' mm</span>' +
+                '<span class="font-bold text-amber-400 uppercase tracking-wide">' + (isPuzzle ? '3. Planta de Cruces Ortogonales' : '3. Alzado de Apilado') + '</span>' +
+                '<span class="text-slate-400">Cota ' + sliceAxisName + ' = ' + slice.coord.toFixed(1) + ' mm</span>' +
               '</div>' +
               stackSvg +
             '</div>' +
           '</div>';
       }
+
+      const rightHeaderStats = isPuzzle
+        ? ('<span class="text-sky-300">' + sliceAxisName + ' = ' + slice.coord.toFixed(2) + ' mm</span>' +
+           '<span class="text-amber-300">| Ranuras: ' + (slice.puzzleSlots ? slice.puzzleSlots.length : 0) + '</span>')
+        : ('<span class="text-sky-300">' + sliceAxisName + ' = ' + slice.coord.toFixed(2) + ' mm</span>' +
+           '<span class="text-slate-400">| Altura acum.: ' + accumHeightMM.toFixed(1) + ' mm</span>');
 
       stepsHTML +=
         '<div class="rounded-xl border p-3.5 transition space-y-2.5 ' +
@@ -5132,12 +6110,11 @@ function renderAssemblyGuideModalContent() {
                 '<input type="checkbox" ' + (isDone ? 'checked' : '') + ' onchange="toggleSliceAssembledCheck(' + sIdx + ', this.checked)" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />' +
                 '<span class="px-2.5 py-0.5 rounded-md bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold">Paso ' + (stepIdx + 1) + ' de ' + totalSteps + '</span>' +
               '</label>' +
-              '<span class="text-sm font-bold text-white">Lámina #' + sNum + '</span>' +
+              '<span class="text-sm font-bold text-white">' + sliceTitle + '</span>' +
               roleBadge +
             '</div>' +
             '<div class="flex items-center gap-2 text-[11px] font-mono">' +
-              '<span class="text-sky-300">' + axisName + ' = ' + slice.coord.toFixed(2) + ' mm</span>' +
-              '<span class="text-slate-400">| Altura acum.: ' + accumHeightMM.toFixed(1) + ' mm</span>' +
+              rightHeaderStats +
             '</div>' +
           '</div>' +
 
@@ -5156,8 +6133,12 @@ function renderAssemblyGuideModalContent() {
     html +=
       '<section class="space-y-3">' +
         '<div class="flex items-center justify-between border-b border-slate-800 pb-2">' +
-          '<h4 class="text-xs font-bold uppercase tracking-wider text-emerald-400">🧱 2. Secuencia Ilustrada de Montaje Paso a Paso (De Abajo a Arriba)</h4>' +
-          '<span class="text-[11px] text-slate-400">Planos vectoriales de localización en tablero, encaje 2D a 0° y alzado de apilado por capa</span>' +
+          '<h4 class="text-xs font-bold uppercase tracking-wider text-emerald-400">' +
+            (isPuzzle ? '🧩 2. Secuencia Ilustrada de Ensamblaje sin Pegamento (Serie A ⊔ → Serie B ⊓)' : '🧱 2. Secuencia Ilustrada de Montaje Paso a Paso (De Abajo a Arriba)') +
+          '</h4>' +
+          '<span class="text-[11px] text-slate-400">' +
+            (isPuzzle ? 'Planos vectoriales de localización en tablero, ranuras a media madera y planta de cruces' : 'Planos vectoriales de localización en tablero, encaje 2D a 0° y alzado de apilado por capa') +
+          '</span>' +
         '</div>' +
         '<div class="space-y-3">' +
           stepsHTML +
@@ -5175,6 +6156,7 @@ function generateIllustratedAssemblyGuideHTML() {
   if (!state.nestingEnabled || state.nestedBoards.length === 0) {
     recomputeBoardNesting();
   }
+  const isPuzzle = state.constructionMode === 'puzzle3d';
   const plan = buildAssemblyAndCuttingPlan();
   const activeSlices = plan.selectedSlices;
   const totalSteps = activeSlices.length;
@@ -5188,7 +6170,8 @@ function generateIllustratedAssemblyGuideHTML() {
   state.nestedBoards.forEach((board, bIdx) => {
     const codes = board.placements.map((pl) => {
       const sNum = pl.island.sliceIndex + 1;
-      const code = pl.island.totalIslandsInSlice > 1 ? ('#' + sNum + '.' + (pl.island.islandIdxInSlice + 1)) : ('#' + sNum);
+      const baseCode = (isPuzzle && pl.island.puzzleCode) ? pl.island.puzzleCode : ('#' + sNum);
+      const code = pl.island.totalIslandsInSlice > 1 ? (baseCode + '.' + (pl.island.islandIdxInSlice + 1)) : baseCode;
       return '<span class="chip">' + escapeGuideXml(code + (pl.rotated ? ' (90°↻)' : '')) + '</span>';
     }).join(' ');
 
@@ -5213,11 +6196,15 @@ function generateIllustratedAssemblyGuideHTML() {
   activeSlices.forEach((slice, stepIdx) => {
     const sIdx = slice.index;
     const sNum = sIdx + 1;
+    const sliceTitle = (isPuzzle && slice.puzzleCode) ? ('Costilla ' + slice.puzzleCode) : ('Lámina #' + sNum);
+    const sliceAxisName = (slice.sliceAxis || state.axis).toUpperCase();
     const pls = plan.slicePlacementsMap.get(sIdx) || [];
     const accumH = ((stepIdx + 1) * state.thickness).toFixed(1);
-    const roleLabel = stepIdx === 0
-      ? 'BASE INFERIOR (1ª en colocar)'
-      : (stepIdx === totalSteps - 1 ? 'CIMA SUPERIOR (Última capa)' : 'Capa Intermedia');
+    const roleLabel = isPuzzle
+      ? (slice.puzzleSeries === 'A' ? 'SERIE A ⊔ (Base portante · Ranuras ARRIBA)' : 'SERIE B ⊓ (Cruce transversal · Ranuras ABAJO)')
+      : (stepIdx === 0
+          ? 'BASE INFERIOR (1ª en colocar)'
+          : (stepIdx === totalSteps - 1 ? 'CIMA SUPERIOR (Última capa)' : 'Capa Intermedia'));
 
     const uniqueBoards = Array.from(new Set(pls.map((p) => p.boardIndex)));
     const locatorSvg = uniqueBoards.map((bIdx) =>
@@ -5239,7 +6226,13 @@ function generateIllustratedAssemblyGuideHTML() {
     });
 
     const rowsHtml = pls.map((p) => {
-      const gType = (p.hasSup && p.hasInf) ? 'Ambas Guías (Sup+Inf)' : (p.hasSup ? 'Guía Sup (#N+1)' : (p.hasInf ? 'Guía Inf (#N-1)' : 'Sin guía'));
+      let gType = 'Sin guía';
+      if (isPuzzle) {
+        const targets = (slice.puzzleSlots || []).map((sl) => sl.targetCode).join(', ');
+        gType = (slice.puzzleSlots ? slice.puzzleSlots.length : 0) + ' ranura(s)' + (targets ? (' → ' + targets) : '');
+      } else {
+        gType = (p.hasSup && p.hasInf) ? 'Ambas Guías (Sup+Inf)' : (p.hasSup ? 'Guía Sup (#N+1)' : (p.hasInf ? 'Guía Inf (#N-1)' : 'Sin guía'));
+      }
       const rotStr = p.rotated ? '🔄 Rotada 90° en tablero (enderezar a 0° al montar)' : 'Orientación 0° directa';
       return (
         '<tr>' +
@@ -5247,21 +6240,25 @@ function generateIllustratedAssemblyGuideHTML() {
           '<td>Tablero #' + (p.boardIndex + 1) + '</td>' +
           '<td>(' + p.x.toFixed(1) + ', ' + p.y.toFixed(1) + ') mm</td>' +
           '<td>' + p.w.toFixed(1) + ' × ' + p.h.toFixed(1) + ' mm</td>' +
-          '<td>' + gType + '</td>' +
+          '<td>' + escapeGuideXml(gType) + '</td>' +
           '<td>' + rotStr + '</td>' +
         '</tr>'
       );
     }).join('');
+
+    const rightMetaHtml = isPuzzle
+      ? ('Cota ' + sliceAxisName + ' = ' + slice.coord.toFixed(2) + ' mm | Ranuras de encaje: <strong>' + (slice.puzzleSlots ? slice.puzzleSlots.length : 0) + '</strong>')
+      : ('Cota ' + sliceAxisName + ' = ' + slice.coord.toFixed(2) + ' mm | Altura acumulada: <strong>' + accumH + ' mm</strong>');
 
     stepsHtml +=
       '<div class="card step-card">' +
         '<div class="card-header">' +
           '<div>' +
             '<span class="step-num">❑ PASO ' + (stepIdx + 1) + ' DE ' + totalSteps + '</span> ' +
-            '<strong>Lámina #' + sNum + '</strong> — <span style="color:#0369a1;font-weight:600;">' + roleLabel + '</span>' +
+            '<strong>' + escapeGuideXml(sliceTitle) + '</strong> — <span style="color:#0369a1;font-weight:600;">' + roleLabel + '</span>' +
           '</div>' +
           '<div style="font-family:monospace;font-size:12px;color:#334155;">' +
-            'Cota ' + axisName + ' = ' + slice.coord.toFixed(2) + ' mm | Altura acumulada: <strong>' + accumH + ' mm</strong>' +
+            rightMetaHtml +
           '</div>' +
         '</div>' +
         '<div class="diagrams-grid">' +
@@ -5270,16 +6267,16 @@ function generateIllustratedAssemblyGuideHTML() {
             locatorSvg +
           '</div>' +
           '<div class="diag-box">' +
-            '<div class="diag-title">2. Plano de Encaje y Guías a 0°</div>' +
+            '<div class="diag-title">' + (isPuzzle ? '2. Ranuras de Encaje a 0°' : '2. Plano de Encaje y Guías a 0°') + '</div>' +
             alignSvg +
           '</div>' +
           '<div class="diag-box">' +
-            '<div class="diag-title">3. Alzado de Apilado Vertical</div>' +
+            '<div class="diag-title">' + (isPuzzle ? '3. Planta de Retícula Ortogonal' : '3. Alzado de Apilado Vertical') + '</div>' +
             stackSvg +
           '</div>' +
         '</div>' +
         '<table class="parts-table">' +
-          '<thead><tr><th>Isla</th><th>Tablero</th><th>Posición (X, Y)</th><th>Dimensiones</th><th>Guías Grabadas</th><th>Orientación en Tablero</th></tr></thead>' +
+          '<thead><tr><th>Pieza</th><th>Tablero</th><th>Posición (X, Y)</th><th>Dimensiones</th><th>' + (isPuzzle ? 'Ranuras de Encaje' : 'Guías Grabadas') + '</th><th>Orientación en Tablero</th></tr></thead>' +
           '<tbody>' + rowsHtml + '</tbody>' +
         '</table>' +
       '</div>';
@@ -5290,6 +6287,10 @@ function generateIllustratedAssemblyGuideHTML() {
         ? (state.tabCount + ' micro-uniones de ' + state.tabWidthMM.toFixed(1) + ' mm por pieza (extracción a presión)')
         : ('1 micro-unión de ' + state.tabWidthMM.toFixed(1) + ' mm cada ' + state.tabSpacingMM.toFixed(0) + ' mm'))
     : 'Corte perimetral continuo';
+
+  const modeMetaStr = isPuzzle
+    ? ('Puzzle 3D (' + state.puzzleAxes.toUpperCase() + ') · ' + totalSteps + ' costillas (' + state.puzzleMaterialThicknessMM.toFixed(2) + ' mm · ' + state.puzzleTotalSlotsCount + ' ranuras)')
+    : ('Eje ' + axisName + ' · ' + totalSteps + ' láminas (' + state.thickness.toFixed(2) + ' mm / capa)');
 
   return [
     '<!DOCTYPE html>',
@@ -5333,17 +6334,17 @@ function generateIllustratedAssemblyGuideHTML() {
     '    <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Guardar como PDF</button>',
     '  </div>',
     '  <h1>Guía Ilustrada de Corte y Montaje: ' + escapeGuideXml(state.modelName) + '</h1>',
-    '  <div style="font-size:12px;color:#475569;">Planos generados algorítmicamente a escala real a partir de los tableros anidados y vectores 2D · Ensamblaje de abajo a arriba (Eje ' + axisName + ')</div>',
+    '  <div style="font-size:12px;color:#475569;">Planos generados algorítmicamente a escala real a partir de los tableros anidados y vectores 2D · ' + (isPuzzle ? ('Modo Puzzle 3D Encajable sin pegamento (' + state.puzzleAxes.toUpperCase() + ')') : ('Ensamblaje de abajo a arriba (Eje ' + axisName + ')')) + '</div>',
     '  <div class="meta-grid">',
     '    <div class="meta-item"><strong>Dimensiones del Modelo</strong>' + state.dimsMM.x.toFixed(1) + ' × ' + state.dimsMM.y.toFixed(1) + ' × ' + state.dimsMM.z.toFixed(1) + ' mm</div>',
-    '    <div class="meta-item"><strong>Eje y Capas Activas</strong>Eje ' + axisName + ' · ' + totalSteps + ' láminas (' + state.thickness.toFixed(2) + ' mm / capa)</div>',
+    '    <div class="meta-item"><strong>Sistema Constructivo</strong>' + escapeGuideXml(modeMetaStr) + '</div>',
     '    <div class="meta-item"><strong>Tableros de Corte</strong>' + state.nestedBoards.length + ' tablero(s) de ' + state.boardWidthMM.toFixed(0) + ' × ' + state.boardHeightMM.toFixed(0) + ' mm</div>',
     '    <div class="meta-item"><strong>Sujeción por Presión (Tabs)</strong>' + escapeGuideXml(tabsSummary) + '</div>',
     '  </div>',
     '  <h2>1. Planos Vectoriales de Tableros y Orden de Corte</h2>',
-    '  <p style="font-size:12px;margin:6px 0 12px 0;"><strong>Orden de prioridad de tableros para empezar a montar desde la Lámina #1:</strong> ' + priorityHtml + '</p>',
+    '  <p style="font-size:12px;margin:6px 0 12px 0;"><strong>Orden de prioridad de tableros:</strong> ' + priorityHtml + '</p>',
     boardsHtml,
-    '  <h2>2. Secuencia Ilustrada de Montaje Paso a Paso (De Abajo a Arriba: #1 → #' + state.slices.length + ')</h2>',
+    '  <h2>2. ' + (isPuzzle ? 'Secuencia Ilustrada de Ensamblaje sin Pegamento (Serie A ⊔ → Serie B ⊓)' : ('Secuencia Ilustrada de Montaje Paso a Paso (De Abajo a Arriba: #1 → #' + state.slices.length + ')')) + '</h2>',
     stepsHtml,
     '  <div class="footer">',
     '    <div><strong>LayerStudio 3D</strong> · Autor: <strong>Norberto Martín Afonso</strong> (&lt;normaafo@gmail.com&gt;) · Licencia GNU AGPL v3.0 (Sección 7b)</div>',
@@ -5379,18 +6380,24 @@ function printIllustratedAssemblyGuide() {
 
 // Genera el texto completo de la Guía de Corte y Montaje (para descargar en .TXT e incluir en el .ZIP)
 function generateFullAssemblyGuideText() {
+  const isPuzzle = state.constructionMode === 'puzzle3d';
   const plan = buildAssemblyAndCuttingPlan();
   const axisName = state.axis.toUpperCase();
   const lines = [
     '========================================================================',
-    'GUÍA DE CORTE / IMPRESIÓN Y MONTAJE PASO A PASO (DE ABAJO A ARRIBA)',
+    isPuzzle
+      ? 'GUÍA DE CORTE Y ENSAMBLAJE PUZZLE 3D SIN PEGAMENTO (MEDIA MADERA)'
+      : 'GUÍA DE CORTE / IMPRESIÓN Y MONTAJE PASO A PASO (DE ABAJO A ARRIBA)',
     '========================================================================',
     'Modelo: ' + state.modelName,
     'Dimensiones totales de la pieza: ' + state.dimsMM.x.toFixed(2) + ' x ' + state.dimsMM.y.toFixed(2) + ' x ' + state.dimsMM.z.toFixed(2) + ' mm',
-    'Eje perpendicular de laminado: Eje ' + axisName + ' (Montaje de menor a mayor cota ' + axisName + ')',
-    'Grosor por lámina: ' + state.thickness.toFixed(2) + ' mm',
-    'Total láminas a montar: ' + plan.selectedSlices.length,
-    'Varillas guía de alineación: ' + (state.rodCount > 0 ? (state.rodCount + ' varilla(s) de Ø' + state.rodDiameter + ' mm') : 'Sin varillas (alineación por guías grabadas)'),
+    isPuzzle
+      ? ('Sistema constructivo: PUZZLE 3D ENCAJABLE SIN PEGAMENTO (Ejes ' + state.puzzleAxes.toUpperCase() + ' · Espesor material: ' + state.puzzleMaterialThicknessMM.toFixed(2) + ' mm · Holgura ranura: ' + state.puzzleSlotClearanceMM.toFixed(2) + ' mm)')
+      : ('Eje perpendicular de laminado: Eje ' + axisName + ' (Montaje de menor a mayor cota ' + axisName + ')'),
+    isPuzzle
+      ? ('Total costillas e intersecciones: ' + plan.selectedSlices.length + ' costillas (' + state.puzzleTotalSlotsCount + ' ranuras de encaje a media madera)')
+      : ('Grosor por lámina: ' + state.thickness.toFixed(2) + ' mm | Total láminas: ' + plan.selectedSlices.length),
+    'Varillas guía de alineación: ' + ((!isPuzzle && state.rodCount > 0) ? (state.rodCount + ' varilla(s) de Ø' + state.rodDiameter + ' mm') : (isPuzzle ? 'No necesarias (auto-alineación por ranuras a media madera)' : 'Sin varillas (alineación por guías grabadas)')),
     'Micro-uniones de sujeción (corte por presión): ' + (state.tabsEnabled
       ? (state.tabMode === 'count'
           ? ('ACTIVAS (' + state.tabCount + ' puntos sin cortar de ' + state.tabWidthMM.toFixed(1) + ' mm por pieza para desprender a presión)')
@@ -5402,13 +6409,13 @@ function generateFullAssemblyGuideText() {
     '1. ORDEN DE CORTE EN LÁSER / CNC (DENTRO DE CADA TABLERO)',
     '------------------------------------------------------------------------',
     'Configura tu software láser (LightBurn / RDWorks / Inkscape) en este orden de capas:',
-    '  1º VERDE   (#008800) - GRABADO DE TEXTO: Graba el número #N y guía [Sup/Inf/Ambas].',
+    '  1º VERDE   (#008800) - GRABADO DE TEXTO: Graba el código de pieza (' + (isPuzzle ? 'X1, Y1...' : '#N') + ').',
     '  2º NARANJA (#ff8800) - GUÍA LÁMINA SUPERIOR (#N+1): Marcado continuo rápido superficial.',
     '  3º VIOLETA (#9900ff) - GUÍA LÁMINA INFERIOR (#N-1): Marcado continuo rápido superficial.',
-    '  4º AZUL    (#0055ff) - CORTE INTERIOR: Corta primero huecos internos y agujeros de varilla.',
-    '  5º ROJO    (#ff0000) - CORTE EXTERIOR: Corta al final el contorno exterior de cada isla.',
+    '  4º AZUL    (#0055ff) - CORTE INTERIOR: Corta primero huecos internos y agujeros.',
+    '  5º ROJO    (#ff0000) - CORTE EXTERIOR: Corta al final el contorno exterior (incluye ranuras de encaje).',
     '',
-    'ORDEN RECOMENDADO DE TABLEROS (para empezar a montar desde la base #1):',
+    'ORDEN RECOMENDADO DE TABLEROS:',
     '  ' + plan.boardPriorityOrder.map((bIdx, i) => (i + 1) + 'º Tablero #' + (bIdx + 1)).join('  -->  '),
     ''
   ];
@@ -5416,7 +6423,8 @@ function generateFullAssemblyGuideText() {
   state.nestedBoards.forEach((board, bIdx) => {
     const codes = board.placements.map((pl) => {
       const sNum = pl.island.sliceIndex + 1;
-      const code = pl.island.totalIslandsInSlice > 1 ? ('#' + sNum + '.' + (pl.island.islandIdxInSlice + 1)) : ('#' + sNum);
+      const baseCode = (isPuzzle && pl.island.puzzleCode) ? pl.island.puzzleCode : ('#' + sNum);
+      const code = pl.island.totalIslandsInSlice > 1 ? (baseCode + '.' + (pl.island.islandIdxInSlice + 1)) : baseCode;
       return code + (pl.rotated ? ' (Rotada 90°)' : '');
     });
     lines.push('  * TABLERO #' + (bIdx + 1) + ' (' + board.placements.length + ' piezas | Uso ' + board.efficiency.toFixed(1) + '%): ' + codes.join(', '));
@@ -5424,7 +6432,9 @@ function generateFullAssemblyGuideText() {
 
   lines.push('');
   lines.push('------------------------------------------------------------------------');
-  lines.push('2. SECUENCIA DE MONTAJE PASO A PASO (DE ABAJO A ARRIBA: #1 -> #' + state.slices.length + ')');
+  lines.push(isPuzzle
+    ? '2. SECUENCIA DE ENSAMBLAJE SIN PEGAMENTO (SERIE A ⊔ BASE -> SERIE B ⊓ CRUCE)'
+    : ('2. SECUENCIA DE MONTAJE PASO A PASO (DE ABAJO A ARRIBA: #1 -> #' + state.slices.length + ')'));
   lines.push('------------------------------------------------------------------------');
 
   plan.selectedSlices.forEach((slice, stepIdx) => {
@@ -5432,27 +6442,44 @@ function generateFullAssemblyGuideText() {
     const sNum = sIdx + 1;
     const pls = plan.slicePlacementsMap.get(sIdx) || [];
     const accumH = (stepIdx + 1) * state.thickness;
-    const role = stepIdx === 0 ? '[BASE INFERIOR]' : (stepIdx === plan.selectedSlices.length - 1 ? '[CIMA SUPERIOR]' : '[CAPA INTERMEDIA]');
+    const sliceAxisName = (slice.sliceAxis || state.axis).toUpperCase();
 
-    lines.push('');
-    lines.push('PASO ' + (stepIdx + 1) + ' — LÁMINA #' + sNum + ' ' + role + ' (Cota ' + axisName + ' = ' + slice.coord.toFixed(2) + ' mm | Altura acumulada: ' + accumH.toFixed(1) + ' mm)');
-    if (pls.length === 0) {
-      lines.push('  ! Pieza no empaquetada (supera las dimensiones del tablero actual).');
-    } else {
+    if (isPuzzle) {
+      const seriesRole = slice.puzzleSeries === 'A' ? '[SERIE A ⊔ BASE]' : '[SERIE B ⊓ CRUCE]';
+      const slotTargets = (slice.puzzleSlots || []).map((sl) => sl.targetCode).join(', ');
+      lines.push('');
+      lines.push('PASO ' + (stepIdx + 1) + ' — COSTILLA ' + (slice.puzzleCode || ('#' + sNum)) + ' ' + seriesRole + ' (Eje ' + sliceAxisName + ' = ' + slice.coord.toFixed(2) + ' mm | Ranuras: ' + (slice.puzzleSlots ? slice.puzzleSlots.length : 0) + ')');
       pls.forEach((p) => {
-        const gType = (p.hasSup && p.hasInf) ? '[Ambas Guías]' : (p.hasSup ? '[Guía Sup]' : (p.hasInf ? '[Guía Inf]' : '[Sin guía]'));
-        const rotNote = p.rotated ? ' | ATENCIÓN: Cortada rotada 90° en el tablero -> Enderezar al montar' : ' | Orientación 0° directa';
-        const clipNote = p.isClippedToBoard ? (' | RECORTADA AL TABLERO (Orig: ' + p.origWidth.toFixed(1) + 'x' + p.origHeight.toFixed(1) + ' mm)') : '';
-        lines.push('  - Isla ' + p.islandCode + ': Extraer de TABLERO #' + (p.boardIndex + 1) + ' en pos (' + p.x.toFixed(1) + ', ' + p.y.toFixed(1) + ' mm) | Medida ' + p.w.toFixed(1) + 'x' + p.h.toFixed(1) + ' mm | ' + gType + rotNote + clipNote);
+        const rotNote = p.rotated ? ' | Cortada rotada 90° en tablero -> Enderezar a 0°' : ' | Orientación 0° directa';
+        lines.push('  - Pieza ' + p.islandCode + ': Extraer de TABLERO #' + (p.boardIndex + 1) + ' en pos (' + p.x.toFixed(1) + ', ' + p.y.toFixed(1) + ' mm) | Medida ' + p.w.toFixed(1) + 'x' + p.h.toFixed(1) + ' mm' + rotNote);
       });
-    }
-
-    if (stepIdx === 0) {
-      lines.push('  > Montaje: Coloca esta lámina como BASE en la mesa. Usa su guía naranja superior (#N+1) para pegar encima el Paso 2.');
-    } else if (stepIdx === plan.selectedSlices.length - 1) {
-      lines.push('  > Montaje: Pega esta última capa sobre la guía naranja de la Lámina #' + sIdx + ' inferior para coronar la pieza.');
+      if (slice.puzzleSeries === 'A') {
+        lines.push('  > Encaje sin cola: Coloca esta costilla base con las ranuras abiertas hacia ARRIBA (⊔). Sus ranuras recibirán: ' + (slotTargets || 'ninguna') + '.');
+      } else {
+        lines.push('  > Encaje sin cola: Desliza esta costilla desde arriba con las ranuras hacia ABAJO (⊓) encajándola a presión en: ' + (slotTargets || 'ninguna') + '.');
+      }
     } else {
-      lines.push('  > Montaje: Pégala haciendo coincidir su base con la guía naranja de la Lámina #' + sIdx + ' inferior. Deja visible hacia arriba la guía naranja para la Lámina #' + (sNum + 1) + '.');
+      const role = stepIdx === 0 ? '[BASE INFERIOR]' : (stepIdx === plan.selectedSlices.length - 1 ? '[CIMA SUPERIOR]' : '[CAPA INTERMEDIA]');
+      lines.push('');
+      lines.push('PASO ' + (stepIdx + 1) + ' — LÁMINA #' + sNum + ' ' + role + ' (Cota ' + axisName + ' = ' + slice.coord.toFixed(2) + ' mm | Altura acumulada: ' + accumH.toFixed(1) + ' mm)');
+      if (pls.length === 0) {
+        lines.push('  ! Pieza no empaquetada (supera las dimensiones del tablero actual).');
+      } else {
+        pls.forEach((p) => {
+          const gType = (p.hasSup && p.hasInf) ? '[Ambas Guías]' : (p.hasSup ? '[Guía Sup]' : (p.hasInf ? '[Guía Inf]' : '[Sin guía]'));
+          const rotNote = p.rotated ? ' | ATENCIÓN: Cortada rotada 90° en el tablero -> Enderezar al montar' : ' | Orientación 0° directa';
+          const clipNote = p.isClippedToBoard ? (' | RECORTADA AL TABLERO (Orig: ' + p.origWidth.toFixed(1) + 'x' + p.origHeight.toFixed(1) + ' mm)') : '';
+          lines.push('  - Isla ' + p.islandCode + ': Extraer de TABLERO #' + (p.boardIndex + 1) + ' en pos (' + p.x.toFixed(1) + ', ' + p.y.toFixed(1) + ' mm) | Medida ' + p.w.toFixed(1) + 'x' + p.h.toFixed(1) + ' mm | ' + gType + rotNote + clipNote);
+        });
+      }
+
+      if (stepIdx === 0) {
+        lines.push('  > Montaje: Coloca esta lámina como BASE en la mesa. Usa su guía naranja superior (#N+1) para pegar encima el Paso 2.');
+      } else if (stepIdx === plan.selectedSlices.length - 1) {
+        lines.push('  > Montaje: Pega esta última capa sobre la guía naranja de la Lámina #' + sIdx + ' inferior para coronar la pieza.');
+      } else {
+        lines.push('  > Montaje: Pégala haciendo coincidir su base con la guía naranja de la Lámina #' + sIdx + ' inferior. Deja visible hacia arriba la guía naranja para la Lámina #' + (sNum + 1) + '.');
+      }
     }
   });
 
@@ -5665,14 +6692,16 @@ function resetCamera3D() {
 // =========================================================================
 // INSPECTOR 2D Y GALERÍA DE LASCAS
 // =========================================================================
-// Devuelve los límites 2D totales de la pieza completa según el eje de corte activo
-function getModelBounds2D() {
+// Devuelve los límites 2D totales de la pieza completa según el eje de corte de la lasca o el eje activo
+function getModelBounds2D(axisOverride) {
+  const activeSlice = state.slices && state.slices[state.activeSliceIndex];
+  const ax = axisOverride || (activeSlice && activeSlice.sliceAxis) || state.axis;
   let w = state.dimsMM.x;
   let h = state.dimsMM.y;
-  if (state.axis === 'x') {
+  if (ax === 'x') {
     w = state.dimsMM.y;
     h = state.dimsMM.z;
-  } else if (state.axis === 'y') {
+  } else if (ax === 'y') {
     w = state.dimsMM.x;
     h = state.dimsMM.z;
   }
@@ -5718,8 +6747,9 @@ function getSliceBounds2D(slice) {
 }
 
 function getAlignmentHoles2D(slice) {
-  if (!state.rodCount || state.rodCount <= 0 || !slice.loops || slice.loops.length === 0) return [];
-  const b = getModelBounds2D();
+  if (state.constructionMode === 'puzzle3d') return [];
+  if (!state.rodCount || state.rodCount <= 0 || !slice || !slice.loops || slice.loops.length === 0) return [];
+  const b = getModelBounds2D(slice.sliceAxis);
   if (state.rodCount === 1) {
     return [{ x: b.cx, y: b.cy }];
   }
@@ -6110,6 +7140,37 @@ function render2DSlice() {
     ctx.stroke();
   });
 
+  // Mostrar en modo Puzzle 3D el código de la costilla transversal que encaja en cada ranura (ej. ↳ Y1, ↳ Y2)
+  if (state.constructionMode === 'puzzle3d' && slice.slots && slice.slots.length > 0) {
+    ctx.save();
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    slice.slots.forEach((sl) => {
+      const mx = sl.uAxis === 'x' ? sl.uCenter : sl.vMouth;
+      const my = sl.uAxis === 'x' ? sl.vMouth : sl.uCenter;
+      const bx = sl.uAxis === 'x' ? sl.uCenter : sl.vMid;
+      const by = sl.uAxis === 'x' ? sl.vMid : sl.uCenter;
+
+      // Línea eje de inserción de la ranura
+      ctx.strokeStyle = 'rgba(251, 191, 36, 0.55)';
+      ctx.setLineDash([3, 3]);
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.moveTo(toScreenX(mx), toScreenY(my));
+      ctx.lineTo(toScreenX(bx), toScreenY(by));
+      ctx.stroke();
+
+      // Etiqueta de qué costilla encaja en esta ranura
+      const labelOffset = (sl.openPositive ? 1 : -1) * Math.max(4, 11 / scale);
+      const lx = sl.uAxis === 'x' ? mx : (mx + labelOffset);
+      const ly = sl.uAxis === 'x' ? (my + labelOffset) : my;
+      ctx.fillStyle = '#fbbf24';
+      ctx.fillText('↳' + sl.targetCode, toScreenX(lx), toScreenY(ly));
+    });
+    ctx.restore();
+  }
+
   // Mostrar también en la vista individual la etiqueta por isla autoajustada al interior de cada isla
   if (state.includeLabels) {
     const sliceIslands = extractIslandsFromSlices([slice]);
@@ -6186,7 +7247,9 @@ function renderSliceStripUI() {
   }
 
   if (titleEl) {
-    titleEl.textContent = 'Secuencia de Lascas (clic para inspeccionar, casilla para incluir/excluir de exportación)';
+    titleEl.textContent = state.constructionMode === 'puzzle3d'
+      ? 'Costillas del Puzzle 3D (Serie A ⊔ en azul + Serie B ⊓ en ámbar — clic para inspeccionar ranuras)'
+      : 'Secuencia de Lascas (clic para inspeccionar, casilla para incluir/excluir de exportación)';
   }
 
   state.slices.forEach((slice, idx) => {
@@ -6199,7 +7262,11 @@ function renderSliceStripUI() {
 
     const topRow = document.createElement('div');
     topRow.className = 'flex items-center justify-between text-[10px]';
-    topRow.innerHTML = '<span class="font-bold text-slate-200">#' + (idx + 1) + '</span>';
+    const codeLabel = slice.puzzleCode ? slice.puzzleCode : ('#' + (idx + 1));
+    const codeColor = slice.puzzleSeries === 'A'
+      ? 'text-sky-300'
+      : (slice.puzzleSeries === 'B' ? 'text-amber-300' : 'text-slate-200');
+    topRow.innerHTML = '<span class="font-bold ' + codeColor + '">' + codeLabel + '</span>';
 
     const chk = document.createElement('input');
     chk.type = 'checkbox';
@@ -6222,7 +7289,8 @@ function renderSliceStripUI() {
 
     const bottomRow = document.createElement('div');
     bottomRow.className = 'text-[9px] text-slate-400 truncate font-mono';
-    bottomRow.textContent = slice.coord.toFixed(1) + 'mm';
+    const axTag = slice.puzzleCode ? ((slice.sliceAxis || '').toUpperCase() + ':') : '';
+    bottomRow.textContent = axTag + slice.coord.toFixed(1) + 'mm';
 
     card.appendChild(topRow);
     card.appendChild(bottomRow);
@@ -6375,8 +7443,9 @@ function pushLoopLinesWithTabsDXF(dxf, pts, isHole, layer, color, ox = 0, oy = 0
 }
 
 function generateSliceSVG(slice, idx) {
-  // El tamaño del documento SVG es siempre el tamaño total de la pieza en el eje activo
-  const docBounds = getModelBounds2D();
+  // El tamaño del documento SVG es siempre el tamaño total de la pieza en el eje de la lámina/costilla
+  const sliceAxis = slice.sliceAxis || state.axis;
+  const docBounds = getModelBounds2D(sliceAxis);
   const cutBounds = getSliceBounds2D(slice);
   const upperSlice = getAdjacentSlice(idx, 'next');
   const lowerSlice = getAdjacentSlice(idx, 'prev');
@@ -6445,6 +7514,7 @@ function generateSliceSVG(slice, idx) {
 
   const rodHoles = getAlignmentHoles2D(slice);
   const rodRadius = (state.rodDiameter / 2).toFixed(4);
+  const displayCode = slice.puzzleCode ? slice.puzzleCode : ('#' + (idx + 1));
 
   // Evita que Google Apps Script procese <?xml como etiqueta de plantilla
   const xmlHeader = '<' + '?xml version="1.0" encoding="UTF-8" standalone="no"?' + '>';
@@ -6452,8 +7522,8 @@ function generateSliceSVG(slice, idx) {
   const lines = [
     xmlHeader,
     '<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="' + svgW.toFixed(3) + 'mm" height="' + svgH.toFixed(3) + 'mm" viewBox="0 0 ' + svgW.toFixed(4) + ' ' + svgH.toFixed(4) + '" style="background:#ffffff;max-width:100vw;max-height:95vh;">',
-    '  <title>' + escapeXmlAttr('Lasca ' + (idx + 1) + ' - Eje ' + state.axis.toUpperCase()) + '</title>',
-    '  <desc>' + escapeXmlAttr('Documento (Pieza): ' + svgW.toFixed(2) + 'x' + svgH.toFixed(2) + 'mm | Medida corte lasca: ' + cutBounds.width.toFixed(2) + 'x' + cutBounds.height.toFixed(2) + 'mm | Posicion ' + state.axis.toUpperCase() + ': ' + slice.coord.toFixed(2) + 'mm') + '</desc>'
+    '  <title>' + escapeXmlAttr('Pieza ' + displayCode + ' - Eje ' + sliceAxis.toUpperCase()) + '</title>',
+    '  <desc>' + escapeXmlAttr('Documento (Pieza): ' + svgW.toFixed(2) + 'x' + svgH.toFixed(2) + 'mm | Medida corte: ' + cutBounds.width.toFixed(2) + 'x' + cutBounds.height.toFixed(2) + 'mm | Posicion ' + sliceAxis.toUpperCase() + ': ' + slice.coord.toFixed(2) + 'mm') + '</desc>'
   ];
 
   if (compoundPath.trim().length > 0) {
@@ -6499,9 +7569,13 @@ function generateSliceSVG(slice, idx) {
 
   if (state.includeLabels) {
     let guideNotes = '';
-    if (upperGuidePath.trim().length > 0 && upperSlice) guideNotes += ' | Sup:#' + (upperSlice.index + 1);
-    if (lowerGuidePath.trim().length > 0 && lowerSlice) guideNotes += ' | Inf:#' + (lowerSlice.index + 1);
-    const labelText = escapeXmlAttr('#' + (idx + 1) + ' [' + state.axis.toUpperCase() + ':' + slice.coord.toFixed(1) + 'mm | Corte:' + cutBounds.width.toFixed(1) + 'x' + cutBounds.height.toFixed(1) + 'mm | Doc:' + svgW.toFixed(1) + 'x' + svgH.toFixed(1) + 'mm' + guideNotes + ']');
+    if (slice.puzzleCode && slice.puzzleSlots) {
+      guideNotes += ' | Ranuras:' + slice.puzzleSlots.length;
+    } else {
+      if (upperGuidePath.trim().length > 0 && upperSlice) guideNotes += ' | Sup:#' + (upperSlice.index + 1);
+      if (lowerGuidePath.trim().length > 0 && lowerSlice) guideNotes += ' | Inf:#' + (lowerSlice.index + 1);
+    }
+    const labelText = escapeXmlAttr(displayCode + ' [' + sliceAxis.toUpperCase() + ':' + slice.coord.toFixed(1) + 'mm | Corte:' + cutBounds.width.toFixed(1) + 'x' + cutBounds.height.toFixed(1) + 'mm | Doc:' + svgW.toFixed(1) + 'x' + svgH.toFixed(1) + 'mm' + guideNotes + ']');
     const labelPad = Math.max(2, Math.min(svgW, svgH) * 0.025);
     const lx = labelPad.toFixed(4);
     const ly = (svgH - labelPad * 0.6).toFixed(4);
@@ -6763,7 +7837,7 @@ function generateSliceDXF(slice, idx) {
   const upperSlice = typeof idx === 'number' ? getAdjacentSlice(idx, 'next') : null;
   const lowerSlice = typeof idx === 'number' ? getAdjacentSlice(idx, 'prev') : null;
   // Origen global basado en el tamaño total de la pieza para mantener la misma referencia en todos los DXF
-  const b = getModelBounds2D();
+  const b = getModelBounds2D(slice.sliceAxis || state.axis);
   const ox = b.minX;
   const oy = b.minY;
   const dxf = ['0', 'SECTION', '2', 'ENTITIES'];
@@ -6893,7 +7967,8 @@ function downloadCurrentSlice(format) {
   const slice = state.slices[idx];
   if (!slice) return;
   const numStr = String(idx + 1).padStart(3, '0');
-  const baseName = state.modelName + '_eje' + state.axis.toUpperCase() + '_lasca_' + numStr;
+  const sliceCodeStr = slice.puzzleCode ? ('costilla_' + slice.puzzleCode) : ('eje' + state.axis.toUpperCase() + '_lasca_' + numStr);
+  const baseName = state.modelName + '_' + sliceCodeStr;
 
   if (format === 'svg') {
     const svgContent = generateSliceSVG(slice, idx);
@@ -6997,7 +8072,10 @@ async function executeZipExport() {
   targetSlices.forEach((slice) => {
     const idx = slice.index;
     const numStr = String(idx + 1).padStart(3, '0');
-    const fname = 'lasca_' + numStr + '_' + state.axis.toUpperCase() + '_' + slice.coord.toFixed(1) + 'mm';
+    const sAxis = (slice.sliceAxis || state.axis).toUpperCase();
+    const fname = slice.puzzleCode
+      ? ('costilla_' + slice.puzzleCode + '_eje' + sAxis + '_' + slice.coord.toFixed(1) + 'mm')
+      : ('lasca_' + numStr + '_' + sAxis + '_' + slice.coord.toFixed(1) + 'mm');
 
     if (folderSVG) folderSVG.file(fname + '.svg', generateSliceSVG(slice, idx));
     if (folderDXF) folderDXF.file(fname + '.dxf', generateSliceDXF(slice, idx));
@@ -7012,7 +8090,10 @@ async function executeZipExport() {
   }
 
   const content = await zip.generateAsync({ type: 'blob' });
-  triggerBrowserDownload(content, state.modelName + '_lascas_' + state.axis.toUpperCase() + '.zip');
+  const zipSuffix = state.constructionMode === 'puzzle3d'
+    ? ('_puzzle3D_' + state.puzzleAxes.toUpperCase())
+    : ('_lascas_' + state.axis.toUpperCase());
+  triggerBrowserDownload(content, state.modelName + zipSuffix + '.zip');
 
   prog.classList.add('hidden');
   closeExportModal();
@@ -7023,9 +8104,15 @@ async function executeZipExport() {
 // =========================================================================
 function exportProjectFile() {
   const payload = {
-    version: '2.4',
+    version: '2.5',
     modelName: state.modelName,
     unit: state.unit,
+    constructionMode: state.constructionMode,
+    puzzleAxes: state.puzzleAxes,
+    puzzleCountA: state.puzzleCountA,
+    puzzleCountB: state.puzzleCountB,
+    puzzleMaterialThicknessMM: state.puzzleMaterialThicknessMM,
+    puzzleSlotClearanceMM: state.puzzleSlotClearanceMM,
     axis: state.axis,
     mode: state.mode,
     sliceCount: state.sliceCount,
@@ -7076,6 +8163,15 @@ function importProjectFile(file) {
       state.modelName = data.modelName || 'proyecto_importado';
       state.baseVertices = new Float32Array(data.baseVertices);
       state.dimsMM = data.dimsMM;
+      state.constructionMode = data.constructionMode === 'puzzle3d' ? 'puzzle3d' : 'stacked';
+      if (data.puzzleAxes === 'xy' || data.puzzleAxes === 'xz' || data.puzzleAxes === 'yz') {
+        state.puzzleAxes = data.puzzleAxes;
+      }
+      if (typeof data.puzzleCountA === 'number') state.puzzleCountA = data.puzzleCountA;
+      if (typeof data.puzzleCountB === 'number') state.puzzleCountB = data.puzzleCountB;
+      if (typeof data.puzzleMaterialThicknessMM === 'number') state.puzzleMaterialThicknessMM = data.puzzleMaterialThicknessMM;
+      if (typeof data.puzzleSlotClearanceMM === 'number') state.puzzleSlotClearanceMM = data.puzzleSlotClearanceMM;
+      if (typeof syncConstructionModeUI === 'function') syncConstructionModeUI();
       state.axis = data.axis || 'z';
       state.mode = data.mode || 'count';
       state.sliceCount = data.sliceCount || 24;

@@ -21,10 +21,18 @@
 const state = {
   modelName: 'nudo_toroidal',
   unit: 'mm', // 'mm' | 'cm' | 'm'
-  axis: 'z',  // 'x' | 'y' | 'z'
+  constructionMode: 'stacked', // 'stacked' (Apilado 1 Eje) | 'puzzle3d' (Puzzle 3D Encajable 2 Ejes sin pegamento)
+  axis: 'z',  // 'x' | 'y' | 'z' (para modo apilado 1 eje)
   mode: 'count', // 'count' | 'thickness'
   sliceCount: 24,
   thickness: 5,
+  // Configuración de Modalidad Puzzle 3D (Costillas ortogonales con ranuras de encaje sin pegamento)
+  puzzleAxes: 'xy',            // 'xy' (encaje en Z) | 'xz' (encaje en Y) | 'yz' (encaje en X)
+  puzzleCountA: 7,             // Nº de costillas en el 1º eje (Serie A)
+  puzzleCountB: 7,             // Nº de costillas en el 2º eje (Serie B)
+  puzzleMaterialThicknessMM: 5.0, // Grosor del tablero/poliexpan en mm
+  puzzleSlotClearanceMM: 0.0,  // Holgura/tolerancia de encaje en mm (ancho ranura = grosor + holgura)
+  puzzleTotalSlotsCount: 0,    // Total de ranuras de encaje generadas
   explodeFactor: 0,
   showGhost: true,
   isolateCurrent: false,

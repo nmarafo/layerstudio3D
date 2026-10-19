@@ -164,51 +164,132 @@
         </div>
       </div>
 
-      <!-- 2. EJE Y PARÁMETROS DE LAMINADO -->
+      <!-- 2. EJE, MODALIDAD Y PARÁMETROS DE LAMINADO / PUZZLE 3D -->
       <div class="bg-slate-800/50 border border-slate-700/70 rounded-xl p-3 space-y-3">
-        <h2 class="text-xs font-bold uppercase tracking-wider text-sky-400">2. Eje y Laminado</h2>
-
-        <div>
-          <label class="text-[11px] text-slate-400 block mb-1">Eje de Corte Perpendicular</label>
-          <div class="grid grid-cols-3 gap-1.5">
-            <button onclick="setSliceAxis('x')" id="axisBtn_x" class="py-1.5 rounded-lg border border-slate-700 bg-slate-900 text-xs font-bold text-rose-400 hover:bg-slate-800 transition">Eje X</button>
-            <button onclick="setSliceAxis('y')" id="axisBtn_y" class="py-1.5 rounded-lg border border-slate-700 bg-slate-900 text-xs font-bold text-emerald-400 hover:bg-slate-800 transition">Eje Y</button>
-            <button onclick="setSliceAxis('z')" id="axisBtn_z" class="py-1.5 rounded-lg border border-sky-500 bg-sky-500/20 text-xs font-bold text-sky-300 transition">Eje Z</button>
-          </div>
+        <div class="flex items-center justify-between">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-sky-400">2. Modalidad y Laminado</h2>
+          <span id="constructionModeBadge" class="text-[9px] px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 font-semibold">Apilado 1 Eje</span>
         </div>
 
+        <!-- Selector de Modalidad: Apilado 1 Eje vs Puzzle 3D Encajable (Waffle sin pegamento) -->
         <div>
-          <label class="text-[11px] text-slate-400 block mb-1">Modo de Cálculo</label>
+          <label class="text-[11px] text-slate-400 block mb-1">Sistema Constructivo</label>
           <div class="grid grid-cols-2 gap-1.5">
-            <button onclick="setSliceMode('count')" id="modeBtn_count" class="py-1 rounded-md border border-sky-500 bg-sky-500/20 text-[11px] font-semibold text-sky-300">Por Nº Capas</button>
-            <button onclick="setSliceMode('thickness')" id="modeBtn_thickness" class="py-1 rounded-md border border-slate-700 bg-slate-900 text-[11px] font-semibold text-slate-400">Por Grosor (mm)</button>
+            <button onclick="setConstructionMode('stacked')" id="constModeBtn_stacked" class="py-1.5 px-2 rounded-lg border border-sky-500 bg-sky-500/20 text-[11px] font-bold text-sky-300 transition flex items-center justify-center gap-1" title="Capas paralelas en un único eje para apilar con pegamento o varillas">
+              <span>🧱 Apilado (1 Eje)</span>
+            </button>
+            <button onclick="setConstructionMode('puzzle3d')" id="constModeBtn_puzzle3d" class="py-1.5 px-2 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 text-[11px] font-bold text-amber-300 transition flex items-center justify-center gap-1" title="Costillas en 2 ejes perpendiculares con ranuras automáticas de encaje a media madera sin pegamento (poliexpan, cartón pluma, MDF)">
+              <span>🧩 Puzzle 3D (Sin cola)</span>
+            </button>
           </div>
         </div>
 
-        <div id="countControlBox">
-          <div class="flex justify-between text-xs mb-1">
-            <span class="text-slate-300">Número de Lascas:</span>
-            <span id="sliceCountLabel" class="font-bold text-sky-400">24</span>
+        <!-- CONTROLES DE MODO APILADO (1 EJE) -->
+        <div id="stackedControlsBox" class="space-y-3">
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Eje de Corte Perpendicular</label>
+            <div class="grid grid-cols-3 gap-1.5">
+              <button onclick="setSliceAxis('x')" id="axisBtn_x" class="py-1.5 rounded-lg border border-slate-700 bg-slate-900 text-xs font-bold text-rose-400 hover:bg-slate-800 transition">Eje X</button>
+              <button onclick="setSliceAxis('y')" id="axisBtn_y" class="py-1.5 rounded-lg border border-slate-700 bg-slate-900 text-xs font-bold text-emerald-400 hover:bg-slate-800 transition">Eje Y</button>
+              <button onclick="setSliceAxis('z')" id="axisBtn_z" class="py-1.5 rounded-lg border border-sky-500 bg-sky-500/20 text-xs font-bold text-sky-300 transition">Eje Z</button>
+            </div>
           </div>
-          <input type="range" id="sliceCountSlider" min="2" max="300" value="24" oninput="onSliceCountInput(this.value)" class="w-full" />
+
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Modo de Cálculo</label>
+            <div class="grid grid-cols-2 gap-1.5">
+              <button onclick="setSliceMode('count')" id="modeBtn_count" class="py-1 rounded-md border border-sky-500 bg-sky-500/20 text-[11px] font-semibold text-sky-300">Por Nº Capas</button>
+              <button onclick="setSliceMode('thickness')" id="modeBtn_thickness" class="py-1 rounded-md border border-slate-700 bg-slate-900 text-[11px] font-semibold text-slate-400">Por Grosor (mm)</button>
+            </div>
+          </div>
+
+          <div id="countControlBox">
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-slate-300">Número de Lascas:</span>
+              <span id="sliceCountLabel" class="font-bold text-sky-400">24</span>
+            </div>
+            <input type="range" id="sliceCountSlider" min="2" max="300" value="24" oninput="onSliceCountInput(this.value)" class="w-full" />
+          </div>
+
+          <div id="thicknessControlBox" class="hidden space-y-1.5">
+            <div class="flex justify-between items-center text-xs">
+              <span class="text-slate-300">Grosor Material (mm):</span>
+              <input type="number" id="thicknessInput" value="4" min="0.2" max="500" step="0.5" onchange="onThicknessInput(this.value)" class="w-20 bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-right text-white" />
+            </div>
+            <div class="flex gap-1">
+              <button onclick="onThicknessInput(3)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300">3mm</button>
+              <button onclick="onThicknessInput(4)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300">4mm</button>
+              <button onclick="onThicknessInput(5)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300">5mm</button>
+              <button onclick="onThicknessInput(10)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300">10mm</button>
+            </div>
+          </div>
+
+          <div class="text-[11px] text-slate-400 bg-slate-900/70 rounded-lg p-2 border border-slate-800 flex justify-between">
+            <span>Grosor por lasca:</span>
+            <span id="computedThicknessInfo" class="text-sky-300 font-semibold">5.00 mm</span>
+          </div>
         </div>
 
-        <div id="thicknessControlBox" class="hidden space-y-1.5">
-          <div class="flex justify-between items-center text-xs">
-            <span class="text-slate-300">Grosor Material (mm):</span>
-            <input type="number" id="thicknessInput" value="4" min="0.2" max="500" step="0.5" onchange="onThicknessInput(this.value)" class="w-20 bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-right text-white" />
-          </div>
-          <div class="flex gap-1">
-            <button onclick="onThicknessInput(3)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300">3mm</button>
-            <button onclick="onThicknessInput(4)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300">4mm</button>
-            <button onclick="onThicknessInput(5)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300">5mm</button>
-            <button onclick="onThicknessInput(10)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300">10mm</button>
-          </div>
-        </div>
+        <!-- CONTROLES DE MODO PUZZLE 3D ENCAJABLE (2 EJES CON RANURAS A MEDIA MADERA SIN PEGAMENTO) -->
+        <div id="puzzle3dControlsBox" class="hidden space-y-2.5 bg-slate-900/80 border border-amber-500/35 rounded-xl p-2.5">
+          <p class="text-[10px] text-slate-300 leading-relaxed">
+            Genera costillas ortogonales en <strong>2 ejes</strong> con <strong>ranuras automáticas a mitad de cruce</strong> para ensamblar a presión sin pegamento (ideal para poliexpan, cartón pluma, MDF o metacrilato).
+          </p>
 
-        <div class="text-[11px] text-slate-400 bg-slate-900/70 rounded-lg p-2 border border-slate-800 flex justify-between">
-          <span>Grosor por lasca:</span>
-          <span id="computedThicknessInfo" class="text-sky-300 font-semibold">5.00 mm</span>
+          <div>
+            <label class="text-[10px] text-amber-300 font-bold uppercase block mb-1">Ejes de Cruce (Costillas A × B)</label>
+            <div class="grid grid-cols-3 gap-1">
+              <button onclick="setPuzzleAxes('xy')" id="puzzleAxesBtn_xy" class="py-1 px-1.5 rounded border border-amber-500 bg-amber-500/20 text-[10px] font-bold text-amber-300 transition" title="Costillas X e Y que encajan verticalmente a lo largo de Z">
+                X × Y (Encaje Z)
+              </button>
+              <button onclick="setPuzzleAxes('xz')" id="puzzleAxesBtn_xz" class="py-1 px-1.5 rounded border border-slate-700 bg-slate-950 text-[10px] font-semibold text-slate-300 hover:bg-slate-800 transition" title="Costillas X y Z que encajan a lo largo de Y">
+                X × Z (Encaje Y)
+              </button>
+              <button onclick="setPuzzleAxes('yz')" id="puzzleAxesBtn_yz" class="py-1 px-1.5 rounded border border-slate-700 bg-slate-950 text-[10px] font-semibold text-slate-300 hover:bg-slate-800 transition" title="Costillas Y y Z que encajan a lo largo de X">
+                Y × Z (Encaje X)
+              </button>
+            </div>
+          </div>
+
+          <div class="space-y-1.5 pt-1 border-t border-slate-800">
+            <div>
+              <div class="flex justify-between text-[11px] mb-0.5">
+                <span id="puzzleAxisALabel" class="text-sky-300 font-semibold">Costillas Serie A (Eje X · Ranura ⊔):</span>
+                <span id="puzzleCountALabel" class="font-bold text-sky-400">7</span>
+              </div>
+              <input type="range" id="puzzleCountASlider" min="2" max="36" value="7" oninput="onPuzzleCountChange('a', this.value)" class="w-full" />
+            </div>
+
+            <div>
+              <div class="flex justify-between text-[11px] mb-0.5">
+                <span id="puzzleAxisBLabel" class="text-amber-300 font-semibold">Costillas Serie B (Eje Y · Ranura ⊓):</span>
+                <span id="puzzleCountBLabel" class="font-bold text-amber-400">7</span>
+              </div>
+              <input type="range" id="puzzleCountBSlider" min="2" max="36" value="7" oninput="onPuzzleCountChange('b', this.value)" class="w-full" />
+            </div>
+          </div>
+
+          <div class="space-y-1.5 pt-1 border-t border-slate-800">
+            <div class="flex items-center justify-between text-[11px]">
+              <span class="text-slate-300">Grosor plancha/poliexpan (mm):</span>
+              <input type="number" id="puzzleThicknessInput" value="5.0" min="0.5" max="80" step="0.5" onchange="onPuzzleSlotParamsChange()" class="w-16 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-amber-300 font-bold" />
+            </div>
+            <div class="grid grid-cols-4 gap-1">
+              <button onclick="setPuzzleThicknessPreset(3, 0.05)" class="py-0.5 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300" title="MDF / Contrachapado 3 mm">3mm MDF</button>
+              <button onclick="setPuzzleThicknessPreset(5, -0.05)" class="py-0.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 rounded text-[9px] text-amber-300 font-semibold" title="Cartón Pluma / Poliexpan 5 mm (ajuste por presión)">5mm Pluma</button>
+              <button onclick="setPuzzleThicknessPreset(10, -0.15)" class="py-0.5 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300" title="Poliexpan / EPS 10 mm">10mm EPS</button>
+              <button onclick="setPuzzleThicknessPreset(20, -0.25)" class="py-0.5 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300" title="Poliexpan / XPS 20 mm">20mm EPS</button>
+            </div>
+
+            <div class="flex items-center justify-between text-[11px] pt-0.5" title="Negativo (-0.1 mm) para encaje a presión en poliexpan/espuma; Positivo (+0.1 mm) para holgura suave en madera rígida">
+              <span class="text-slate-300">Holgura encaje / Kerf (mm):</span>
+              <input type="number" id="puzzleClearanceInput" value="0.0" min="-2.0" max="3.0" step="0.05" onchange="onPuzzleSlotParamsChange()" class="w-16 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-emerald-300 font-semibold" />
+            </div>
+          </div>
+
+          <div id="puzzleSummaryBadge" class="text-[10px] text-amber-200 bg-amber-950/40 border border-amber-500/30 rounded-lg p-2 text-center font-medium leading-snug">
+            Ranura de encaje: <strong>5.00 mm</strong> · 14 costillas (7 X + 7 Y)
+          </div>
         </div>
       </div>
 

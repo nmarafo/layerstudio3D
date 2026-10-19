@@ -17,18 +17,18 @@
 - **Importación directa en navegador** de mallas `.STL`, `.GLB` y `.GLTF` (100 % en cliente, sin subir archivos a servidores externos), además de modelos paramétricos de prueba integrados (*Nudo Toroidal*, *Jarrón Hueco*, *Engranaje Mecánico* y *Cristal Facetado*).
 - **Escalado proporcional o independiente** en los ejes **X, Y, Z** con entrada rápida de dimensiones máximas (`10cm`, `50cm`, `1m`, `2m`, `3m` o cualquier valor personalizado).
 
-### 2. Motor Geométrico de Laminado Perpendicular (Ejes X, Y, Z)
-- **Corte planar exacto** en cualquiera de los tres ejes cartesianos (**X**, **Y** o **Z**).
-- **Dos modos de cálculo**:
-  - **Por número de capas** (`2` a `300+` lascas).
-  - **Por grosor fijo de material** (ej. tableros de `3 mm`, `4 mm`, `5 mm`, `10 mm`, etc.).
+### 2. Dos Sistemas Constructivos: Apilado (1 Eje) y Puzzle 3D Encajable sin Pegamento (2 Ejes)
+- **🧱 Modo Apilado (1 Eje — X, Y o Z)**:
+  - Corte planar exacto en cualquiera de los tres ejes cartesianos (**X**, **Y** o **Z**), por número de capas (`2` a `300+` lascas) o por grosor fijo de material.
+- **🧩 Modo Puzzle 3D Encajable sin Pegamento (*Waffle / Interlocking Slot Grid*)**:
+  - Genera simultáneamente dos series ortogonales de costillas (**Serie A `⊔` Base** y **Serie B `⊓` Cruce**) en cualquiera de los pares de ejes (**`X × Y`**, **`X × Z`** o **`Y × Z`**).
+  - **Tallado booleano automático de ranuras a media madera (*Half-Lap Slots*)**: Calcula la intersección 3D exacta entre cada par de costillas perpendiculares y recorta ranuras complementarias de ancho igual al **espesor del material + holgura (*kerf*)**, dividiendo cada cruce a mitad de altura (`50 %` superior en Serie A `⊔` y `50 %` inferior en Serie B `⊓`) para montar el modelo por simple deslizamiento/presión sin necesidad de adhesivo (ideal para **poliexpan/EPS**, **cartón pluma/foamboard**, **MDF**, **contrachapado** o **metacrilato**).
 - **Detección automática de contornos exteriores e interiores (huecos)** mediante orientación de área signada y regla par-impar.
 
 ### 3. Guías de Ensamblaje, Varillas de Alineación, Micro-uniones de Sujeción y Filtro de Islas
-- **Guías de pegado multicapa**:
-  - **Guía de lámina superior (`#N+1`)** en capa naranja (`#ff8800`).
-  - **Guía de lámina inferior (`#N-1`)** en capa violeta (`#9900ff`).
-  - Recorte automático de las líneas guía al contorno del material sólido de cada lasca o isla y selección de estilo de trazo (continuo rápido para grabado vectorial láser, guiones, punteado o raya-punto).
+- **Guías de pegado multicapa (Modo Apilado)** y **Etiquetas de ranura `↳Y1 / ↳X1` (Modo Puzzle 3D)**:
+  - **Guía de lámina superior (`#N+1`)** en capa naranja (`#ff8800`) y **Guía de lámina inferior (`#N-1`)** en capa violeta (`#9900ff`), recortadas al material sólido de cada isla.
+  - En modo **Puzzle 3D**, señalización automática en el visor 2D y en la guía ilustrada de qué costilla transversal encaja en cada ranura (`↳Y1`, `↳Y2`, `↳X1`, etc.).
 - **Perforaciones de varilla guía**: Inserción automática de 1 taladro central o 2 taladros simétricos con diámetro configurable en milímetros.
 - **Micro-uniones de sujeción por presión (*Holding Tabs / Bridges*)**: Sistema configurable para dejar pequeños puentes sin cortar en el contorno (por ejemplo, `4 puntos` de `1.0 mm` por pieza o `1 punto` cada `X mm` de perímetro, tanto en exterior como opcionalmente en huecos interiores), manteniendo las piezas fijas al tablero durante el trabajo láser/CNC para desprenderlas limpiamente haciendo presión con los dedos.
 - **Filtro inteligente de islas pequeñas**: Descarta automáticamente fragmentos o astillas sueltas inferiores a un umbral configurable (por dimensión máxima, lado menor o área en $\text{mm}^2$).
@@ -39,21 +39,20 @@
   - Rotación automática de $90^\circ$ para maximizar el aprovechamiento del tablero.
   - Anidado de islas pequeñas dentro de los huecos interiores de piezas mayores.
   - Opción de recorte automático para piezas que excedan las dimensiones útiles del tablero.
-- **Grabado inteligente en cada isla**: Inscripción automática del código de lámina/isla (`#N` o `#N.M`) e indicador de guía (`[Sup]`, `[Inf]`, `[Ambas]`), calculando geométricamente el mayor tamaño de fuente que cabe estrictamente dentro del material sólido sin invadir huecos ni taladros.
+- **Grabado inteligente en cada isla**: Inscripción automática del código de lámina/costilla (`#N`, `X1`, `Y1`) e indicador de serie o guía (`[Base]`, `[Cruce]`, `[Sup]`, `[Inf]`, `[Ambas]`), calculando geométricamente el mayor tamaño de fuente que cabe estrictamente dentro del material sólido sin invadir huecos ni ranuras.
 
-### 5. Guía Interactiva de Corte y Montaje (De Abajo a Arriba)
-- **Prioridad óptima de capas para máquina láser** (LightBurn, RDWorks, Inkscape, LaserGRBL):
-  1. `VERDE (#008800)` — Grabado de etiquetas y numeración.
-  2. `NARANJA (#ff8800)` / `VIOLETA (#9900ff)` — Marcado superficial rápido de guías de pegado.
-  3. `AZUL (#0055ff)` — Corte de huecos interiores y perforaciones de varilla.
-  4. `ROJO (#ff0000)` — Corte del perímetro exterior.
-- **Secuencia paso a paso de montaje (`#1 -> #N`)** con lista de verificación interactiva y exportación a `.TXT`.
+### 5. Guía Ilustrada Vectorial Automática de Corte y Montaje (Sin IA)
+- **Generación algorítmica de planos vectoriales SVG** a partir de los tableros anidados y vectores 2D:
+  1. **Mapa Localizador en Tablero**: Resalta en verde dónde se ubica la pieza del paso actual dentro del tablero e indica si fue rotada $90^\circ$.
+  2. **Plano de Encaje 2D a $0^\circ$**: Muestra la orientación real de montaje, las guías de pegado o las ranuras a media madera (`↳Y1`, `↳X1`) y los puntos de micro-unión.
+  3. **Alzado Vertical de Apilado / Planta de Retícula Ortogonal**: Muestra el progreso vertical capa a capa (modo Apilado) o la planta de cruces `Serie A × Serie B` con los nudos de encaje sin pegamento (modo Puzzle 3D).
+- **Exportación de la guía**: Impresión directa a **PDF**, descarga como documento autocontenido **`GUIA_ILUSTRADA_MONTAJE.html`** (incluido automáticamente dentro del `.ZIP`) y resumen en texto plano **`.TXT`**.
 
 ### 6. Exportación Directa y por Lotes (`.ZIP`)
 - **`.SVG` (Corte Láser)**: Escala `1:1` en milímetros, validado XML y organizado por capas semánticas.
 - **`.DXF` (AutoCAD / CNC / Láser)**: Polilíneas, círculos y textos separados por capas y colores estándar CAD.
-- **`.STL` (Impresión 3D)**: Mallas 3D extruidas individualmente por cada lasca.
-- **`.LASCA` / `.JSON`**: Guardado y recuperación íntegra del estado del proyecto.
+- **`.STL` (Impresión 3D)**: Mallas 3D extruidas individualmente por cada lasca o costilla.
+- **`.LASCA` / `.JSON`**: Guardado y recuperación íntegra del estado del proyecto (incluyendo parámetros de Puzzle 3D y micro-uniones).
 
 ---
 

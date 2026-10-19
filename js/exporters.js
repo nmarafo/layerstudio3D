@@ -93,8 +93,9 @@ function pushLoopLinesWithTabsDXF(dxf, pts, isHole, layer, color, ox = 0, oy = 0
 }
 
 function generateSliceSVG(slice, idx) {
-  // El tamaño del documento SVG es siempre el tamaño total de la pieza en el eje activo
-  const docBounds = getModelBounds2D();
+  // El tamaño del documento SVG es siempre el tamaño total de la pieza en el eje de la lámina/costilla
+  const sliceAxis = slice.sliceAxis || state.axis;
+  const docBounds = getModelBounds2D(sliceAxis);
   const cutBounds = getSliceBounds2D(slice);
   const upperSlice = getAdjacentSlice(idx, 'next');
   const lowerSlice = getAdjacentSlice(idx, 'prev');
@@ -163,6 +164,7 @@ function generateSliceSVG(slice, idx) {
 
   const rodHoles = getAlignmentHoles2D(slice);
   const rodRadius = (state.rodDiameter / 2).toFixed(4);
+  const displayCode = slice.puzzleCode ? slice.puzzleCode : ('#' + (idx + 1));
 
   // Evita que Google Apps Script procese <?xml como etiqueta de plantilla
   const xmlHeader = '<' + '?xml version="1.0" encoding="UTF-8" standalone="no"?' + '>';
@@ -170,8 +172,8 @@ function generateSliceSVG(slice, idx) {
   const lines = [
     xmlHeader,
     '<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="' + svgW.toFixed(3) + 'mm" height="' + svgH.toFixed(3) + 'mm" viewBox="0 0 ' + svgW.toFixed(4) + ' ' + svgH.toFixed(4) + '" style="background:#ffffff;max-width:100vw;max-height:95vh;">',
-    '  <title>' + escapeXmlAttr('Lasca ' + (idx + 1) + ' - Eje ' + state.axis.toUpperCase()) + '</title>',
-    '  <desc>' + escapeXmlAttr('Documento (Pieza): ' + svgW.toFixed(2) + 'x' + svgH.toFixed(2) + 'mm | Medida corte lasca: ' + cutBounds.width.toFixed(2) + 'x' + cutBounds.height.toFixed(2) + 'mm | Posicion ' + state.axis.toUpperCase() + ': ' + slice.coord.toFixed(2) + 'mm') + '</desc>'
+    '  <title>' + escapeXmlAttr('Pieza ' + displayCode + ' - Eje ' + sliceAxis.toUpperCase()) + '</title>',
+    '  <desc>' + escapeXmlAttr('Documento (Pieza): ' + svgW.toFixed(2) + 'x' + svgH.toFixed(2) + 'mm | Medida corte: ' + cutBounds.width.toFixed(2) + 'x' + cutBounds.height.toFixed(2) + 'mm | Posicion ' + sliceAxis.toUpperCase() + ': ' + slice.coord.toFixed(2) + 'mm') + '</desc>'
   ];
 
   if (compoundPath.trim().length > 0) {
@@ -217,9 +219,13 @@ function generateSliceSVG(slice, idx) {
 
   if (state.includeLabels) {
     let guideNotes = '';
-    if (upperGuidePath.trim().length > 0 && upperSlice) guideNotes += ' | Sup:#' + (upperSlice.index + 1);
-    if (lowerGuidePath.trim().length > 0 && lowerSlice) guideNotes += ' | Inf:#' + (lowerSlice.index + 1);
-    const labelText = escapeXmlAttr('#' + (idx + 1) + ' [' + state.axis.toUpperCase() + ':' + slice.coord.toFixed(1) + 'mm | Corte:' + cutBounds.width.toFixed(1) + 'x' + cutBounds.height.toFixed(1) + 'mm | Doc:' + svgW.toFixed(1) + 'x' + svgH.toFixed(1) + 'mm' + guideNotes + ']');
+    if (slice.puzzleCode && slice.puzzleSlots) {
+      guideNotes += ' | Ranuras:' + slice.puzzleSlots.length;
+    } else {
+      if (upperGuidePath.trim().length > 0 && upperSlice) guideNotes += ' | Sup:#' + (upperSlice.index + 1);
+      if (lowerGuidePath.trim().length > 0 && lowerSlice) guideNotes += ' | Inf:#' + (lowerSlice.index + 1);
+    }
+    const labelText = escapeXmlAttr(displayCode + ' [' + sliceAxis.toUpperCase() + ':' + slice.coord.toFixed(1) + 'mm | Corte:' + cutBounds.width.toFixed(1) + 'x' + cutBounds.height.toFixed(1) + 'mm | Doc:' + svgW.toFixed(1) + 'x' + svgH.toFixed(1) + 'mm' + guideNotes + ']');
     const labelPad = Math.max(2, Math.min(svgW, svgH) * 0.025);
     const lx = labelPad.toFixed(4);
     const ly = (svgH - labelPad * 0.6).toFixed(4);
@@ -481,7 +487,7 @@ function generateSliceDXF(slice, idx) {
   const upperSlice = typeof idx === 'number' ? getAdjacentSlice(idx, 'next') : null;
   const lowerSlice = typeof idx === 'number' ? getAdjacentSlice(idx, 'prev') : null;
   // Origen global basado en el tamaño total de la pieza para mantener la misma referencia en todos los DXF
-  const b = getModelBounds2D();
+  const b = getModelBounds2D(slice.sliceAxis || state.axis);
   const ox = b.minX;
   const oy = b.minY;
   const dxf = ['0', 'SECTION', '2', 'ENTITIES'];
@@ -611,7 +617,8 @@ function downloadCurrentSlice(format) {
   const slice = state.slices[idx];
   if (!slice) return;
   const numStr = String(idx + 1).padStart(3, '0');
-  const baseName = state.modelName + '_eje' + state.axis.toUpperCase() + '_lasca_' + numStr;
+  const sliceCodeStr = slice.puzzleCode ? ('costilla_' + slice.puzzleCode) : ('eje' + state.axis.toUpperCase() + '_lasca_' + numStr);
+  const baseName = state.modelName + '_' + sliceCodeStr;
 
   if (format === 'svg') {
     const svgContent = generateSliceSVG(slice, idx);
@@ -715,7 +722,10 @@ async function executeZipExport() {
   targetSlices.forEach((slice) => {
     const idx = slice.index;
     const numStr = String(idx + 1).padStart(3, '0');
-    const fname = 'lasca_' + numStr + '_' + state.axis.toUpperCase() + '_' + slice.coord.toFixed(1) + 'mm';
+    const sAxis = (slice.sliceAxis || state.axis).toUpperCase();
+    const fname = slice.puzzleCode
+      ? ('costilla_' + slice.puzzleCode + '_eje' + sAxis + '_' + slice.coord.toFixed(1) + 'mm')
+      : ('lasca_' + numStr + '_' + sAxis + '_' + slice.coord.toFixed(1) + 'mm');
 
     if (folderSVG) folderSVG.file(fname + '.svg', generateSliceSVG(slice, idx));
     if (folderDXF) folderDXF.file(fname + '.dxf', generateSliceDXF(slice, idx));
@@ -730,7 +740,10 @@ async function executeZipExport() {
   }
 
   const content = await zip.generateAsync({ type: 'blob' });
-  triggerBrowserDownload(content, state.modelName + '_lascas_' + state.axis.toUpperCase() + '.zip');
+  const zipSuffix = state.constructionMode === 'puzzle3d'
+    ? ('_puzzle3D_' + state.puzzleAxes.toUpperCase())
+    : ('_lascas_' + state.axis.toUpperCase());
+  triggerBrowserDownload(content, state.modelName + zipSuffix + '.zip');
 
   prog.classList.add('hidden');
   closeExportModal();
@@ -741,9 +754,15 @@ async function executeZipExport() {
 // =========================================================================
 function exportProjectFile() {
   const payload = {
-    version: '2.4',
+    version: '2.5',
     modelName: state.modelName,
     unit: state.unit,
+    constructionMode: state.constructionMode,
+    puzzleAxes: state.puzzleAxes,
+    puzzleCountA: state.puzzleCountA,
+    puzzleCountB: state.puzzleCountB,
+    puzzleMaterialThicknessMM: state.puzzleMaterialThicknessMM,
+    puzzleSlotClearanceMM: state.puzzleSlotClearanceMM,
     axis: state.axis,
     mode: state.mode,
     sliceCount: state.sliceCount,
@@ -794,6 +813,15 @@ function importProjectFile(file) {
       state.modelName = data.modelName || 'proyecto_importado';
       state.baseVertices = new Float32Array(data.baseVertices);
       state.dimsMM = data.dimsMM;
+      state.constructionMode = data.constructionMode === 'puzzle3d' ? 'puzzle3d' : 'stacked';
+      if (data.puzzleAxes === 'xy' || data.puzzleAxes === 'xz' || data.puzzleAxes === 'yz') {
+        state.puzzleAxes = data.puzzleAxes;
+      }
+      if (typeof data.puzzleCountA === 'number') state.puzzleCountA = data.puzzleCountA;
+      if (typeof data.puzzleCountB === 'number') state.puzzleCountB = data.puzzleCountB;
+      if (typeof data.puzzleMaterialThicknessMM === 'number') state.puzzleMaterialThicknessMM = data.puzzleMaterialThicknessMM;
+      if (typeof data.puzzleSlotClearanceMM === 'number') state.puzzleSlotClearanceMM = data.puzzleSlotClearanceMM;
+      if (typeof syncConstructionModeUI === 'function') syncConstructionModeUI();
       state.axis = data.axis || 'z';
       state.mode = data.mode || 'count';
       state.sliceCount = data.sliceCount || 24;

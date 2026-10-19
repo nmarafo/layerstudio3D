@@ -379,23 +379,32 @@ function isRectStrictlyInsideIsland(cx, cy, w, h, outerPts, holeLoops, rods, rod
 function getIslandTextLineOptions(item) {
   let numPart = '';
   let guidePart = '';
+  const sliceRef = state.slices && state.slices[item.sliceIndex];
+  const baseCode = (item.puzzleCode || (sliceRef && sliceRef.puzzleCode))
+    ? (item.puzzleCode || sliceRef.puzzleCode)
+    : ('#' + (item.sliceIndex + 1));
 
   if (state.nestEngraveSliceNum) {
     numPart = item.totalIslandsInSlice > 1
-      ? '#' + (item.sliceIndex + 1) + '.' + (item.islandIdxInSlice + 1)
-      : '#' + (item.sliceIndex + 1);
+      ? baseCode + '.' + (item.islandIdxInSlice + 1)
+      : baseCode;
   }
   if (state.nestEngraveGuideType) {
-    const hasSup = state.includeNextSliceGuide && item.upperPolys && item.upperPolys.length > 0;
-    const hasInf = state.includePrevSliceGuide && item.lowerPolys && item.lowerPolys.length > 0;
-    if (hasSup && hasInf) {
-      guidePart = '[Ambas]';
-    } else if (hasSup) {
-      guidePart = '[Sup]';
-    } else if (hasInf) {
-      guidePart = '[Inf]';
+    if (state.constructionMode === 'puzzle3d' || item.puzzleSeries || (sliceRef && sliceRef.puzzleSeries)) {
+      const series = item.puzzleSeries || (sliceRef && sliceRef.puzzleSeries);
+      guidePart = series === 'A' ? '[Base]' : '[Cruce]';
     } else {
-      guidePart = '[Sin guía]';
+      const hasSup = state.includeNextSliceGuide && item.upperPolys && item.upperPolys.length > 0;
+      const hasInf = state.includePrevSliceGuide && item.lowerPolys && item.lowerPolys.length > 0;
+      if (hasSup && hasInf) {
+        guidePart = '[Ambas]';
+      } else if (hasSup) {
+        guidePart = '[Sup]';
+      } else if (hasInf) {
+        guidePart = '[Inf]';
+      } else {
+        guidePart = '[Sin guía]';
+      }
     }
   }
 
@@ -579,8 +588,9 @@ function extractIslandsFromSlices(targetSlices) {
     if (outers.length === 0) return;
 
     // Obtener lascas adyacentes reales del modelo para calcular si esta isla tiene guía superior/inferior
-    const nextSlice = (idx + 1 < state.slices.length) ? state.slices[idx + 1] : null;
-    const prevSlice = (idx - 1 >= 0) ? state.slices[idx - 1] : null;
+    const isPuzzle = state.constructionMode === 'puzzle3d';
+    const nextSlice = (!isPuzzle && idx + 1 < state.slices.length) ? state.slices[idx + 1] : null;
+    const prevSlice = (!isPuzzle && idx - 1 >= 0) ? state.slices[idx - 1] : null;
     const sliceRods = getAlignmentHoles2D(slice);
 
     outers.forEach((outer, oIdx) => {
@@ -616,6 +626,10 @@ function extractIslandsFromSlices(targetSlices) {
 
       const itemObj = {
         sliceIndex: idx,
+        puzzleCode: slice.puzzleCode || null,
+        puzzleSeries: slice.puzzleSeries || null,
+        sliceAxis: slice.sliceAxis || state.axis,
+        puzzleSlotsCount: slice.puzzleSlots ? slice.puzzleSlots.length : 0,
         islandIdxInSlice: oIdx,
         totalIslandsInSlice: outers.length,
         outerPoints: outer.points,
@@ -1229,18 +1243,29 @@ function update2DInspectorHeader() {
     if (includeLbl) includeLbl.classList.remove('hidden');
     const slice = state.slices[state.activeSliceIndex];
     if (!slice) return;
-    document.getElementById('slice2DTitle').textContent = 'Lasca #' + (state.activeSliceIndex + 1) + ' / ' + state.slices.length;
-    document.getElementById('slice2DCoord').textContent = state.axis.toUpperCase() + ' = ' + slice.coord.toFixed(2) + ' mm';
+    if (state.constructionMode === 'puzzle3d' && slice.puzzleCode) {
+      const seriesLbl = slice.puzzleSeries === 'A' ? 'Serie A ⊔ (Base)' : 'Serie B ⊓ (Cruce)';
+      document.getElementById('slice2DTitle').textContent =
+        'Costilla ' + slice.puzzleCode + ' · ' + seriesLbl + ' (' + (state.activeSliceIndex + 1) + '/' + state.slices.length + ')';
+      document.getElementById('slice2DCoord').textContent =
+        (slice.sliceAxis || state.axis).toUpperCase() + ' = ' + slice.coord.toFixed(2) + ' mm';
+    } else {
+      document.getElementById('slice2DTitle').textContent = 'Lasca #' + (state.activeSliceIndex + 1) + ' / ' + state.slices.length;
+      document.getElementById('slice2DCoord').textContent = state.axis.toUpperCase() + ' = ' + slice.coord.toFixed(2) + ' mm';
+    }
     document.getElementById('currentSliceSelectedCheck').checked = slice.selected;
 
     const b = getSliceBounds2D(slice);
-    const docB = getModelBounds2D();
+    const docB = getModelBounds2D(slice.sliceAxis);
     const f = getUnitFactor();
     const dec = state.unit === 'm' ? 3 : 1;
+    const slotsStr = (state.constructionMode === 'puzzle3d' && slice.puzzleSlots)
+      ? (' | Ranuras de encaje: ' + slice.puzzleSlots.length)
+      : '';
     document.getElementById('slice2DStats').textContent =
       'Corte: ' + (b.width / f).toFixed(dec) + ' × ' + (b.height / f).toFixed(dec) + ' ' + state.unit +
       ' | Doc SVG (Pieza): ' + (docB.width / f).toFixed(dec) + ' × ' + (docB.height / f).toFixed(dec) + ' ' + state.unit +
-      ' | Contornos: ' + slice.loops.length;
+      ' | Contornos: ' + slice.loops.length + slotsStr;
   }
 }
 

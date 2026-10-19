@@ -166,14 +166,16 @@ function resetCamera3D() {
 // =========================================================================
 // INSPECTOR 2D Y GALERÍA DE LASCAS
 // =========================================================================
-// Devuelve los límites 2D totales de la pieza completa según el eje de corte activo
-function getModelBounds2D() {
+// Devuelve los límites 2D totales de la pieza completa según el eje de corte de la lasca o el eje activo
+function getModelBounds2D(axisOverride) {
+  const activeSlice = state.slices && state.slices[state.activeSliceIndex];
+  const ax = axisOverride || (activeSlice && activeSlice.sliceAxis) || state.axis;
   let w = state.dimsMM.x;
   let h = state.dimsMM.y;
-  if (state.axis === 'x') {
+  if (ax === 'x') {
     w = state.dimsMM.y;
     h = state.dimsMM.z;
-  } else if (state.axis === 'y') {
+  } else if (ax === 'y') {
     w = state.dimsMM.x;
     h = state.dimsMM.z;
   }
@@ -219,8 +221,9 @@ function getSliceBounds2D(slice) {
 }
 
 function getAlignmentHoles2D(slice) {
-  if (!state.rodCount || state.rodCount <= 0 || !slice.loops || slice.loops.length === 0) return [];
-  const b = getModelBounds2D();
+  if (state.constructionMode === 'puzzle3d') return [];
+  if (!state.rodCount || state.rodCount <= 0 || !slice || !slice.loops || slice.loops.length === 0) return [];
+  const b = getModelBounds2D(slice.sliceAxis);
   if (state.rodCount === 1) {
     return [{ x: b.cx, y: b.cy }];
   }
@@ -611,6 +614,37 @@ function render2DSlice() {
     ctx.stroke();
   });
 
+  // Mostrar en modo Puzzle 3D el código de la costilla transversal que encaja en cada ranura (ej. ↳ Y1, ↳ Y2)
+  if (state.constructionMode === 'puzzle3d' && slice.slots && slice.slots.length > 0) {
+    ctx.save();
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    slice.slots.forEach((sl) => {
+      const mx = sl.uAxis === 'x' ? sl.uCenter : sl.vMouth;
+      const my = sl.uAxis === 'x' ? sl.vMouth : sl.uCenter;
+      const bx = sl.uAxis === 'x' ? sl.uCenter : sl.vMid;
+      const by = sl.uAxis === 'x' ? sl.vMid : sl.uCenter;
+
+      // Línea eje de inserción de la ranura
+      ctx.strokeStyle = 'rgba(251, 191, 36, 0.55)';
+      ctx.setLineDash([3, 3]);
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.moveTo(toScreenX(mx), toScreenY(my));
+      ctx.lineTo(toScreenX(bx), toScreenY(by));
+      ctx.stroke();
+
+      // Etiqueta de qué costilla encaja en esta ranura
+      const labelOffset = (sl.openPositive ? 1 : -1) * Math.max(4, 11 / scale);
+      const lx = sl.uAxis === 'x' ? mx : (mx + labelOffset);
+      const ly = sl.uAxis === 'x' ? (my + labelOffset) : my;
+      ctx.fillStyle = '#fbbf24';
+      ctx.fillText('↳' + sl.targetCode, toScreenX(lx), toScreenY(ly));
+    });
+    ctx.restore();
+  }
+
   // Mostrar también en la vista individual la etiqueta por isla autoajustada al interior de cada isla
   if (state.includeLabels) {
     const sliceIslands = extractIslandsFromSlices([slice]);
@@ -687,7 +721,9 @@ function renderSliceStripUI() {
   }
 
   if (titleEl) {
-    titleEl.textContent = 'Secuencia de Lascas (clic para inspeccionar, casilla para incluir/excluir de exportación)';
+    titleEl.textContent = state.constructionMode === 'puzzle3d'
+      ? 'Costillas del Puzzle 3D (Serie A ⊔ en azul + Serie B ⊓ en ámbar — clic para inspeccionar ranuras)'
+      : 'Secuencia de Lascas (clic para inspeccionar, casilla para incluir/excluir de exportación)';
   }
 
   state.slices.forEach((slice, idx) => {
@@ -700,7 +736,11 @@ function renderSliceStripUI() {
 
     const topRow = document.createElement('div');
     topRow.className = 'flex items-center justify-between text-[10px]';
-    topRow.innerHTML = '<span class="font-bold text-slate-200">#' + (idx + 1) + '</span>';
+    const codeLabel = slice.puzzleCode ? slice.puzzleCode : ('#' + (idx + 1));
+    const codeColor = slice.puzzleSeries === 'A'
+      ? 'text-sky-300'
+      : (slice.puzzleSeries === 'B' ? 'text-amber-300' : 'text-slate-200');
+    topRow.innerHTML = '<span class="font-bold ' + codeColor + '">' + codeLabel + '</span>';
 
     const chk = document.createElement('input');
     chk.type = 'checkbox';
@@ -723,7 +763,8 @@ function renderSliceStripUI() {
 
     const bottomRow = document.createElement('div');
     bottomRow.className = 'text-[9px] text-slate-400 truncate font-mono';
-    bottomRow.textContent = slice.coord.toFixed(1) + 'mm';
+    const axTag = slice.puzzleCode ? ((slice.sliceAxis || '').toUpperCase() + ':') : '';
+    bottomRow.textContent = axTag + slice.coord.toFixed(1) + 'mm';
 
     card.appendChild(topRow);
     card.appendChild(bottomRow);
