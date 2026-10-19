@@ -867,7 +867,7 @@
 
   <!-- MODAL DE GUÍA DE CORTE / IMPRESIÓN Y MONTAJE PASO A PASO (DE ABAJO A ARRIBA) -->
   <div id="assemblyGuideModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-4xl w-full max-h-[88vh] flex flex-col shadow-2xl overflow-hidden">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-6xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
       <!-- Cabecera -->
       <div class="p-4 bg-slate-950/90 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
         <div class="flex items-center gap-2.5">
@@ -875,13 +875,19 @@
             🛠️
           </div>
           <div>
-            <h3 id="assemblyGuideTitle" class="text-sm font-bold text-white">Guía de Corte / Impresión y Montaje (De Abajo a Arriba)</h3>
-            <p id="assemblyGuideSub" class="text-[11px] text-slate-400">Secuencia óptima de fabricación en tableros y ensamblaje capa por capa</p>
+            <h3 id="assemblyGuideTitle" class="text-sm font-bold text-white">Guía Ilustrada de Corte y Montaje (De Abajo a Arriba)</h3>
+            <p id="assemblyGuideSub" class="text-[11px] text-slate-400">Planos vectoriales automáticos a partir de los tableros anidados y contornos 2D</p>
           </div>
         </div>
-        <div class="flex items-center gap-2">
-          <button onclick="downloadAssemblyGuideTxt()" class="px-3 py-1.5 rounded-lg bg-emerald-600/25 hover:bg-emerald-600/40 border border-emerald-500/40 text-emerald-300 text-xs font-semibold transition flex items-center gap-1" title="Descargar guía completa en archivo de texto (.txt)">
-            <span>⬇ Descargar Guía (.TXT)</span>
+        <div class="flex flex-wrap items-center gap-1.5">
+          <button onclick="printIllustratedAssemblyGuide()" class="px-2.5 py-1.5 rounded-lg bg-sky-600/25 hover:bg-sky-600/40 border border-sky-500/40 text-sky-300 text-xs font-semibold transition flex items-center gap-1" title="Imprimir o guardar como PDF el manual técnico ilustrado con planos vectoriales">
+            <span>🖨️ Imprimir / PDF Ilustrado</span>
+          </button>
+          <button onclick="downloadIllustratedAssemblyGuideHtml()" class="px-2.5 py-1.5 rounded-lg bg-amber-500/25 hover:bg-amber-500/40 border border-amber-500/40 text-amber-300 text-xs font-semibold transition flex items-center gap-1" title="Descargar guía ilustrada interactiva autocontenida con diagramas SVG (.html)">
+            <span>⬇ Guía Ilustrada (.HTML)</span>
+          </button>
+          <button onclick="downloadAssemblyGuideTxt()" class="px-2.5 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/35 border border-emerald-500/40 text-emerald-300 text-xs font-semibold transition flex items-center gap-1" title="Descargar resumen en texto plano (.txt)">
+            <span>⬇ Texto (.TXT)</span>
           </button>
           <button onclick="closeAssemblyGuideModal()" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white text-xs flex items-center justify-center">✕</button>
         </div>
@@ -889,18 +895,21 @@
 
       <!-- Pestañas de navegación dentro de la guía -->
       <div class="px-4 py-2 bg-slate-900 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2 shrink-0">
-        <div class="flex items-center gap-1.5">
+        <div class="flex flex-wrap items-center gap-1.5">
           <button onclick="switchAssemblyGuideTab('all')" id="guideTab_all" class="px-3 py-1 rounded-lg bg-amber-500/20 border border-amber-500 text-amber-300 text-xs font-bold transition">
             📋 Vista Completa (Corte + Montaje)
           </button>
           <button onclick="switchAssemblyGuideTab('cutting')" id="guideTab_cutting" class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-medium transition">
-            🔥 1. Orden de Corte / Impresión
+            🔥 1. Planos de Tableros y Corte
           </button>
           <button onclick="switchAssemblyGuideTab('assembly')" id="guideTab_assembly" class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-medium transition">
-            🧱 2. Montaje Abajo → Arriba
+            🧱 2. Montaje Ilustrado Paso a Paso
           </button>
         </div>
-        <div class="flex items-center gap-2 text-[11px]">
+        <div class="flex flex-wrap items-center gap-2 text-[11px]">
+          <button onclick="toggleGuideIllustrations()" id="btnToggleGuideIllustrations" class="px-2.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/40 font-semibold transition">
+            📐 Planos Vectoriales: ON
+          </button>
           <span id="assemblyProgressBadge" class="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold">
             Progreso montaje: 0 / 0 capas
           </span>
@@ -913,7 +922,7 @@
 
       <!-- Pie del modal -->
       <div class="p-3 bg-slate-950/90 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2">
-        <span class="text-[11px] text-slate-400">Marca cada casilla conforme vayas pegando las láminas de abajo hacia arriba o haz clic en "Ver en 3D/Tablero"</span>
+        <span class="text-[11px] text-slate-400">Ilustraciones generadas algorítmicamente a escala real a partir de los tableros y vectores 2D · Marca cada paso al ensamblar</span>
         <button onclick="closeAssemblyGuideModal()" class="px-4 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-xs font-bold text-white transition">Cerrar Guía</button>
       </div>
     </div>

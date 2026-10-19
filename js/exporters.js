@@ -724,6 +724,10 @@ async function executeZipExport() {
 
   const resumen = generateFullAssemblyGuideText();
   zip.file('LEEME_GUIA_MONTAJE.txt', resumen);
+  if (typeof generateIllustratedAssemblyGuideHTML === 'function') {
+    const guiaIlustradaHtml = generateIllustratedAssemblyGuideHTML();
+    zip.file('GUIA_ILUSTRADA_MONTAJE.html', guiaIlustradaHtml);
+  }
 
   const content = await zip.generateAsync({ type: 'blob' });
   triggerBrowserDownload(content, state.modelName + '_lascas_' + state.axis.toUpperCase() + '.zip');

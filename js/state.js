@@ -66,6 +66,7 @@ const state = {
   clippedIslandsCount: 0,      // Islas que fueron recortadas para caber en el tablero
   activeBoardIndex: 0,
   assemblyGuideTab: 'all',     // 'all' | 'cutting' | 'assembly'
+  guideShowIllustrations: true,// true = muestra diagramas vectoriales automáticos en la guía de montaje
   assembledSlicesDone: {},     // Registro de pasos marcados como montados { [sliceIndex]: boolean }
   view2D: {
     zoom: 1,

@@ -924,7 +924,7 @@ input[type="range"] {
 
   <!-- MODAL DE GUÍA DE CORTE / IMPRESIÓN Y MONTAJE PASO A PASO (DE ABAJO A ARRIBA) -->
   <div id="assemblyGuideModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-4xl w-full max-h-[88vh] flex flex-col shadow-2xl overflow-hidden">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-6xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
       <!-- Cabecera -->
       <div class="p-4 bg-slate-950/90 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
         <div class="flex items-center gap-2.5">
@@ -932,13 +932,19 @@ input[type="range"] {
             🛠️
           </div>
           <div>
-            <h3 id="assemblyGuideTitle" class="text-sm font-bold text-white">Guía de Corte / Impresión y Montaje (De Abajo a Arriba)</h3>
-            <p id="assemblyGuideSub" class="text-[11px] text-slate-400">Secuencia óptima de fabricación en tableros y ensamblaje capa por capa</p>
+            <h3 id="assemblyGuideTitle" class="text-sm font-bold text-white">Guía Ilustrada de Corte y Montaje (De Abajo a Arriba)</h3>
+            <p id="assemblyGuideSub" class="text-[11px] text-slate-400">Planos vectoriales automáticos a partir de los tableros anidados y contornos 2D</p>
           </div>
         </div>
-        <div class="flex items-center gap-2">
-          <button onclick="downloadAssemblyGuideTxt()" class="px-3 py-1.5 rounded-lg bg-emerald-600/25 hover:bg-emerald-600/40 border border-emerald-500/40 text-emerald-300 text-xs font-semibold transition flex items-center gap-1" title="Descargar guía completa en archivo de texto (.txt)">
-            <span>⬇ Descargar Guía (.TXT)</span>
+        <div class="flex flex-wrap items-center gap-1.5">
+          <button onclick="printIllustratedAssemblyGuide()" class="px-2.5 py-1.5 rounded-lg bg-sky-600/25 hover:bg-sky-600/40 border border-sky-500/40 text-sky-300 text-xs font-semibold transition flex items-center gap-1" title="Imprimir o guardar como PDF el manual técnico ilustrado con planos vectoriales">
+            <span>🖨️ Imprimir / PDF Ilustrado</span>
+          </button>
+          <button onclick="downloadIllustratedAssemblyGuideHtml()" class="px-2.5 py-1.5 rounded-lg bg-amber-500/25 hover:bg-amber-500/40 border border-amber-500/40 text-amber-300 text-xs font-semibold transition flex items-center gap-1" title="Descargar guía ilustrada interactiva autocontenida con diagramas SVG (.html)">
+            <span>⬇ Guía Ilustrada (.HTML)</span>
+          </button>
+          <button onclick="downloadAssemblyGuideTxt()" class="px-2.5 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/35 border border-emerald-500/40 text-emerald-300 text-xs font-semibold transition flex items-center gap-1" title="Descargar resumen en texto plano (.txt)">
+            <span>⬇ Texto (.TXT)</span>
           </button>
           <button onclick="closeAssemblyGuideModal()" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white text-xs flex items-center justify-center">✕</button>
         </div>
@@ -946,18 +952,21 @@ input[type="range"] {
 
       <!-- Pestañas de navegación dentro de la guía -->
       <div class="px-4 py-2 bg-slate-900 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2 shrink-0">
-        <div class="flex items-center gap-1.5">
+        <div class="flex flex-wrap items-center gap-1.5">
           <button onclick="switchAssemblyGuideTab('all')" id="guideTab_all" class="px-3 py-1 rounded-lg bg-amber-500/20 border border-amber-500 text-amber-300 text-xs font-bold transition">
             📋 Vista Completa (Corte + Montaje)
           </button>
           <button onclick="switchAssemblyGuideTab('cutting')" id="guideTab_cutting" class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-medium transition">
-            🔥 1. Orden de Corte / Impresión
+            🔥 1. Planos de Tableros y Corte
           </button>
           <button onclick="switchAssemblyGuideTab('assembly')" id="guideTab_assembly" class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-medium transition">
-            🧱 2. Montaje Abajo → Arriba
+            🧱 2. Montaje Ilustrado Paso a Paso
           </button>
         </div>
-        <div class="flex items-center gap-2 text-[11px]">
+        <div class="flex flex-wrap items-center gap-2 text-[11px]">
+          <button onclick="toggleGuideIllustrations()" id="btnToggleGuideIllustrations" class="px-2.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/40 font-semibold transition">
+            📐 Planos Vectoriales: ON
+          </button>
           <span id="assemblyProgressBadge" class="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold">
             Progreso montaje: 0 / 0 capas
           </span>
@@ -970,7 +979,7 @@ input[type="range"] {
 
       <!-- Pie del modal -->
       <div class="p-3 bg-slate-950/90 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2">
-        <span class="text-[11px] text-slate-400">Marca cada casilla conforme vayas pegando las láminas de abajo hacia arriba o haz clic en "Ver en 3D/Tablero"</span>
+        <span class="text-[11px] text-slate-400">Ilustraciones generadas algorítmicamente a escala real a partir de los tableros y vectores 2D · Marca cada paso al ensamblar</span>
         <button onclick="closeAssemblyGuideModal()" class="px-4 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-xs font-bold text-white transition">Cerrar Guía</button>
       </div>
     </div>
@@ -1153,6 +1162,7 @@ const state = {
   clippedIslandsCount: 0,      // Islas que fueron recortadas para caber en el tablero
   activeBoardIndex: 0,
   assemblyGuideTab: 'all',     // 'all' | 'cutting' | 'assembly'
+  guideShowIllustrations: true,// true = muestra diagramas vectoriales automáticos en la guía de montaje
   assembledSlicesDone: {},     // Registro de pasos marcados como montados { [sliceIndex]: boolean }
   view2D: {
     zoom: 1,
@@ -3820,8 +3830,9 @@ function selectActiveBoard(bIdx) {
 
 
 /**
- * LayerStudio 3D - Board Inspector & Step-by-Step Assembly Guide
- * Modales de detalle de láminas por tablero y guía interactiva de corte láser y montaje de abajo a arriba.
+ * LayerStudio 3D - Board Inspector & Vector-Illustrated Step-by-Step Assembly Guide
+ * Modales de detalle de láminas por tablero y guía interactiva ilustrada algorítmicamente
+ * a partir de los tableros anidados y vectores 2D (sin uso de IA).
  *
  * Copyright (C) 2026 Norberto Martín Afonso <normaafo@gmail.com>
  * Repository: https://github.com/nmarafo/layerstudio3D
@@ -3836,7 +3847,628 @@ function selectActiveBoard(bIdx) {
  * to Norberto Martín Afonso in the source code, documentation, and visible
  * application notices.
  */
-// Abre el modal de información detallando las láminas e islas que contiene el tablero
+
+// =========================================================================
+// MOTOR DE ILUSTRACIÓN VECTORIAL AUTOMÁTICA (SVG GEOMÉTRICO SIN IA)
+// =========================================================================
+
+function escapeGuideXml(val) {
+  return String(val == null ? '' : val)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function buildClosedPolyPathD(pts, toX, toY) {
+  if (!pts || pts.length < 3) return '';
+  let d = 'M ' + toX(pts[0].x) + ' ' + toY(pts[0].y);
+  for (let i = 1; i < pts.length; i++) {
+    d += ' L ' + toX(pts[i].x) + ' ' + toY(pts[i].y);
+  }
+  return d + ' Z';
+}
+
+function buildOpenPolyPathD(pts, toX, toY) {
+  if (!pts || pts.length < 2) return '';
+  let d = 'M ' + toX(pts[0].x) + ' ' + toY(pts[0].y);
+  for (let i = 1; i < pts.length; i++) {
+    d += ' L ' + toX(pts[i].x) + ' ' + toY(pts[i].y);
+  }
+  return d;
+}
+
+/**
+ * 1. ILUSTRACIÓN VECTORIAL DE UN TABLERO ANIDADO
+ * - Si opts.highlightSliceIndex === null: muestra el plano completo del tablero con todas sus islas coloreadas por altura.
+ * - Si opts.highlightSliceIndex es un número: atenúa el resto del tablero y resalta con un marco localizador
+ *   las islas pertenecientes a esa lámina (#N), indicando su posición (x, y) y si están rotadas 90°.
+ */
+function generateBoardIllustrationSVG(board, opts) {
+  const options = opts || {};
+  const highlightSliceIdx = typeof options.highlightSliceIndex === 'number' ? options.highlightSliceIndex : null;
+  const isLight = options.theme === 'light';
+  const maxH = options.maxHeightPx || 230;
+
+  if (!board) return '';
+
+  const bW = board.width;
+  const bH = board.height;
+  const margin = board.margin || 0;
+
+  const padLeft = Math.max(18, bW * 0.055);
+  const padRight = Math.max(14, bW * 0.04);
+  const padTop = Math.max(16, bH * 0.065);
+  const padBottom = Math.max(16, bH * 0.065);
+
+  const vbW = bW + padLeft + padRight;
+  const vbH = bH + padTop + padBottom;
+
+  const toX = (x) => (padLeft + Number(x)).toFixed(2);
+  const toY = (y) => (padTop + (bH - Number(y))).toFixed(2);
+
+  const bgCanvas = isLight ? '#f8fafc' : '#090d16';
+  const boardFill = isLight ? '#ffffff' : '#111827';
+  const boardStroke = isLight ? '#475569' : '#475569';
+  const gridColor = isLight ? '#e2e8f0' : '#1e293b';
+  const marginColor = isLight ? '#94a3b8' : '#334155';
+  const dimTextColor = isLight ? '#334155' : '#94a3b8';
+
+  const unitFactor = getUnitFactor();
+  const dec = state.unit === 'm' ? 3 : 1;
+  const u = state.unit;
+
+  const svg = [];
+  svg.push(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + vbW.toFixed(2) + ' ' + vbH.toFixed(2) + '" ' +
+    'style="width:100%;max-height:' + maxH + 'px;height:auto;display:block;background:' + bgCanvas + ';border-radius:8px;">'
+  );
+
+  // Cuadrícula métrica cada 50 mm o 100 mm
+  const gridStep = Math.max(bW, bH) > 500 ? 100 : 50;
+  svg.push('<g stroke="' + gridColor + '" stroke-width="0.6" vector-effect="non-scaling-stroke">');
+  for (let gx = gridStep; gx < bW; gx += gridStep) {
+    const xPos = (padLeft + gx).toFixed(2);
+    svg.push('<line x1="' + xPos + '" y1="' + padTop.toFixed(2) + '" x2="' + xPos + '" y2="' + (padTop + bH).toFixed(2) + '" />');
+  }
+  for (let gy = gridStep; gy < bH; gy += gridStep) {
+    const yPos = (padTop + (bH - gy)).toFixed(2);
+    svg.push('<line x1="' + padLeft.toFixed(2) + '" y1="' + yPos + '" x2="' + (padLeft + bW).toFixed(2) + '" y2="' + yPos + '" />');
+  }
+  svg.push('</g>');
+
+  // Contorno físico del tablero y margen de seguridad
+  svg.push(
+    '<rect x="' + padLeft.toFixed(2) + '" y="' + padTop.toFixed(2) + '" width="' + bW.toFixed(2) + '" height="' + bH.toFixed(2) + '" ' +
+    'fill="' + boardFill + '" fill-opacity="0.7" stroke="' + boardStroke + '" stroke-width="1.5" vector-effect="non-scaling-stroke" rx="2" />'
+  );
+  if (margin > 0 && bW > margin * 2 && bH > margin * 2) {
+    svg.push(
+      '<rect x="' + (padLeft + margin).toFixed(2) + '" y="' + (padTop + margin).toFixed(2) + '" ' +
+      'width="' + (bW - margin * 2).toFixed(2) + '" height="' + (bH - margin * 2).toFixed(2) + '" ' +
+      'fill="none" stroke="' + marginColor + '" stroke-width="0.8" stroke-dasharray="4,3" vector-effect="non-scaling-stroke" />'
+    );
+  }
+
+  // Cotas exteriores del tablero
+  const headerFontSize = Math.max(8, Math.min(bW, bH) * 0.036).toFixed(1);
+  const boardTitle = 'TABLERO #' + (board.boardIndex + 1) + ' (' + (bW / unitFactor).toFixed(dec) + ' × ' + (bH / unitFactor).toFixed(dec) + ' ' + u + ' · Uso ' + board.efficiency.toFixed(1) + '%)';
+  svg.push(
+    '<text x="' + (padLeft + bW * 0.5).toFixed(2) + '" y="' + (padTop * 0.62).toFixed(2) + '" ' +
+    'text-anchor="middle" dominant-baseline="central" font-family="monospace, sans-serif" font-weight="bold" ' +
+    'font-size="' + headerFontSize + '" fill="' + dimTextColor + '">' + escapeGuideXml(boardTitle) + '</text>'
+  );
+
+  // Origen (0,0) en esquina inferior izquierda
+  const smallFont = Math.max(6.5, Math.min(bW, bH) * 0.028).toFixed(1);
+  svg.push(
+    '<text x="' + padLeft.toFixed(2) + '" y="' + (padTop + bH + padBottom * 0.62).toFixed(2) + '" ' +
+    'text-anchor="start" dominant-baseline="central" font-family="monospace, sans-serif" ' +
+    'font-size="' + smallFont + '" fill="' + dimTextColor + '">(0,0) ➔ X (' + bW.toFixed(0) + ' mm)</text>'
+  );
+
+  const totalSlicesCount = Math.max(1, state.slices.length);
+  const rodR = Math.max(0.8, state.rodDiameter * 0.5);
+  const targetHighlights = [];
+
+  // Dibujar cada isla colocada en el tablero
+  (board.placements || []).forEach((pl) => {
+    const isl = pl.island;
+    const sIdx = isl.sliceIndex;
+    const isTarget = highlightSliceIdx === null || sIdx === highlightSliceIdx;
+    const isSpotlight = highlightSliceIdx !== null && sIdx === highlightSliceIdx;
+
+    // Path compuesto (contorno exterior + huecos interiores)
+    let compoundD = buildClosedPolyPathD(pl.outerPoints, toX, toY);
+    (pl.holes || []).forEach((h) => {
+      compoundD += ' ' + buildClosedPolyPathD(h.points, toX, toY);
+    });
+
+    // Colores según modo vista general vs modo localizador de paso
+    let fillCol, fillOp, strokeOuter, strokeHole, strokeW;
+    if (highlightSliceIdx === null) {
+      const ratio = sIdx / Math.max(1, totalSlicesCount - 1);
+      const hue = Math.round(160 + ratio * 55); // De verde esmeralda (#1) a azul cielo/índigo (#N)
+      fillCol = 'hsl(' + hue + ', 80%, 48%)';
+      fillOp = isLight ? '0.22' : '0.24';
+      strokeOuter = isLight ? '#dc2626' : '#f87171';
+      strokeHole = isLight ? '#2563eb' : '#60a5fa';
+      strokeW = '1.2';
+    } else if (isSpotlight) {
+      fillCol = '#10b981';
+      fillOp = isLight ? '0.35' : '0.42';
+      strokeOuter = isLight ? '#059669' : '#34d399';
+      strokeHole = isLight ? '#0284c7' : '#38bdf8';
+      strokeW = '2.0';
+    } else {
+      fillCol = isLight ? '#94a3b8' : '#475569';
+      fillOp = isLight ? '0.14' : '0.12';
+      strokeOuter = isLight ? '#cbd5e1' : '#334155';
+      strokeHole = isLight ? '#cbd5e1' : '#334155';
+      strokeW = '0.75';
+    }
+
+    if (compoundD) {
+      svg.push(
+        '<path d="' + compoundD + '" fill="' + fillCol + '" fill-opacity="' + fillOp + '" fill-rule="evenodd" ' +
+        'stroke="' + strokeOuter + '" stroke-width="' + strokeW + '" vector-effect="non-scaling-stroke" />'
+      );
+    }
+
+    // Huecos interiores y varillas si es isla activa
+    if (isTarget) {
+      (pl.holes || []).forEach((h) => {
+        const hd = buildClosedPolyPathD(h.points, toX, toY);
+        if (hd) {
+          svg.push('<path d="' + hd + '" fill="none" stroke="' + strokeHole + '" stroke-width="1.0" vector-effect="non-scaling-stroke" />');
+        }
+      });
+
+      // Guías de pegado grabadas sobre la isla en el tablero
+      if (state.includeNextSliceGuide && pl.upperPolys && pl.upperPolys.length > 0) {
+        let upD = '';
+        pl.upperPolys.forEach((poly) => { upD += buildOpenPolyPathD(poly, toX, toY) + ' '; });
+        if (upD.trim()) {
+          svg.push(
+            '<path d="' + upD.trim() + '" fill="none" stroke="#f97316" stroke-width="0.9" stroke-dasharray="3,2" vector-effect="non-scaling-stroke" />'
+          );
+        }
+      }
+      if (state.includePrevSliceGuide && pl.lowerPolys && pl.lowerPolys.length > 0) {
+        let lowD = '';
+        pl.lowerPolys.forEach((poly) => { lowD += buildOpenPolyPathD(poly, toX, toY) + ' '; });
+        if (lowD.trim()) {
+          svg.push(
+            '<path d="' + lowD.trim() + '" fill="none" stroke="#a855f7" stroke-width="0.85" stroke-dasharray="1.5,2" vector-effect="non-scaling-stroke" />'
+          );
+        }
+      }
+
+      // Orificios de varillas guía
+      (pl.rods || []).forEach((r) => {
+        svg.push(
+          '<circle cx="' + toX(r.x) + '" cy="' + toY(r.y) + '" r="' + rodR.toFixed(2) + '" ' +
+          'fill="' + boardFill + '" stroke="#06b6d4" stroke-width="1.1" vector-effect="non-scaling-stroke" />'
+        );
+      });
+
+      // Micro-uniones (holding tabs) si están activas
+      if (state.tabsEnabled && typeof computeLoopWithHoldingTabs === 'function') {
+        const tabRes = computeLoopWithHoldingTabs(pl.outerPoints, false);
+        if (tabRes && tabRes.tabs && tabRes.tabs.length > 0) {
+          const tabMarkerR = Math.max(1.2, Math.min(bW, bH) * 0.006).toFixed(2);
+          tabRes.tabs.forEach((t) => {
+            svg.push(
+              '<circle cx="' + toX(t.mid.x) + '" cy="' + toY(t.mid.y) + '" r="' + tabMarkerR + '" ' +
+              'fill="#f59e0b" stroke="#0f172a" stroke-width="0.7" vector-effect="non-scaling-stroke" />'
+            );
+          });
+        }
+      }
+    }
+
+    // Código de la isla (#N o #N.1)
+    const code = isl.totalIslandsInSlice > 1
+      ? '#' + (sIdx + 1) + '.' + (isl.islandIdxInSlice + 1)
+      : '#' + (sIdx + 1);
+    const labelStr = code + (pl.rotated ? '↻' : '');
+    const cx = pl.textLayout ? pl.textLayout.x : (pl.x + pl.w * 0.5);
+    const cy = pl.textLayout ? pl.textLayout.y : (pl.y + pl.h * 0.5);
+
+    const lblSize = isSpotlight
+      ? Math.max(8, Math.min(bW, bH) * 0.04).toFixed(1)
+      : Math.max(6.2, Math.min(pl.w, pl.h, Math.min(bW, bH) * 0.033) * 0.35).toFixed(1);
+
+    const lblColor = isSpotlight
+      ? (isLight ? '#065f46' : '#ecfdf5')
+      : (isTarget ? (isLight ? '#0f172a' : '#e2e8f0') : (isLight ? '#94a3b8' : '#64748b'));
+
+    svg.push(
+      '<text x="' + toX(cx) + '" y="' + toY(cy) + '" text-anchor="middle" dominant-baseline="central" ' +
+      'font-family="monospace, sans-serif" font-weight="bold" font-size="' + lblSize + '" fill="' + lblColor + '">' +
+      escapeGuideXml(labelStr) + '</text>'
+    );
+
+    if (isSpotlight) {
+      targetHighlights.push({ pl, code, cx, cy });
+    }
+  });
+
+  // Si estamos en modo localizador de paso, dibujar recuadro resaltado y etiqueta flotante sobre las piezas buscadas
+  targetHighlights.forEach((item) => {
+    const pl = item.pl;
+    const rx = (padLeft + pl.x).toFixed(2);
+    const ry = (padTop + (bH - (pl.y + pl.h))).toFixed(2);
+    const rw = pl.w.toFixed(2);
+    const rh = pl.h.toFixed(2);
+
+    svg.push(
+      '<rect x="' + rx + '" y="' + ry + '" width="' + rw + '" height="' + rh + '" ' +
+      'fill="none" stroke="#f59e0b" stroke-width="1.6" stroke-dasharray="4,2" vector-effect="non-scaling-stroke" rx="2" />'
+    );
+  });
+
+  svg.push('</svg>');
+  return svg.join('');
+}
+
+/**
+ * 2. ILUSTRACIÓN VECTORIAL DE ENCAJE Y ALINEACIÓN 2D (ORIENTACIÓN REAL 0°)
+ * Muestra cómo debe orientarse y pegarse la Lámina #N sobre la Lámina #N-1 (sombra inferior),
+ * dónde quedan los orificios de varilla, los puntos de presión (holding tabs) y la guía naranja superior (#N+1).
+ */
+function generateStepAlignmentIllustrationSVG(slice, stepIdx, activeSlices, opts) {
+  const options = opts || {};
+  const isLight = options.theme === 'light';
+  const maxH = options.maxHeightPx || 215;
+
+  if (!slice || !slice.loops) return '';
+
+  const docBounds = getModelBounds2D();
+  const cutBounds = getSliceBounds2D(slice);
+  const prevSlice = stepIdx > 0 ? activeSlices[stepIdx - 1] : null;
+  const nextSlice = stepIdx < activeSlices.length - 1 ? activeSlices[stepIdx + 1] : null;
+
+  const minX = docBounds.minX;
+  const minY = docBounds.minY;
+  const docW = Math.max(10, docBounds.width);
+  const docH = Math.max(10, docBounds.height);
+
+  const padX = Math.max(12, docW * 0.08);
+  const padY = Math.max(14, docH * 0.09);
+  const vbW = docW + padX * 2;
+  const vbH = docH + padY * 2;
+
+  const toX = (x) => (padX + (Number(x) - minX)).toFixed(2);
+  const toY = (y) => (padY + (docH - (Number(y) - minY))).toFixed(2);
+
+  const bgCanvas = isLight ? '#f8fafc' : '#090d16';
+  const frameStroke = isLight ? '#cbd5e1' : '#1e293b';
+  const prevFill = isLight ? '#94a3b8' : '#64748b';
+  const prevStroke = isLight ? '#64748b' : '#94a3b8';
+  const currFill = isLight ? '#0ea5e9' : '#38bdf8';
+  const currOuterStroke = isLight ? '#dc2626' : '#f87171';
+  const currHoleStroke = isLight ? '#2563eb' : '#60a5fa';
+  const textColor = isLight ? '#0f172a' : '#f8fafc';
+  const subTextColor = isLight ? '#475569' : '#94a3b8';
+
+  const svg = [];
+  svg.push(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + vbW.toFixed(2) + ' ' + vbH.toFixed(2) + '" ' +
+    'style="width:100%;max-height:' + maxH + 'px;height:auto;display:block;background:' + bgCanvas + ';border-radius:8px;">'
+  );
+
+  // Marco de referencia global 2D del modelo
+  svg.push(
+    '<rect x="' + padX.toFixed(2) + '" y="' + padY.toFixed(2) + '" width="' + docW.toFixed(2) + '" height="' + docH.toFixed(2) + '" ' +
+    'fill="none" stroke="' + frameStroke + '" stroke-width="0.9" stroke-dasharray="3,3" vector-effect="non-scaling-stroke" rx="2" />'
+  );
+
+  // Ejes centrales de referencia
+  const midX = (padX + docW * 0.5).toFixed(2);
+  const midY = (padY + docH * 0.5).toFixed(2);
+  svg.push(
+    '<line x1="' + midX + '" y1="' + padY.toFixed(2) + '" x2="' + midX + '" y2="' + (padY + docH).toFixed(2) + '" stroke="' + frameStroke + '" stroke-width="0.5" vector-effect="non-scaling-stroke" />' +
+    '<line x1="' + padX.toFixed(2) + '" y1="' + midY + '" x2="' + (padX + docW).toFixed(2) + '" y2="' + midY + '" stroke="' + frameStroke + '" stroke-width="0.5" vector-effect="non-scaling-stroke" />'
+  );
+
+  // 1. Silueta de la capa inferior ya montada (#N-1) debajo para referencia visual de apoyo
+  if (prevSlice && prevSlice.loops && prevSlice.loops.length > 0) {
+    let prevD = '';
+    prevSlice.loops.forEach((loop) => {
+      prevD += buildClosedPolyPathD(loop.points, toX, toY) + ' ';
+    });
+    if (prevD.trim()) {
+      svg.push(
+        '<path d="' + prevD.trim() + '" fill="' + prevFill + '" fill-opacity="0.18" fill-rule="evenodd" ' +
+        'stroke="' + prevStroke + '" stroke-width="1.0" stroke-dasharray="3,2" vector-effect="non-scaling-stroke" />'
+      );
+    }
+  }
+
+  // 2. Contorno y material sólido de la Lámina Actual (#N) en su orientación real 0°
+  let currCompoundD = '';
+  const outerLoops = [];
+  const holeLoops = [];
+  (slice.loops || []).forEach((loop) => {
+    const d = buildClosedPolyPathD(loop.points, toX, toY);
+    if (!d) return;
+    currCompoundD += d + ' ';
+    if (loop.isHole) holeLoops.push({ d, points: loop.points });
+    else outerLoops.push({ d, points: loop.points });
+  });
+
+  if (currCompoundD.trim()) {
+    svg.push(
+      '<path d="' + currCompoundD.trim() + '" fill="' + currFill + '" fill-opacity="' + (isLight ? '0.24' : '0.28') + '" fill-rule="evenodd" stroke="none" />'
+    );
+  }
+  outerLoops.forEach((ol) => {
+    svg.push(
+      '<path d="' + ol.d + '" fill="none" stroke="' + currOuterStroke + '" stroke-width="1.6" vector-effect="non-scaling-stroke" />'
+    );
+  });
+  holeLoops.forEach((hl) => {
+    svg.push(
+      '<path d="' + hl.d + '" fill="none" stroke="' + currHoleStroke + '" stroke-width="1.2" vector-effect="non-scaling-stroke" />'
+    );
+  });
+
+  // 3. Guías de pegado (Naranja #N+1 donde aplicar adhesivo para el siguiente paso, y Violeta #N-1)
+  if (state.includePrevSliceGuide && prevSlice && typeof getGuidePolylinesForSlice === 'function') {
+    const lowPolys = getGuidePolylinesForSlice(slice, prevSlice);
+    let lowD = '';
+    lowPolys.forEach((poly) => { lowD += buildOpenPolyPathD(poly, toX, toY) + ' '; });
+    if (lowD.trim()) {
+      svg.push(
+        '<path d="' + lowD.trim() + '" fill="none" stroke="#a855f7" stroke-width="1.15" stroke-dasharray="2,2" vector-effect="non-scaling-stroke" />'
+      );
+    }
+  }
+
+  if (state.includeNextSliceGuide && nextSlice && typeof getGuidePolylinesForSlice === 'function') {
+    const upPolys = getGuidePolylinesForSlice(slice, nextSlice);
+    let upD = '';
+    upPolys.forEach((poly) => { upD += buildOpenPolyPathD(poly, toX, toY) + ' '; });
+    if (upD.trim()) {
+      svg.push(
+        '<path d="' + upD.trim() + '" fill="none" stroke="#f97316" stroke-width="1.35" stroke-dasharray="4,2" vector-effect="non-scaling-stroke" />'
+      );
+    }
+  }
+
+  // 4. Orificios de varillas de alineación
+  const rodHoles = typeof getAlignmentHoles2D === 'function' ? getAlignmentHoles2D(slice) : [];
+  const rodR = Math.max(1.0, state.rodDiameter * 0.5);
+  rodHoles.forEach((h) => {
+    const rx = toX(h.x);
+    const ry = toY(h.y);
+    svg.push(
+      '<circle cx="' + rx + '" cy="' + ry + '" r="' + rodR.toFixed(2) + '" fill="' + bgCanvas + '" stroke="#06b6d4" stroke-width="1.3" vector-effect="non-scaling-stroke" />'
+    );
+  });
+
+  // 5. Puntos de micro-unión (holding tabs) en el contorno
+  if (state.tabsEnabled && typeof computeLoopWithHoldingTabs === 'function') {
+    const tabMarkerR = Math.max(1.2, Math.min(docW, docH) * 0.012).toFixed(2);
+    (slice.loops || []).forEach((loop) => {
+      const tabRes = computeLoopWithHoldingTabs(loop.points, loop.isHole);
+      if (tabRes && tabRes.tabs) {
+        tabRes.tabs.forEach((t) => {
+          svg.push(
+            '<circle cx="' + toX(t.mid.x) + '" cy="' + toY(t.mid.y) + '" r="' + tabMarkerR + '" ' +
+            'fill="#f59e0b" stroke="#0f172a" stroke-width="0.7" vector-effect="non-scaling-stroke" />'
+          );
+        });
+      }
+    });
+  }
+
+  // 6. Etiquetas de cada isla en orientación real 0°
+  if (typeof extractIslandsFromSlices === 'function') {
+    const sliceIslands = extractIslandsFromSlices([slice]);
+    const fontSz = Math.max(6.5, Math.min(docW, docH) * 0.048).toFixed(1);
+    sliceIslands.forEach((isl) => {
+      const code = isl.totalIslandsInSlice > 1
+        ? '#' + (slice.index + 1) + '.' + (isl.islandIdxInSlice + 1)
+        : '#' + (slice.index + 1);
+      const tx = isl.textLayout ? isl.textLayout.x : (isl.bounds.minX + isl.bounds.width * 0.5);
+      const ty = isl.textLayout ? isl.textLayout.y : (isl.bounds.minY + isl.bounds.height * 0.5);
+      svg.push(
+        '<text x="' + toX(tx) + '" y="' + toY(ty) + '" text-anchor="middle" dominant-baseline="central" ' +
+        'font-family="monospace, sans-serif" font-weight="bold" font-size="' + fontSz + '" fill="' + textColor + '">' +
+        escapeGuideXml(code) + '</text>'
+      );
+    });
+  }
+
+  // Cabecera y leyenda de orientación 0°
+  const titleSz = Math.max(6.5, Math.min(vbW, vbH) * 0.038).toFixed(1);
+  svg.push(
+    '<text x="' + padX.toFixed(2) + '" y="' + (padY * 0.58).toFixed(2) + '" text-anchor="start" dominant-baseline="central" ' +
+    'font-family="monospace, sans-serif" font-weight="bold" font-size="' + titleSz + '" fill="' + subTextColor + '">' +
+    '▲ ORIENTACIÓN 0° (Lámina #' + (slice.index + 1) + ': ' + cutBounds.width.toFixed(1) + '×' + cutBounds.height.toFixed(1) + ' mm)</text>'
+  );
+
+  if (prevSlice) {
+    svg.push(
+      '<text x="' + padX.toFixed(2) + '" y="' + (padY + docH + padY * 0.55).toFixed(2) + '" text-anchor="start" dominant-baseline="central" ' +
+      'font-family="monospace, sans-serif" font-size="' + titleSz + '" fill="' + subTextColor + '">' +
+      '--- Base inferior: #' + (prevSlice.index + 1) + (nextSlice && state.includeNextSliceGuide ? (' | Naranja: Guía #' + (nextSlice.index + 1)) : '') + '</text>'
+    );
+  }
+
+  svg.push('</svg>');
+  return svg.join('');
+}
+
+/**
+ * 3. ILUSTRACIÓN VECTORIAL DE ALZADO LATERAL DE APILADO (PROGRESO VERTICAL #1 -> #N)
+ * Representa la sección transversal de todas las láminas apiladas de abajo a arriba,
+ * destacando en verde las capas ya pegadas, en ámbar/cielo la capa actual a colocar,
+ * y en línea discontinua las capas superiores pendientes.
+ */
+function generateStepStackElevationSVG(slice, stepIdx, activeSlices, opts) {
+  const options = opts || {};
+  const isLight = options.theme === 'light';
+  const maxH = options.maxHeightPx || 215;
+
+  if (!activeSlices || activeSlices.length === 0) return '';
+
+  const docBounds = getModelBounds2D();
+  const minX = docBounds.minX;
+  const docW = Math.max(10, docBounds.width);
+  const totalLayers = activeSlices.length;
+  const layerT = Math.max(1, state.thickness);
+  const totalH = Math.max(15, totalLayers * layerT);
+
+  const padX = Math.max(16, docW * 0.14);
+  const padY = Math.max(14, totalH * 0.12);
+  const vbW = docW + padX * 2;
+  const vbH = totalH + padY * 2;
+
+  const toX = (x) => (padX + (Number(x) - minX));
+  // Altura medida desde la mesa inferior (step = 0 abajo, step = totalLayers - 1 arriba)
+  const toYFromZ = (zBottom) => (padY + (totalH - zBottom));
+
+  const bgCanvas = isLight ? '#f8fafc' : '#090d16';
+  const baseLineCol = isLight ? '#475569' : '#64748b';
+  const doneFill = '#10b981';
+  const doneStroke = isLight ? '#059669' : '#047857';
+  const currFill = '#f59e0b';
+  const currStroke = isLight ? '#d97706' : '#fbbf24';
+  const pendingStroke = isLight ? '#94a3b8' : '#334155';
+  const textCol = isLight ? '#0f172a' : '#f8fafc';
+  const subTextCol = isLight ? '#475569' : '#94a3b8';
+
+  const svg = [];
+  svg.push(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + vbW.toFixed(2) + ' ' + vbH.toFixed(2) + '" ' +
+    'style="width:100%;max-height:' + maxH + 'px;height:auto;display:block;background:' + bgCanvas + ';border-radius:8px;">'
+  );
+
+  // Línea de mesa de apoyo inferior (Base = 0.0 mm)
+  const baseY = toYFromZ(0).toFixed(2);
+  svg.push(
+    '<line x1="' + (padX * 0.4).toFixed(2) + '" y1="' + baseY + '" x2="' + (vbW - padX * 0.4).toFixed(2) + '" y2="' + baseY + '" ' +
+    'stroke="' + baseLineCol + '" stroke-width="1.8" vector-effect="non-scaling-stroke" />'
+  );
+
+  // Varillas guía verticales si están activas
+  if (state.rodCount > 0 && typeof getAlignmentHoles2D === 'function') {
+    const refRods = getAlignmentHoles2D(slice);
+    const rodW = Math.max(0.8, state.rodDiameter);
+    refRods.forEach((r) => {
+      const rx = (toX(r.x) - rodW * 0.5).toFixed(2);
+      const ry = toYFromZ(totalH + layerT * 0.4).toFixed(2);
+      const rh = (totalH + layerT * 0.4).toFixed(2);
+      svg.push(
+        '<rect x="' + rx + '" y="' + ry + '" width="' + rodW.toFixed(2) + '" height="' + rh + '" ' +
+        'fill="#06b6d4" fill-opacity="0.28" stroke="#06b6d4" stroke-width="0.8" vector-effect="non-scaling-stroke" />'
+      );
+    });
+  }
+
+  // Dibujar cada capa de abajo (k=0) hacia arriba (k=totalLayers-1)
+  activeSlices.forEach((s, k) => {
+    const zTop = (k + 1) * layerT;
+    const yTop = toYFromZ(zTop);
+    const hRect = Math.max(0.4, layerT);
+
+    // Extraer intervalos horizontales [minX, maxX] de cada contorno exterior de esta lámina
+    const outerSpans = [];
+    (s.loops || []).forEach((loop) => {
+      if (loop.isHole || !loop.points || loop.points.length < 3) return;
+      let lMin = Infinity;
+      let lMax = -Infinity;
+      loop.points.forEach((pt) => {
+        if (pt.x < lMin) lMin = pt.x;
+        if (pt.x > lMax) lMax = pt.x;
+      });
+      if (lMax > lMin) outerSpans.push({ minX: lMin, maxX: lMax });
+    });
+
+    outerSpans.forEach((sp) => {
+      const rx = toX(sp.minX).toFixed(2);
+      const rw = Math.max(1, sp.maxX - sp.minX).toFixed(2);
+      const ry = yTop.toFixed(2);
+      const rh = hRect.toFixed(2);
+
+      if (k < stepIdx) {
+        // Capa inferior ya montada
+        svg.push(
+          '<rect x="' + rx + '" y="' + ry + '" width="' + rw + '" height="' + rh + '" ' +
+          'fill="' + doneFill + '" fill-opacity="' + (isLight ? '0.55' : '0.62') + '" ' +
+          'stroke="' + doneStroke + '" stroke-width="0.8" vector-effect="non-scaling-stroke" />'
+        );
+      } else if (k === stepIdx) {
+        // Capa actual que se está colocando en este paso
+        svg.push(
+          '<rect x="' + rx + '" y="' + ry + '" width="' + rw + '" height="' + rh + '" ' +
+          'fill="' + currFill + '" fill-opacity="0.92" ' +
+          'stroke="' + currStroke + '" stroke-width="1.6" vector-effect="non-scaling-stroke" />'
+        );
+      } else {
+        // Capas superiores pendientes
+        svg.push(
+          '<rect x="' + rx + '" y="' + ry + '" width="' + rw + '" height="' + rh + '" ' +
+          'fill="none" stroke="' + pendingStroke + '" stroke-width="0.65" stroke-dasharray="2,2" vector-effect="non-scaling-stroke" />'
+        );
+      }
+    });
+  });
+
+  // Indicador de nivel de la capa actual
+  const currZMid = (stepIdx + 0.5) * layerT;
+  const currYMid = toYFromZ(currZMid).toFixed(2);
+  const accumH = ((stepIdx + 1) * layerT).toFixed(1);
+  const lblFont = Math.max(6.2, Math.min(vbW, vbH) * 0.042).toFixed(1);
+
+  svg.push(
+    '<line x1="' + (padX * 0.5).toFixed(2) + '" y1="' + currYMid + '" x2="' + (vbW - padX * 0.5).toFixed(2) + '" y2="' + currYMid + '" ' +
+    'stroke="#f59e0b" stroke-width="1.0" stroke-dasharray="3,2" vector-effect="non-scaling-stroke" />'
+  );
+  svg.push(
+    '<text x="' + (vbW - padX * 0.25).toFixed(2) + '" y="' + currYMid + '" text-anchor="end" dominant-baseline="central" ' +
+    'font-family="monospace, sans-serif" font-weight="bold" font-size="' + lblFont + '" fill="' + (isLight ? '#b45309' : '#fbbf24') + '">' +
+    '◀ #' + (slice.index + 1) + ' (' + accumH + ' mm)</text>'
+  );
+
+  // Título superior y etiqueta de mesa inferior
+  svg.push(
+    '<text x="' + (vbW * 0.5).toFixed(2) + '" y="' + (padY * 0.52).toFixed(2) + '" text-anchor="middle" dominant-baseline="central" ' +
+    'font-family="monospace, sans-serif" font-weight="bold" font-size="' + lblFont + '" fill="' + subTextCol + '">' +
+    'ALZADO APILADO: PASO ' + (stepIdx + 1) + ' / ' + totalLayers + ' (EJE ' + state.axis.toUpperCase() + ')</text>'
+  );
+  svg.push(
+    '<text x="' + (vbW * 0.5).toFixed(2) + '" y="' + (toYFromZ(0) + padY * 0.55).toFixed(2) + '" text-anchor="middle" dominant-baseline="central" ' +
+    'font-family="monospace, sans-serif" font-size="' + lblFont + '" fill="' + textCol + '">' +
+    '▲ MESA / BASE INFERIOR (Lámina #1)</text>'
+  );
+
+  svg.push('</svg>');
+  return svg.join('');
+}
+
+function toggleGuideIllustrations() {
+  state.guideShowIllustrations = !state.guideShowIllustrations;
+  const btn = document.getElementById('btnToggleGuideIllustrations');
+  if (btn) {
+    if (state.guideShowIllustrations) {
+      btn.textContent = '📐 Planos Vectoriales: ON';
+      btn.className = 'px-2.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 border border-sky-500/40 font-semibold transition';
+    } else {
+      btn.textContent = '📐 Planos Vectoriales: OFF';
+      btn.className = 'px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700 font-semibold transition';
+    }
+  }
+  renderAssemblyGuideModalContent();
+}
+
+// =========================================================================
+// MODAL DE DETALLE DE CONTENIDO POR TABLERO
+// =========================================================================
 function openBoardInfoModal(boardIdx) {
   if (!state.nestingEnabled) {
     setNestingEnabled(true);
@@ -3969,8 +4601,18 @@ function renderBoardInfoModalContent(bIdx) {
       '<span class="text-[10px] text-slate-400 block">' + state.thickness.toFixed(2) + ' mm / lámina</span>' +
     '</div>';
 
-  // 4. Construir listado detallado por cada lámina contenida en el tablero
+  // 4. Construir vista vectorial del tablero + listado detallado por lámina
   listContainer.innerHTML = '';
+
+  const vectorPreviewDiv = document.createElement('div');
+  vectorPreviewDiv.className = 'p-3 rounded-xl bg-slate-950/80 border border-slate-800 space-y-1.5';
+  vectorPreviewDiv.innerHTML =
+    '<div class="flex items-center justify-between text-[11px]">' +
+      '<span class="font-bold text-emerald-400">📐 Mapa Vectorial del Tablero #' + (board.boardIndex + 1) + '</span>' +
+      '<span class="text-slate-400">Escala real 1:1 · Color gradual de base (#1) a cima (#' + state.slices.length + ')</span>' +
+    '</div>' +
+    generateBoardIllustrationSVG(board, { highlightSliceIndex: null, theme: 'dark', maxHeightPx: 220 });
+  listContainer.appendChild(vectorPreviewDiv);
 
   if (state.clippedIslandsCount > 0) {
     const clipInfoDiv = document.createElement('div');
@@ -4065,7 +4707,7 @@ function renderBoardInfoModalContent(bIdx) {
 }
 
 // =========================================================================
-// GUÍA DE CORTE / IMPRESIÓN Y MONTAJE PASO A PASO (DE ABAJO A ARRIBA)
+// GUÍA ILUSTRADA DE CORTE / IMPRESIÓN Y MONTAJE PASO A PASO (DE ABAJO A ARRIBA)
 // =========================================================================
 function openAssemblyGuideModal() {
   if (!state.nestingEnabled) {
@@ -4238,7 +4880,7 @@ function renderAssemblyGuideModalContent() {
   let html = '';
 
   // =======================================================================
-  // SECCIÓN 1: ORDEN DE CORTE / IMPRESIÓN (PARÁMETROS LÁSER Y TABLEROS)
+  // SECCIÓN 1: ORDEN DE CORTE / IMPRESIÓN Y PLANOS VECTORIALES DE TABLEROS
   // =======================================================================
   if (state.assemblyGuideTab === 'all' || state.assemblyGuideTab === 'cutting') {
     const priorityStr = plan.boardPriorityOrder.map((bIdx, i) =>
@@ -4248,7 +4890,6 @@ function renderAssemblyGuideModalContent() {
 
     let boardsCardsHTML = '';
     state.nestedBoards.forEach((board, bIdx) => {
-      // Agrupar piezas por lámina para mostrar resumen claro de qué cortar en este tablero
       const bySlice = new Map();
       board.placements.forEach((pl) => {
         const sNum = pl.island.sliceIndex + 1;
@@ -4269,8 +4910,14 @@ function renderAssemblyGuideModalContent() {
         return '<span class="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-[10px] font-mono text-slate-200">' + label + '</span>';
       }).join(' ');
 
+      const boardSvgHTML = state.guideShowIllustrations
+        ? '<div class="pt-2">' +
+            generateBoardIllustrationSVG(board, { highlightSliceIndex: null, theme: 'dark', maxHeightPx: 230 }) +
+          '</div>'
+        : '';
+
       boardsCardsHTML +=
-        '<div class="p-3 rounded-xl bg-slate-800/60 border border-slate-700/80 flex flex-col justify-between gap-2">' +
+        '<div class="p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/80 flex flex-col justify-between gap-2.5">' +
           '<div class="flex flex-wrap items-center justify-between gap-2">' +
             '<div class="flex items-center gap-2">' +
               '<span class="px-2.5 py-0.5 rounded-md bg-emerald-600 text-white text-xs font-bold">Tablero #' + (bIdx + 1) + '</span>' +
@@ -4278,10 +4925,11 @@ function renderAssemblyGuideModalContent() {
             '</div>' +
             '<div class="flex items-center gap-2">' +
               '<span class="text-[11px] text-amber-300 font-mono">Uso: ' + board.efficiency.toFixed(1) + '%</span>' +
-              '<button onclick="closeAssemblyGuideModal(); selectActiveBoard(' + bIdx + ');" class="px-2 py-0.5 rounded bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/40 text-sky-300 text-[10px] font-semibold">Ver Tablero →</button>' +
+              '<button onclick="closeAssemblyGuideModal(); selectActiveBoard(' + bIdx + ');" class="px-2 py-0.5 rounded bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/40 text-sky-300 text-[10px] font-semibold">Ver Tablero en 2D →</button>' +
             '</div>' +
           '</div>' +
-          '<div class="flex flex-wrap gap-1 pt-1 border-t border-slate-700/50">' +
+          boardSvgHTML +
+          '<div class="flex flex-wrap gap-1 pt-2 border-t border-slate-700/50">' +
             chipsHTML +
           '</div>' +
         '</div>';
@@ -4290,8 +4938,8 @@ function renderAssemblyGuideModalContent() {
     html +=
       '<section class="space-y-3">' +
         '<div class="flex items-center justify-between border-b border-slate-800 pb-2">' +
-          '<h4 class="text-xs font-bold uppercase tracking-wider text-amber-400">🔥 1. Orden Recomendado de Corte / Impresión</h4>' +
-          '<span class="text-[11px] text-slate-400">Configuración de capas láser y secuencia de tableros</span>' +
+          '<h4 class="text-xs font-bold uppercase tracking-wider text-amber-400">🔥 1. Planos Vectoriales de Tableros y Orden de Corte Láser</h4>' +
+          '<span class="text-[11px] text-slate-400">Mapas generados automáticamente a escala 1:1 de los ' + state.nestedBoards.length + ' tableros</span>' +
         '</div>' +
 
         '<!-- Orden de capas dentro de cada tablero para máquina láser -->' +
@@ -4312,22 +4960,21 @@ function renderAssemblyGuideModalContent() {
             '</div>' +
             '<div class="p-2 rounded-lg bg-rose-950/30 border border-rose-500/30">' +
               '<span class="font-bold text-rose-400 block">4º CORTE EXTERIOR (#ff0000)</span>' +
-              '<span class="text-slate-400 text-[10px]">Corta en último lugar el perímetro exterior de cada isla para evitar que la pieza se mueva.</span>' +
+              '<span class="text-slate-400 text-[10px]">Corta en último lugar el perímetro exterior' + (state.tabsEnabled ? ' (dejando los ' + state.tabWidthMM.toFixed(1) + ' mm de micro-unión para extraer a presión).' : ' de cada isla para evitar que la pieza se mueva.') + '</span>' +
             '</div>' +
           '</div>' +
         '</div>' +
 
-        '<!-- Orden de los tableros -->' +
+        '<!-- Orden de los tableros y mapas vectoriales -->' +
         '<div class="bg-slate-950/70 border border-slate-800 rounded-xl p-3 space-y-2.5">' +
           '<div class="space-y-1">' +
-            '<span class="text-[11px] font-bold text-emerald-300 block">B) ¿En qué orden cortar los Tableros?</span>' +
-            '<p class="text-[11px] text-slate-300">Como el anidado agrupa las islas de mayor a menor tamaño para aprovechar al máximo la madera/metacrilato, tienes dos formas de proceder:</p>' +
+            '<span class="text-[11px] font-bold text-emerald-300 block">B) Secuencia Recomendada de Tableros y Planos de Distribución:</span>' +
+            '<p class="text-[11px] text-slate-300">Para empezar a ensamblar desde la base (<code>Lámina #1</code>) mientras el láser sigue cortando, procesa los tableros en este orden:</p>' +
           '</div>' +
           '<div class="p-2.5 rounded-lg bg-slate-900 border border-slate-800 text-[11px] space-y-1.5">' +
-            '<div><strong class="text-amber-300">Opción Rápida (empezar a montar desde la base mientras el láser sigue cortando):</strong> Corta los tableros en este orden para disponer primero de las capas inferiores (<code>#1, #2, #3...</code>):</div>' +
-            '<div class="flex flex-wrap items-center gap-1 pt-1">' + priorityStr + '</div>' +
+            '<div class="flex flex-wrap items-center gap-1">' + priorityStr + '</div>' +
           '</div>' +
-          '<div class="space-y-2 pt-1">' +
+          '<div class="grid grid-cols-1 ' + (state.nestedBoards.length > 1 ? 'lg:grid-cols-2' : '') + ' gap-3 pt-1">' +
             boardsCardsHTML +
           '</div>' +
         '</div>' +
@@ -4335,7 +4982,7 @@ function renderAssemblyGuideModalContent() {
   }
 
   // =======================================================================
-  // SECCIÓN 2: GUÍA DE MONTAJE DE ABAJO A ARRIBA (CAPA #1 -> CAPA #N)
+  // SECCIÓN 2: GUÍA ILUSTRADA DE MONTAJE DE ABAJO A ARRIBA (CAPA #1 -> CAPA #N)
   // =======================================================================
   if (state.assemblyGuideTab === 'all' || state.assemblyGuideTab === 'assembly') {
     let stepsHTML = '';
@@ -4356,24 +5003,31 @@ function renderAssemblyGuideModalContent() {
         roleBadge = '<span class="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-[10px] font-bold">🏁 CIMA SUPERIOR (Última capa)</span>';
       }
 
-      // Instrucción de cómo alinear y pegar esta capa respecto a la inferior y superior
+      // Instrucción de cómo extraer, orientar y pegar esta capa respecto a la inferior y superior
+      const detachHint = state.tabsEnabled
+        ? 'Presiona suavemente la pieza para desprender sus micro-uniones del tablero y repasa el borde si fuera necesario. '
+        : '';
+
       let instructionText = '';
       if (isBase) {
         instructionText =
-          '1. Localiza ' + (pls.length > 1 ? 'las <strong>' + pls.length + ' islas</strong> de ' : 'la pieza de ') + 'la <strong>Lámina #' + sNum + '</strong> y apóyala plana sobre la mesa como <strong>BASE INFERIOR</strong>' +
-          (state.rodCount > 0 ? ' (inserta las ' + state.rodCount + ' varillas guía de Ø' + state.rodDiameter + 'mm en sus orificios).' : '.') +
-          (state.includeNextSliceGuide ? ' Verás grabada encima la <strong>línea naranja continua (Guía Sup)</strong> donde irá pegada la Lámina #' + (sNum + 1) + '.' : '');
+          '1. ' + detachHint + 'Localiza ' + (pls.length > 1 ? 'las <strong>' + pls.length + ' islas</strong> de ' : 'la pieza de ') + 'la <strong>Lámina #' + sNum + '</strong> resaltada en verde en el plano del tablero inferior y apóyala plana a <strong>0°</strong> sobre la mesa como <strong>BASE INFERIOR</strong>' +
+          (state.rodCount > 0 ? ' (inserta las ' + state.rodCount + ' varillas guía de Ø' + state.rodDiameter + 'mm en sus orificios azules).' : '.') +
+          (state.includeNextSliceGuide ? ' Verás grabada encima la <strong>silueta naranja (Guía Sup)</strong> donde irá pegada la Lámina #' + (sNum + 1) + '.' : '');
       } else if (isTop) {
+        const prevSNumTop = activeSlices[stepIdx - 1].index + 1;
         instructionText =
-          '1. Aplica adhesivo en la zona delimitada por la guía naranja de la <strong>Lámina #' + sIdx + '</strong> (ya montada debajo). ' +
-          '2. Coloca encima ' + (pls.length > 1 ? 'las piezas de ' : '') + 'la <strong>Lámina #' + sNum + '</strong> haciéndola coincidir con la silueta guía' +
-          (state.includePrevSliceGuide ? ' (puedes verificar el encaje por su guía inferior violeta).' : '.') +
+          '1. ' + detachHint + 'Aplica adhesivo en la zona delimitada por la guía naranja de la <strong>Lámina #' + prevSNumTop + '</strong> (ya montada debajo). ' +
+          '2. Coloca encima ' + (pls.length > 1 ? 'las piezas de ' : '') + 'la <strong>Lámina #' + sNum + '</strong> en orientación <strong>0°</strong> haciéndola coincidir con la silueta guía' +
+          (state.includePrevSliceGuide ? ' (verifica el encaje con su guía inferior violeta).' : '.') +
           ' ¡Con esta capa finalizas la coronación de la pieza!';
       } else {
+        const prevSNum = activeSlices[stepIdx - 1].index + 1;
+        const nextSNum = activeSlices[stepIdx + 1].index + 1;
         instructionText =
-          '1. Aplica adhesivo dentro de la silueta naranja grabada sobre la <strong>Lámina #' + sIdx + '</strong> (montada en el paso anterior). ' +
-          '2. Asienta ' + (pls.length > 1 ? 'cada isla de ' : '') + 'la <strong>Lámina #' + sNum + '</strong> alineando su contorno (y su guía inferior <code>[Inf]</code> si sobresale en voladizo) con la capa inferior. ' +
-          '3. Deja hacia arriba la cara con la guía naranja <code>[Sup]</code> para recibir después la <strong>Lámina #' + (sNum + 1) + '</strong>.';
+          '1. ' + detachHint + 'Aplica adhesivo dentro de la silueta naranja grabada sobre la <strong>Lámina #' + prevSNum + '</strong> (montada en el paso anterior). ' +
+          '2. Asienta ' + (pls.length > 1 ? 'cada isla de ' : '') + 'la <strong>Lámina #' + sNum + '</strong> a <strong>0°</strong> alineando su contorno con la capa inferior (sombra punteada en el plano central). ' +
+          '3. Deja hacia arriba la cara con la guía naranja <code>[Sup]</code> para recibir después la <strong>Lámina #' + nextSNum + '</strong>.';
       }
 
       // Tarjetas de cada isla perteneciente a esta lámina indicando en qué tablero buscarla
@@ -4391,7 +5045,7 @@ function renderAssemblyGuideModalContent() {
           else if (p.hasInf) guideBadge = '<span class="text-fuchsia-300 font-semibold">[Guía Inf]</span>';
 
           const rotWarning = p.rotated
-            ? '<span class="px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-semibold" title="Esta pieza se giró 90° en el tablero para optimizar espacio. Gírala 90° al montarla para que el texto grabado quede horizontal.">🔄 Girada 90° en tablero (enderezar al pegar)</span>'
+            ? '<span class="px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-semibold" title="Esta pieza se giró 90° en el tablero para optimizar espacio. Gírala 90° al montarla para que coincida con el Plano de Encaje 0°.">🔄 Girada 90° en tablero (enderezar a 0° al pegar)</span>'
             : '<span class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px]">Orientación 0° directa</span>';
 
           const clipBadge = p.isClippedToBoard
@@ -4402,23 +5056,76 @@ function renderAssemblyGuideModalContent() {
             '<div class="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg bg-slate-900/90 border border-slate-800 text-[11px]">' +
               '<div class="flex items-center gap-2 flex-wrap">' +
                 '<span class="font-mono font-bold text-emerald-400 text-xs">Isla ' + p.islandCode + '</span>' +
-                '<span class="px-2 py-0.5 rounded bg-sky-500/20 border border-sky-500/40 text-sky-300 font-bold">📍 Buscar en Tablero #' + (p.boardIndex + 1) + '</span>' +
+                '<span class="px-2 py-0.5 rounded bg-sky-500/20 border border-sky-500/40 text-sky-300 font-bold">📍 Extraer de Tablero #' + (p.boardIndex + 1) + '</span>' +
                 '<span class="text-slate-400 font-mono text-[10px]">Pos: (' + (p.x / f).toFixed(dec) + ', ' + (p.y / f).toFixed(dec) + ') ' + u + ' | ' + (p.w / f).toFixed(dec) + '×' + (p.h / f).toFixed(dec) + ' ' + u + '</span>' +
                 clipBadge +
               '</div>' +
               '<div class="flex items-center gap-2 flex-wrap">' +
                 guideBadge +
                 rotWarning +
-                '<button onclick="jumpToSliceAndBoardFromGuide(' + sIdx + ', ' + p.boardIndex + ')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 text-[10px] font-semibold">👁️ Ver en Tablero</button>' +
+                '<button onclick="jumpToSliceAndBoardFromGuide(' + sIdx + ', ' + p.boardIndex + ')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 text-[10px] font-semibold">👁️ Ver en Visor</button>' +
               '</div>' +
             '</div>'
           );
         }).join('');
       }
 
+      // Generar los 3 diagramas vectoriales automáticos del paso (1. Localización en Tablero, 2. Plano de Encaje 2D a 0°, 3. Alzado de Apilado)
+      let illustrationsGridHTML = '';
+      if (state.guideShowIllustrations) {
+        const uniqueBoardIndices = Array.from(new Set(pls.map((p) => p.boardIndex)));
+        let boardLocatorSVGs = '';
+        if (uniqueBoardIndices.length === 0) {
+          boardLocatorSVGs = '<div class="text-[11px] text-rose-400 p-4 text-center">Sin tablero asignado</div>';
+        } else {
+          boardLocatorSVGs = uniqueBoardIndices.map((bIdx) => {
+            const bObj = state.nestedBoards[bIdx];
+            return generateBoardIllustrationSVG(bObj, {
+              highlightSliceIndex: sIdx,
+              theme: 'dark',
+              maxHeightPx: uniqueBoardIndices.length > 1 ? 130 : 200
+            });
+          }).join('<div class="h-1.5"></div>');
+        }
+
+        const alignSvg = generateStepAlignmentIllustrationSVG(slice, stepIdx, activeSlices, {
+          theme: 'dark',
+          maxHeightPx: 200
+        });
+        const stackSvg = generateStepStackElevationSVG(slice, stepIdx, activeSlices, {
+          theme: 'dark',
+          maxHeightPx: 200
+        });
+
+        illustrationsGridHTML =
+          '<div class="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1">' +
+            '<div class="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800/90 flex flex-col justify-between gap-1.5">' +
+              '<div class="flex items-center justify-between text-[10px]">' +
+                '<span class="font-bold text-emerald-400 uppercase tracking-wide">1. Localizar en Tablero</span>' +
+                '<span class="text-slate-400">Pieza resaltada en verde</span>' +
+              '</div>' +
+              boardLocatorSVGs +
+            '</div>' +
+            '<div class="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800/90 flex flex-col justify-between gap-1.5">' +
+              '<div class="flex items-center justify-between text-[10px]">' +
+                '<span class="font-bold text-sky-400 uppercase tracking-wide">2. Plano de Encaje y Guías (0°)</span>' +
+                '<span class="text-slate-400">Superposición sobre #' + (stepIdx > 0 ? (activeSlices[stepIdx - 1].index + 1) : 'Base') + '</span>' +
+              '</div>' +
+              alignSvg +
+            '</div>' +
+            '<div class="p-2.5 rounded-xl bg-slate-950/80 border border-slate-800/90 flex flex-col justify-between gap-1.5">' +
+              '<div class="flex items-center justify-between text-[10px]">' +
+                '<span class="font-bold text-amber-400 uppercase tracking-wide">3. Alzado de Apilado</span>' +
+                '<span class="text-slate-400">Cota ' + axisName + ' = ' + slice.coord.toFixed(1) + ' mm</span>' +
+              '</div>' +
+              stackSvg +
+            '</div>' +
+          '</div>';
+      }
+
       stepsHTML +=
         '<div class="rounded-xl border p-3.5 transition space-y-2.5 ' +
-          (isDone ? 'bg-emerald-950/20 border-emerald-500/40 opacity-80' : 'bg-slate-800/50 border-slate-700/80') + '">' +
+          (isDone ? 'bg-emerald-950/20 border-emerald-500/40 opacity-85' : 'bg-slate-800/50 border-slate-700/80') + '">' +
           '<div class="flex flex-wrap items-center justify-between gap-2">' +
             '<div class="flex items-center gap-2.5 flex-wrap">' +
               '<label class="flex items-center gap-2 cursor-pointer">' +
@@ -4438,6 +5145,8 @@ function renderAssemblyGuideModalContent() {
             instructionText +
           '</p>' +
 
+          illustrationsGridHTML +
+
           '<div class="space-y-1.5">' +
             islandsLocateHTML +
           '</div>' +
@@ -4447,16 +5156,225 @@ function renderAssemblyGuideModalContent() {
     html +=
       '<section class="space-y-3">' +
         '<div class="flex items-center justify-between border-b border-slate-800 pb-2">' +
-          '<h4 class="text-xs font-bold uppercase tracking-wider text-emerald-400">🧱 2. Secuencia de Montaje Paso a Paso (De Abajo a Arriba)</h4>' +
-          '<span class="text-[11px] text-slate-400">Empieza por la Lámina #1 (Base inferior) y sube en orden numérico</span>' +
+          '<h4 class="text-xs font-bold uppercase tracking-wider text-emerald-400">🧱 2. Secuencia Ilustrada de Montaje Paso a Paso (De Abajo a Arriba)</h4>' +
+          '<span class="text-[11px] text-slate-400">Planos vectoriales de localización en tablero, encaje 2D a 0° y alzado de apilado por capa</span>' +
         '</div>' +
-        '<div class="space-y-2.5">' +
+        '<div class="space-y-3">' +
           stepsHTML +
         '</div>' +
       '</section>';
   }
 
   container.innerHTML = html;
+}
+
+// =========================================================================
+// GENERADOR DE GUÍA ILUSTRADA AUTOCONTENIDA EN HTML / IMPRESIÓN PDF
+// =========================================================================
+function generateIllustratedAssemblyGuideHTML() {
+  if (!state.nestingEnabled || state.nestedBoards.length === 0) {
+    recomputeBoardNesting();
+  }
+  const plan = buildAssemblyAndCuttingPlan();
+  const activeSlices = plan.selectedSlices;
+  const totalSteps = activeSlices.length;
+  const axisName = state.axis.toUpperCase();
+
+  const priorityHtml = plan.boardPriorityOrder
+    .map((bIdx, i) => '<span class="badge badge-emerald">' + (i + 1) + 'º → Tablero #' + (bIdx + 1) + '</span>')
+    .join(' <span style="color:#64748b;font-weight:bold;">➔</span> ');
+
+  let boardsHtml = '';
+  state.nestedBoards.forEach((board, bIdx) => {
+    const codes = board.placements.map((pl) => {
+      const sNum = pl.island.sliceIndex + 1;
+      const code = pl.island.totalIslandsInSlice > 1 ? ('#' + sNum + '.' + (pl.island.islandIdxInSlice + 1)) : ('#' + sNum);
+      return '<span class="chip">' + escapeGuideXml(code + (pl.rotated ? ' (90°↻)' : '')) + '</span>';
+    }).join(' ');
+
+    const svgBoard = generateBoardIllustrationSVG(board, {
+      highlightSliceIndex: null,
+      theme: 'light',
+      maxHeightPx: 290
+    });
+
+    boardsHtml +=
+      '<div class="card board-card">' +
+        '<div class="card-header">' +
+          '<div><strong>Tablero #' + (bIdx + 1) + '</strong> — ' + board.placements.length + ' piezas (' + board.width.toFixed(0) + ' × ' + board.height.toFixed(0) + ' mm)</div>' +
+          '<div class="badge badge-amber">Aprovechamiento: ' + board.efficiency.toFixed(1) + '%</div>' +
+        '</div>' +
+        '<div class="svg-box">' + svgBoard + '</div>' +
+        '<div class="chips-row"><strong>Piezas incluidas:</strong> ' + codes + '</div>' +
+      '</div>';
+  });
+
+  let stepsHtml = '';
+  activeSlices.forEach((slice, stepIdx) => {
+    const sIdx = slice.index;
+    const sNum = sIdx + 1;
+    const pls = plan.slicePlacementsMap.get(sIdx) || [];
+    const accumH = ((stepIdx + 1) * state.thickness).toFixed(1);
+    const roleLabel = stepIdx === 0
+      ? 'BASE INFERIOR (1ª en colocar)'
+      : (stepIdx === totalSteps - 1 ? 'CIMA SUPERIOR (Última capa)' : 'Capa Intermedia');
+
+    const uniqueBoards = Array.from(new Set(pls.map((p) => p.boardIndex)));
+    const locatorSvg = uniqueBoards.map((bIdx) =>
+      generateBoardIllustrationSVG(state.nestedBoards[bIdx], {
+        highlightSliceIndex: sIdx,
+        theme: 'light',
+        maxHeightPx: uniqueBoards.length > 1 ? 120 : 195
+      })
+    ).join('<div style="height:6px"></div>');
+
+    const alignSvg = generateStepAlignmentIllustrationSVG(slice, stepIdx, activeSlices, {
+      theme: 'light',
+      maxHeightPx: 195
+    });
+
+    const stackSvg = generateStepStackElevationSVG(slice, stepIdx, activeSlices, {
+      theme: 'light',
+      maxHeightPx: 195
+    });
+
+    const rowsHtml = pls.map((p) => {
+      const gType = (p.hasSup && p.hasInf) ? 'Ambas Guías (Sup+Inf)' : (p.hasSup ? 'Guía Sup (#N+1)' : (p.hasInf ? 'Guía Inf (#N-1)' : 'Sin guía'));
+      const rotStr = p.rotated ? '🔄 Rotada 90° en tablero (enderezar a 0° al montar)' : 'Orientación 0° directa';
+      return (
+        '<tr>' +
+          '<td><strong>' + escapeGuideXml(p.islandCode) + '</strong></td>' +
+          '<td>Tablero #' + (p.boardIndex + 1) + '</td>' +
+          '<td>(' + p.x.toFixed(1) + ', ' + p.y.toFixed(1) + ') mm</td>' +
+          '<td>' + p.w.toFixed(1) + ' × ' + p.h.toFixed(1) + ' mm</td>' +
+          '<td>' + gType + '</td>' +
+          '<td>' + rotStr + '</td>' +
+        '</tr>'
+      );
+    }).join('');
+
+    stepsHtml +=
+      '<div class="card step-card">' +
+        '<div class="card-header">' +
+          '<div>' +
+            '<span class="step-num">❑ PASO ' + (stepIdx + 1) + ' DE ' + totalSteps + '</span> ' +
+            '<strong>Lámina #' + sNum + '</strong> — <span style="color:#0369a1;font-weight:600;">' + roleLabel + '</span>' +
+          '</div>' +
+          '<div style="font-family:monospace;font-size:12px;color:#334155;">' +
+            'Cota ' + axisName + ' = ' + slice.coord.toFixed(2) + ' mm | Altura acumulada: <strong>' + accumH + ' mm</strong>' +
+          '</div>' +
+        '</div>' +
+        '<div class="diagrams-grid">' +
+          '<div class="diag-box">' +
+            '<div class="diag-title">1. Localización en Tablero (Verde)</div>' +
+            locatorSvg +
+          '</div>' +
+          '<div class="diag-box">' +
+            '<div class="diag-title">2. Plano de Encaje y Guías a 0°</div>' +
+            alignSvg +
+          '</div>' +
+          '<div class="diag-box">' +
+            '<div class="diag-title">3. Alzado de Apilado Vertical</div>' +
+            stackSvg +
+          '</div>' +
+        '</div>' +
+        '<table class="parts-table">' +
+          '<thead><tr><th>Isla</th><th>Tablero</th><th>Posición (X, Y)</th><th>Dimensiones</th><th>Guías Grabadas</th><th>Orientación en Tablero</th></tr></thead>' +
+          '<tbody>' + rowsHtml + '</tbody>' +
+        '</table>' +
+      '</div>';
+  });
+
+  const tabsSummary = state.tabsEnabled
+    ? (state.tabMode === 'count'
+        ? (state.tabCount + ' micro-uniones de ' + state.tabWidthMM.toFixed(1) + ' mm por pieza (extracción a presión)')
+        : ('1 micro-unión de ' + state.tabWidthMM.toFixed(1) + ' mm cada ' + state.tabSpacingMM.toFixed(0) + ' mm'))
+    : 'Corte perimetral continuo';
+
+  return [
+    '<!DOCTYPE html>',
+    '<html lang="es">',
+    '<head>',
+    '<meta charset="UTF-8" />',
+    '<title>Guía Ilustrada de Montaje — ' + escapeGuideXml(state.modelName) + ' (LayerStudio 3D)</title>',
+    '<style>',
+    '  * { box-sizing: border-box; }',
+    '  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color: #0f172a; background: #f1f5f9; margin: 0; padding: 24px; line-height: 1.45; }',
+    '  .container { max-width: 1120px; margin: 0 auto; background: #ffffff; padding: 28px; border-radius: 14px; border: 1px solid #cbd5e1; box-shadow: 0 4px 20px rgba(15,23,42,0.06); }',
+    '  h1 { margin: 0 0 4px 0; font-size: 22px; color: #0f172a; }',
+    '  h2 { margin: 24px 0 12px 0; font-size: 16px; text-transform: uppercase; letter-spacing: 0.04em; color: #0369a1; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; }',
+    '  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 14px 0; }',
+    '  .meta-item { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px; font-size: 12px; }',
+    '  .meta-item strong { display: block; font-size: 10px; text-transform: uppercase; color: #64748b; }',
+    '  .card { border: 1px solid #cbd5e1; border-radius: 10px; padding: 14px; margin-bottom: 16px; background: #ffffff; page-break-inside: avoid; break-inside: avoid; }',
+    '  .card-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 10px; font-size: 13px; }',
+    '  .step-num { background: #fef3c7; border: 1px solid #f59e0b; color: #92400e; font-weight: 800; padding: 2px 8px; border-radius: 6px; font-size: 12px; margin-right: 6px; }',
+    '  .badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }',
+    '  .badge-emerald { background: #d1fae5; color: #065f46; border: 1px solid #34d399; }',
+    '  .badge-amber { background: #fef3c7; color: #92400e; border: 1px solid #fbbf24; }',
+    '  .chip { display: inline-block; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px; padding: 1px 6px; font-family: monospace; font-size: 11px; margin: 2px; }',
+    '  .chips-row { font-size: 11px; color: #334155; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #e2e8f0; }',
+    '  .diagrams-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px; }',
+    '  .diag-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; }',
+    '  .diag-title { font-size: 11px; font-weight: 700; color: #334155; margin-bottom: 6px; text-transform: uppercase; }',
+    '  .parts-table { width: 100%; border-collapse: collapse; font-size: 11px; }',
+    '  .parts-table th, .parts-table td { border: 1px solid #e2e8f0; padding: 5px 8px; text-align: left; }',
+    '  .parts-table th { background: #f8fafc; color: #475569; font-weight: 700; }',
+    '  .footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #cbd5e1; font-size: 11px; color: #475569; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }',
+    '  .no-print-bar { display: flex; justify-content: space-between; align-items: center; background: #0f172a; color: #fff; padding: 10px 18px; border-radius: 10px; margin-bottom: 18px; }',
+    '  .btn-print { background: #0284c7; color: #fff; border: none; padding: 7px 14px; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 12px; }',
+    '  @media print { body { background: #fff; padding: 0; } .container { border: none; box-shadow: none; padding: 0; max-width: 100%; } .no-print-bar { display: none !important; } }',
+    '</style>',
+    '</head>',
+    '<body>',
+    '<div class="container">',
+    '  <div class="no-print-bar">',
+    '    <div><strong>LayerStudio 3D</strong> — Guía Técnica Ilustrada de Corte y Montaje (Planos Vectoriales Automáticos)</div>',
+    '    <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Guardar como PDF</button>',
+    '  </div>',
+    '  <h1>Guía Ilustrada de Corte y Montaje: ' + escapeGuideXml(state.modelName) + '</h1>',
+    '  <div style="font-size:12px;color:#475569;">Planos generados algorítmicamente a escala real a partir de los tableros anidados y vectores 2D · Ensamblaje de abajo a arriba (Eje ' + axisName + ')</div>',
+    '  <div class="meta-grid">',
+    '    <div class="meta-item"><strong>Dimensiones del Modelo</strong>' + state.dimsMM.x.toFixed(1) + ' × ' + state.dimsMM.y.toFixed(1) + ' × ' + state.dimsMM.z.toFixed(1) + ' mm</div>',
+    '    <div class="meta-item"><strong>Eje y Capas Activas</strong>Eje ' + axisName + ' · ' + totalSteps + ' láminas (' + state.thickness.toFixed(2) + ' mm / capa)</div>',
+    '    <div class="meta-item"><strong>Tableros de Corte</strong>' + state.nestedBoards.length + ' tablero(s) de ' + state.boardWidthMM.toFixed(0) + ' × ' + state.boardHeightMM.toFixed(0) + ' mm</div>',
+    '    <div class="meta-item"><strong>Sujeción por Presión (Tabs)</strong>' + escapeGuideXml(tabsSummary) + '</div>',
+    '  </div>',
+    '  <h2>1. Planos Vectoriales de Tableros y Orden de Corte</h2>',
+    '  <p style="font-size:12px;margin:6px 0 12px 0;"><strong>Orden de prioridad de tableros para empezar a montar desde la Lámina #1:</strong> ' + priorityHtml + '</p>',
+    boardsHtml,
+    '  <h2>2. Secuencia Ilustrada de Montaje Paso a Paso (De Abajo a Arriba: #1 → #' + state.slices.length + ')</h2>',
+    stepsHtml,
+    '  <div class="footer">',
+    '    <div><strong>LayerStudio 3D</strong> · Autor: <strong>Norberto Martín Afonso</strong> (&lt;normaafo@gmail.com&gt;) · Licencia GNU AGPL v3.0 (Sección 7b)</div>',
+    '    <div>Repositorio: https://github.com/nmarafo/layerstudio3D · X: @NorbertoMartnAf · GitHub/HF: @nmarafo</div>',
+    '  </div>',
+    '</div>',
+    '</body>',
+    '</html>'
+  ].join('\n');
+}
+
+function downloadIllustratedAssemblyGuideHtml() {
+  const htmlContent = generateIllustratedAssemblyGuideHTML();
+  const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+  triggerBrowserDownload(blob, state.modelName + '_GUIA_ILUSTRADA_MONTAJE.html');
+}
+
+function printIllustratedAssemblyGuide() {
+  const htmlContent = generateIllustratedAssemblyGuideHTML();
+  const printWin = window.open('', '_blank');
+  if (!printWin) {
+    downloadIllustratedAssemblyGuideHtml();
+    return;
+  }
+  printWin.document.open();
+  printWin.document.write(htmlContent);
+  printWin.document.close();
+  setTimeout(() => {
+    printWin.focus();
+    printWin.print();
+  }, 350);
 }
 
 // Genera el texto completo de la Guía de Corte y Montaje (para descargar en .TXT e incluir en el .ZIP)
@@ -4577,7 +5495,6 @@ function closeCreditsModal() {
   modal.classList.add('hidden');
   modal.classList.remove('flex');
 }
-
 
 
 /**
@@ -6089,6 +7006,10 @@ async function executeZipExport() {
 
   const resumen = generateFullAssemblyGuideText();
   zip.file('LEEME_GUIA_MONTAJE.txt', resumen);
+  if (typeof generateIllustratedAssemblyGuideHTML === 'function') {
+    const guiaIlustradaHtml = generateIllustratedAssemblyGuideHTML();
+    zip.file('GUIA_ILUSTRADA_MONTAJE.html', guiaIlustradaHtml);
+  }
 
   const content = await zip.generateAsync({ type: 'blob' });
   triggerBrowserDownload(content, state.modelName + '_lascas_' + state.axis.toUpperCase() + '.zip');
