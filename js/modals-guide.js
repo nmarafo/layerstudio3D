@@ -1,5 +1,5 @@
 /**
- * LayerStudio 3D (LascaStudio 3D) - Board Inspector & Step-by-Step Assembly Guide
+ * LayerStudio 3D - Board Inspector & Step-by-Step Assembly Guide
  * Modales de detalle de láminas por tablero y guía interactiva de corte láser y montaje de abajo a arriba.
  *
  * Copyright (C) 2026 Norberto Martín Afonso <normaafo@gmail.com>
@@ -719,7 +719,7 @@ function generateFullAssemblyGuideText() {
 
   lines.push('');
   lines.push('========================================================================');
-  lines.push('CRÉDITOS, AUTORÍA Y LICENCIA — LAYERSTUDIO 3D (LASCASTUDIO 3D)');
+  lines.push('CRÉDITOS, AUTORÍA Y LICENCIA — LAYERSTUDIO 3D');
   lines.push('========================================================================');
   lines.push('Autor: Norberto Martín Afonso <normaafo@gmail.com>');
   lines.push('Licencia: GNU Affero General Public License v3.0 (AGPL-3.0-or-later)');

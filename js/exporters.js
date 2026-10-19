@@ -1,5 +1,5 @@
 /**
- * LayerStudio 3D (LascaStudio 3D) - CAD/CAM Exporters (SVG, DXF, STL, ZIP, LASCA)
+ * LayerStudio 3D - CAD/CAM Exporters (SVG, DXF, STL, ZIP, LASCA)
  * Generadores vectoriales 1:1 en mm (SVG/DXF), mallas 3D por capa (STL), paquete ZIP y proyectos .lasca.
  *
  * Copyright (C) 2026 Norberto Martín Afonso <normaafo@gmail.com>

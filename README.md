@@ -1,11 +1,11 @@
-# LayerStudio 3D (LascaStudio 3D)
+# LayerStudio 3D
 
 [![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-Live%20App-0ea5e9.svg?logo=github)](https://nmarafo.github.io/layerstudio3D/)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![Three.js](https://img.shields.io/badge/Three.js-r128-black.svg?logo=three.js)](https://threejs.org/)
 [![Apps Script Ready](https://img.shields.io/badge/Google%20Apps%20Script-Ready-34a853.svg?logo=google)](https://nmarafo.github.io/layerstudio3D/)
 
-**LayerStudio 3D (LascaStudio 3D)** es una aplicación web interactiva de laminado multicapa (**X / Y / Z**) diseñada para convertir modelos tridimensionales (`.STL`, `.GLB`, `.GLTF`) en secuencias de láminas («lascas») listas para **Corte Láser / CNC** (`.SVG` y `.DXF` a escala real `1:1` en milímetros) e **Impresión 3D** (`.STL` extruido por capa), incluyendo empaquetado automático en tableros (**Nesting 2D MaxRects**) y guías paso a paso de ensamblaje.
+**LayerStudio 3D** es una aplicación web interactiva de laminado multicapa (**X / Y / Z**) diseñada para convertir modelos tridimensionales (`.STL`, `.GLB`, `.GLTF`) en secuencias de láminas («lascas») listas para **Corte Láser / CNC** (`.SVG` y `.DXF` a escala real `1:1` en milímetros) e **Impresión 3D** (`.STL` extruido por capa), incluyendo empaquetado automático en tableros (**Nesting 2D MaxRects**) y guías paso a paso de ensamblaje.
 
 🌐 **Aplicación en vivo (GitHub Pages):** **[https://nmarafo.github.io/layerstudio3D/](https://nmarafo.github.io/layerstudio3D/)**
 
@@ -126,6 +126,6 @@ Este proyecto se distribuye bajo los términos de la licencia **GNU Affero Gener
 
 Conforme a la Sección 7(b) de la licencia GNU Affero General Public License v3.0, cualquier redistribución, modificación, obra derivada, adaptación o integración de este software en otros sistemas o plataformas debe preservar de forma visible el aviso de copyright original y la atribución expresa a su autor en el código fuente, en la documentación y en la interfaz de usuario:
 
-> *Basado en [LayerStudio 3D (LascaStudio 3D)](https://github.com/nmarafo/layerstudio3D), creado por **Norberto Martín Afonso** (`normaafo@gmail.com`), distribuido bajo licencia GNU Affero General Public License v3.0 (AGPL-3.0-or-later).*
+> *Basado en [LayerStudio 3D](https://github.com/nmarafo/layerstudio3D), creado por **Norberto Martín Afonso** (`normaafo@gmail.com`), distribuido bajo licencia GNU Affero General Public License v3.0 (AGPL-3.0-or-later).*
 
 Consulten el archivo [LICENSE](LICENSE) para conocer el texto legal completo de la licencia.

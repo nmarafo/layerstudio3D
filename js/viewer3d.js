@@ -1,5 +1,5 @@
 /**
- * LayerStudio 3D (LascaStudio 3D) - 3D Viewport, Loaders & Dynamic Sizing
+ * LayerStudio 3D - 3D Viewport, Loaders & Dynamic Sizing
  * Motor 3D Three.js, importación STL/GLB/GLTF, modelos paramétricos y dimensionamiento mm/cm/m.
  *
  * Copyright (C) 2026 Norberto Martín Afonso <normaafo@gmail.com>

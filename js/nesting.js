@@ -1,5 +1,5 @@
 /**
- * LayerStudio 3D (LascaStudio 3D) - 2D Board Nesting Engine (MaxRects)
+ * LayerStudio 3D - 2D Board Nesting Engine (MaxRects)
  * Empaquetado automático multi-tablero, aprovechamiento de huecos y encaje geométrico de texto por isla.
  *
  * Copyright (C) 2026 Norberto Martín Afonso <normaafo@gmail.com>

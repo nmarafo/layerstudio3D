@@ -1,5 +1,5 @@
 /**
- * LayerStudio 3D (LascaStudio 3D) - Geometric Slicing Engine & Layer Guides
+ * LayerStudio 3D - Geometric Slicing Engine & Layer Guides
  * Intersección plano-malla X/Y/Z, filtro de islas pequeñas, extrusión 3D y guías de pegado (#N+1 / #N-1).
  *
  * Copyright (C) 2026 Norberto Martín Afonso <normaafo@gmail.com>

@@ -1,5 +1,5 @@
 /**
- * LayerStudio 3D (LascaStudio 3D) - Global State & 3D Scene References
+ * LayerStudio 3D - Global State & 3D Scene References
  * Estado reactivo centralizado de la aplicación y referencias de escena Three.js.
  *
  * Copyright (C) 2026 Norberto Martín Afonso <normaafo@gmail.com>

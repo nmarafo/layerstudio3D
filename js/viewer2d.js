@@ -1,5 +1,5 @@
 /**
- * LayerStudio 3D (LascaStudio 3D) - 2D Interactive Canvas Inspector & Slice Strip
+ * LayerStudio 3D - 2D Interactive Canvas Inspector & Slice Strip
  * Visor 2D con zoom/pan, selección interactiva de islas, reproductor de capas y galería inferior.
  *
  * Copyright (C) 2026 Norberto Martín Afonso <normaafo@gmail.com>
