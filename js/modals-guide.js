@@ -712,6 +712,20 @@ function generateFullAssemblyGuideText() {
     }
   });
 
+  lines.push('');
+  lines.push('========================================================================');
+  lines.push('CRÉDITOS, AUTORÍA Y LICENCIA — LAYERSTUDIO 3D (LASCASTUDIO 3D)');
+  lines.push('========================================================================');
+  lines.push('Autor: Norberto Martín Afonso <normaafo@gmail.com>');
+  lines.push('Licencia: GNU Affero General Public License v3.0 (AGPL-3.0-or-later)');
+  lines.push('          con cláusula de atribución obligatoria (Sección 7b).');
+  lines.push('Repositorio: https://github.com/nmarafo/layerstudio3D');
+  lines.push('Redes sociales:');
+  lines.push('  - X (Twitter):  https://x.com/NorbertoMartnAf (@NorbertoMartnAf)');
+  lines.push('  - GitHub:       https://github.com/nmarafo (@nmarafo)');
+  lines.push('  - Hugging Face: https://huggingface.co/nmarafo (@nmarafo)');
+  lines.push('  - Instagram:    https://instagram.com/nmar_afo (@nmar_afo)');
+
   return lines.join('\n');
 }
 
@@ -720,3 +734,21 @@ function downloadAssemblyGuideTxt() {
   const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
   triggerBrowserDownload(blob, state.modelName + '_GUIA_CORTE_Y_MONTAJE.txt');
 }
+
+// ============================================================================
+// MODAL DE CRÉDITOS, AUTORÍA, LICENCIA Y REDES SOCIALES
+// ============================================================================
+function openCreditsModal() {
+  const modal = document.getElementById('creditsModal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
+
+function closeCreditsModal() {
+  const modal = document.getElementById('creditsModal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+}
+

@@ -104,11 +104,16 @@ layerstudio3D/
 
 ---
 
-## 👤 Autoría y Atribución
+## 👤 Autoría, Créditos y Redes Sociales
 
 - **Autor**: **Norberto Martín Afonso** ([normaafo@gmail.com](mailto:normaafo@gmail.com))
 - **Repositorio oficial**: [https://github.com/nmarafo/layerstudio3D](https://github.com/nmarafo/layerstudio3D)
 - **Aplicación en GitHub Pages**: [https://nmarafo.github.io/layerstudio3D/](https://nmarafo.github.io/layerstudio3D/)
+- **Sígueme en mis redes sociales**:
+  - 🐦 **X (Twitter)**: [@NorbertoMartnAf](https://x.com/NorbertoMartnAf)
+  - 💼 **GitHub**: [@nmarafo](https://github.com/nmarafo)
+  - 🤗 **Hugging Face**: [@nmarafo](https://huggingface.co/nmarafo)
+  - 📸 **Instagram**: [@nmar_afo](https://instagram.com/nmar_afo)
 
 ---
 
