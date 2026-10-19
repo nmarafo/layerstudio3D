@@ -24,12 +24,13 @@
   - **Por grosor fijo de material** (ej. tableros de `3 mm`, `4 mm`, `5 mm`, `10 mm`, etc.).
 - **Detección automática de contornos exteriores e interiores (huecos)** mediante orientación de área signada y regla par-impar.
 
-### 3. Guías de Ensamblaje, Varillas de Alineación y Filtro de Islas
+### 3. Guías de Ensamblaje, Varillas de Alineación, Micro-uniones de Sujeción y Filtro de Islas
 - **Guías de pegado multicapa**:
   - **Guía de lámina superior (`#N+1`)** en capa naranja (`#ff8800`).
   - **Guía de lámina inferior (`#N-1`)** en capa violeta (`#9900ff`).
   - Recorte automático de las líneas guía al contorno del material sólido de cada lasca o isla y selección de estilo de trazo (continuo rápido para grabado vectorial láser, guiones, punteado o raya-punto).
 - **Perforaciones de varilla guía**: Inserción automática de 1 taladro central o 2 taladros simétricos con diámetro configurable en milímetros.
+- **Micro-uniones de sujeción por presión (*Holding Tabs / Bridges*)**: Sistema configurable para dejar pequeños puentes sin cortar en el contorno (por ejemplo, `4 puntos` de `1.0 mm` por pieza o `1 punto` cada `X mm` de perímetro, tanto en exterior como opcionalmente en huecos interiores), manteniendo las piezas fijas al tablero durante el trabajo láser/CNC para desprenderlas limpiamente haciendo presión con los dedos.
 - **Filtro inteligente de islas pequeñas**: Descarta automáticamente fragmentos o astillas sueltas inferiores a un umbral configurable (por dimensión máxima, lado menor o área en $\text{mm}^2$).
 
 ### 4. Distribución Automática en Tableros (Nesting 2D MaxRects)

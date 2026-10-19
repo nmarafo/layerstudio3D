@@ -786,3 +786,256 @@ function onRodSettingsChange() {
   if (state.nestingEnabled) recomputeBoardNesting();
   render2DSlice();
 }
+
+// =========================================================================
+// MOTOR DE MICRO-UNIONES / PESTAÑAS DE SUJECIÓN POR PRESIÓN (HOLDING TABS)
+// =========================================================================
+/**
+ * Divide un contorno cerrado 2D (pts) dejando sin cortar N puntos (puentes/pestañas
+ * de sujeción de p. ej. 1.0 mm) para poder desprender la pieza del tablero haciendo presión.
+ */
+function computeLoopWithHoldingTabs(pts, isHole = false) {
+  if (!pts || pts.length < 3) {
+    return { isClosed: true, subpaths: [], tabBridges: [] };
+  }
+  if (!state.tabsEnabled || (isHole && !state.tabApplyToHoles)) {
+    return { isClosed: true, subpaths: [pts], tabBridges: [] };
+  }
+
+  const n = pts.length;
+  const edges = [];
+  let totalPerimeter = 0;
+
+  for (let i = 0; i < n; i++) {
+    const p1 = pts[i];
+    const p2 = pts[(i + 1) % n];
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const len = Math.hypot(dx, dy);
+    if (len > 1e-6) {
+      edges.push({
+        p1,
+        p2,
+        dx,
+        dy,
+        len,
+        startDist: totalPerimeter,
+        endDist: totalPerimeter + len
+      });
+      totalPerimeter += len;
+    }
+  }
+
+  const tabWidth = Math.max(0.15, Number(state.tabWidthMM) || 1.0);
+  if (edges.length === 0 || totalPerimeter <= tabWidth * 2.2) {
+    return { isClosed: true, subpaths: [pts], tabBridges: [] };
+  }
+
+  let desiredTabs = 4;
+  if (state.tabMode === 'spacing') {
+    const spacing = Math.max(5, Number(state.tabSpacingMM) || 60);
+    desiredTabs = Math.max(2, Math.round(totalPerimeter / spacing));
+  } else {
+    desiredTabs = Math.max(1, parseInt(state.tabCount, 10) || 4);
+  }
+
+  // Evitar que los puentes sin cortar superen el 40% del perímetro en islas pequeñas
+  const maxAllowedTabs = Math.max(1, Math.floor((totalPerimeter * 0.4) / tabWidth));
+  const numTabs = Math.min(desiredTabs, maxAllowedTabs);
+  if (numTabs < 1) {
+    return { isClosed: true, subpaths: [pts], tabBridges: [] };
+  }
+
+  const getPointAtDist = (dist) => {
+    const d = ((dist % totalPerimeter) + totalPerimeter) % totalPerimeter;
+    for (let i = 0; i < edges.length; i++) {
+      const e = edges[i];
+      if (d <= e.endDist + 1e-7 || i === edges.length - 1) {
+        const localT = e.len > 1e-8 ? Math.max(0, Math.min(1, (d - e.startDist) / e.len)) : 0;
+        return {
+          x: e.p1.x + e.dx * localT,
+          y: e.p1.y + e.dy * localT
+        };
+      }
+    }
+    return { x: edges[0].p1.x, y: edges[0].p1.y };
+  };
+
+  const extractSubpathLinear = (sStart, sEnd) => {
+    const poly = [];
+    const pushUnique = (pt) => {
+      if (poly.length === 0) {
+        poly.push(pt);
+        return;
+      }
+      const last = poly[poly.length - 1];
+      if (Math.hypot(pt.x - last.x, pt.y - last.y) > 1e-5) {
+        poly.push(pt);
+      }
+    };
+
+    pushUnique(getPointAtDist(sStart));
+    for (let i = 0; i < edges.length; i++) {
+      const vDist = edges[i].startDist;
+      if (vDist > sStart + 1e-5 && vDist < sEnd - 1e-5) {
+        pushUnique({ x: edges[i].p1.x, y: edges[i].p1.y });
+      }
+    }
+    pushUnique(getPointAtDist(sEnd));
+    return poly;
+  };
+
+  const step = totalPerimeter / numTabs;
+  const halfW = tabWidth * 0.5;
+  const tabs = [];
+  const tabBridges = [];
+
+  for (let k = 0; k < numTabs; k++) {
+    const centerS = (k + 0.5) * step;
+    const a = centerS - halfW;
+    const b = centerS + halfW;
+    tabs.push({ a, b, centerS });
+    const cPt = getPointAtDist(centerS);
+    const pStart = getPointAtDist(a);
+    const pEnd = getPointAtDist(b);
+    tabBridges.push({
+      x: cPt.x,
+      y: cPt.y,
+      pStart,
+      pEnd,
+      widthMM: tabWidth
+    });
+  }
+
+  const subpaths = [];
+  for (let k = 0; k < numTabs; k++) {
+    if (k < numTabs - 1) {
+      const poly = extractSubpathLinear(tabs[k].b, tabs[k + 1].a);
+      if (poly.length >= 2) subpaths.push(poly);
+    } else {
+      const part1 = extractSubpathLinear(tabs[k].b, totalPerimeter);
+      const part2 = extractSubpathLinear(0, tabs[0].a);
+      const merged = part1.slice();
+      for (let m = 0; m < part2.length; m++) {
+        const pt = part2[m];
+        const last = merged[merged.length - 1];
+        if (!last || Math.hypot(pt.x - last.x, pt.y - last.y) > 1e-5) {
+          merged.push(pt);
+        }
+      }
+      if (merged.length >= 2) subpaths.push(merged);
+    }
+  }
+
+  return {
+    isClosed: false,
+    subpaths,
+    tabBridges
+  };
+}
+
+function syncHoldingTabsUI() {
+  const chkSidebar = document.getElementById('tabsEnabledCheck');
+  const chkModal = document.getElementById('modalTabsEnabledCheck');
+  const chkInspector = document.getElementById('inspectorTabsCheck');
+  const panel = document.getElementById('tabsConfigPanel');
+  const legendTabs = document.getElementById('legendHoldingTabs');
+
+  if (chkSidebar) chkSidebar.checked = state.tabsEnabled;
+  if (chkModal) chkModal.checked = state.tabsEnabled;
+  if (chkInspector) chkInspector.checked = state.tabsEnabled;
+  if (panel) panel.classList.toggle('hidden', !state.tabsEnabled);
+  if (legendTabs) legendTabs.classList.toggle('hidden', !state.tabsEnabled);
+
+  const btnModeCount = document.getElementById('btnTabModeCount');
+  const btnModeSpacing = document.getElementById('btnTabModeSpacing');
+  const boxCount = document.getElementById('tabCountBox');
+  const boxSpacing = document.getElementById('tabSpacingBox');
+
+  if (btnModeCount && btnModeSpacing) {
+    if (state.tabMode === 'count') {
+      btnModeCount.className = 'py-1 px-2 rounded bg-amber-500/20 border border-amber-500 text-amber-300 text-[11px] font-semibold';
+      btnModeSpacing.className = 'py-1 px-2 rounded bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-semibold';
+    } else {
+      btnModeSpacing.className = 'py-1 px-2 rounded bg-amber-500/20 border border-amber-500 text-amber-300 text-[11px] font-semibold';
+      btnModeCount.className = 'py-1 px-2 rounded bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-semibold';
+    }
+  }
+  if (boxCount) boxCount.classList.toggle('hidden', state.tabMode !== 'count');
+  if (boxSpacing) boxSpacing.classList.toggle('hidden', state.tabMode !== 'spacing');
+
+  const countInput = document.getElementById('tabCountInput');
+  const modalCountInput = document.getElementById('modalTabCountInput');
+  const spacingInput = document.getElementById('tabSpacingInput');
+  const widthInput = document.getElementById('tabWidthInput');
+  const modalWidthInput = document.getElementById('modalTabWidthInput');
+  const holesCheck = document.getElementById('tabApplyHolesCheck');
+  const markersCheck = document.getElementById('tabShowMarkersCheck');
+  const summaryBadge = document.getElementById('tabsSummaryBadge');
+
+  if (countInput) countInput.value = state.tabCount;
+  if (modalCountInput) modalCountInput.value = state.tabCount;
+  if (spacingInput) spacingInput.value = state.tabSpacingMM;
+  if (widthInput) widthInput.value = state.tabWidthMM;
+  if (modalWidthInput) modalWidthInput.value = state.tabWidthMM;
+  if (holesCheck) holesCheck.checked = state.tabApplyToHoles;
+  if (markersCheck) markersCheck.checked = state.tabShowMarkers;
+
+  if (summaryBadge) {
+    if (!state.tabsEnabled) {
+      summaryBadge.textContent = 'Corte continuo cerrado (sin puentes)';
+    } else if (state.tabMode === 'count') {
+      summaryBadge.textContent = state.tabCount + ' puntos de ' + state.tabWidthMM.toFixed(1) + ' mm por pieza (desprendimiento por presión)';
+    } else {
+      summaryBadge.textContent = '1 punto de ' + state.tabWidthMM.toFixed(1) + ' mm cada ' + state.tabSpacingMM.toFixed(0) + ' mm de perímetro';
+    }
+  }
+}
+
+function setTabsEnabled(val) {
+  state.tabsEnabled = Boolean(val);
+  syncHoldingTabsUI();
+  render2DSlice();
+}
+
+function setTabMode(mode) {
+  state.tabMode = mode === 'spacing' ? 'spacing' : 'count';
+  syncHoldingTabsUI();
+  render2DSlice();
+}
+
+function onTabSettingsChange() {
+  const countInput = document.getElementById('tabCountInput');
+  const spacingInput = document.getElementById('tabSpacingInput');
+  const widthInput = document.getElementById('tabWidthInput');
+  const holesCheck = document.getElementById('tabApplyHolesCheck');
+  const markersCheck = document.getElementById('tabShowMarkersCheck');
+
+  if (countInput) state.tabCount = Math.max(1, Math.min(32, parseInt(countInput.value, 10) || 4));
+  if (spacingInput) state.tabSpacingMM = Math.max(5, Math.min(1000, parseFloat(spacingInput.value) || 60));
+  if (widthInput) state.tabWidthMM = Math.max(0.15, Math.min(15, parseFloat(widthInput.value) || 1.0));
+  if (holesCheck) state.tabApplyToHoles = Boolean(holesCheck.checked);
+  if (markersCheck) state.tabShowMarkers = Boolean(markersCheck.checked);
+
+  syncHoldingTabsUI();
+  render2DSlice();
+}
+
+function onModalTabQuickChange() {
+  const modalCountInput = document.getElementById('modalTabCountInput');
+  const modalWidthInput = document.getElementById('modalTabWidthInput');
+  if (modalCountInput) state.tabCount = Math.max(1, Math.min(32, parseInt(modalCountInput.value, 10) || 4));
+  if (modalWidthInput) state.tabWidthMM = Math.max(0.15, Math.min(15, parseFloat(modalWidthInput.value) || 1.0));
+  syncHoldingTabsUI();
+  render2DSlice();
+}
+
+function setPresetTabConfig(count, widthMM) {
+  state.tabsEnabled = true;
+  state.tabMode = 'count';
+  state.tabCount = count;
+  state.tabWidthMM = widthMM;
+  syncHoldingTabsUI();
+  render2DSlice();
+}
+

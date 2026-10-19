@@ -652,6 +652,11 @@ function generateFullAssemblyGuideText() {
     'Grosor por lámina: ' + state.thickness.toFixed(2) + ' mm',
     'Total láminas a montar: ' + plan.selectedSlices.length,
     'Varillas guía de alineación: ' + (state.rodCount > 0 ? (state.rodCount + ' varilla(s) de Ø' + state.rodDiameter + ' mm') : 'Sin varillas (alineación por guías grabadas)'),
+    'Micro-uniones de sujeción (corte por presión): ' + (state.tabsEnabled
+      ? (state.tabMode === 'count'
+          ? ('ACTIVAS (' + state.tabCount + ' puntos sin cortar de ' + state.tabWidthMM.toFixed(1) + ' mm por pieza para desprender a presión)')
+          : ('ACTIVAS (1 punto de ' + state.tabWidthMM.toFixed(1) + ' mm cada ' + state.tabSpacingMM.toFixed(0) + ' mm de perímetro)'))
+      : 'Desactivadas (corte perimetral 100% continuo)'),
     'Tableros generados: ' + state.nestedBoards.length + ' tablero(s) de ' + state.boardWidthMM.toFixed(0) + ' x ' + state.boardHeightMM.toFixed(0) + ' mm',
     '',
     '------------------------------------------------------------------------',

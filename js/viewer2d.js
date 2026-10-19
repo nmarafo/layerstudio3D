@@ -299,6 +299,53 @@ function drawAdaptiveIslandTextOnCanvas(ctx, tLayout, toScreenX, toScreenY, scal
   ctx.restore();
 }
 
+// Dibuja un contorno 2D en el Canvas respetando las micro-uniones (holding tabs) si están activas
+function drawContourWithTabsOnCanvas(ctx, pts, isHole, strokeColor, lineWidth, toScreenX, toScreenY) {
+  if (!pts || pts.length < 3) return;
+  const tabRes = computeLoopWithHoldingTabs(pts, isHole);
+
+  ctx.save();
+  ctx.strokeStyle = strokeColor;
+  ctx.lineWidth = lineWidth;
+
+  if (tabRes.isClosed) {
+    ctx.beginPath();
+    pts.forEach((pt, i) => {
+      if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+      else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+    });
+    ctx.closePath();
+    ctx.stroke();
+  } else {
+    ctx.lineCap = 'butt';
+    ctx.beginPath();
+    tabRes.subpaths.forEach((poly) => {
+      if (!poly || poly.length < 2) return;
+      poly.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+        else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+      });
+    });
+    ctx.stroke();
+
+    // Resaltar visualmente los puentes de sujeción sin cortar si el indicador está activo
+    if (state.tabShowMarkers && tabRes.tabBridges.length > 0) {
+      tabRes.tabBridges.forEach((br) => {
+        const sx = toScreenX(br.x);
+        const sy = toScreenY(br.y);
+        ctx.beginPath();
+        ctx.arc(sx, sy, 3.2, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(250, 204, 21, 0.25)';
+        ctx.fill();
+        ctx.strokeStyle = '#facc15';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      });
+    }
+  }
+  ctx.restore();
+}
+
 function render2DBoard(ctx, canvas) {
   const board = state.nestedBoards[state.activeBoardIndex];
   if (!board || board.placements.length === 0) {
@@ -369,28 +416,20 @@ function render2DBoard(ctx, canvas) {
     ctx.fill('evenodd');
     ctx.restore();
 
-    // Contorno exterior (rojo)
-    ctx.beginPath();
-    pl.outerPoints.forEach((pt, i) => {
-      if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
-      else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
-    });
-    ctx.closePath();
-    ctx.strokeStyle = isCurrentSlice ? '#fb7185' : '#f43f5e';
-    ctx.lineWidth = isCurrentSlice ? 2.4 : 1.7;
-    ctx.stroke();
+    // Contorno exterior (rojo) con soporte de micro-uniones
+    drawContourWithTabsOnCanvas(
+      ctx,
+      pl.outerPoints,
+      false,
+      isCurrentSlice ? '#fb7185' : '#f43f5e',
+      isCurrentSlice ? 2.4 : 1.7,
+      toScreenX,
+      toScreenY
+    );
 
-    // Contornos de huecos interiores (azul)
+    // Contornos de huecos interiores (azul) con soporte opcional de micro-uniones
     pl.holes.forEach((h) => {
-      ctx.beginPath();
-      h.points.forEach((pt, i) => {
-        if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
-        else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
-      });
-      ctx.closePath();
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 1.4;
-      ctx.stroke();
+      drawContourWithTabsOnCanvas(ctx, h.points, true, '#38bdf8', 1.4, toScreenX, toScreenY);
     });
 
     // Guía inferior (#N-1) si está activa
@@ -503,17 +542,17 @@ function render2DSlice() {
   ctx.fill('evenodd');
   ctx.restore();
 
-  // Contornos exteriores (rojo) e interiores (azul) de la lasca actual
+  // Contornos exteriores (rojo) e interiores (azul) de la lasca actual con soporte de micro-uniones
   slice.loops.forEach((loop) => {
-    ctx.beginPath();
-    loop.points.forEach((pt, i) => {
-      if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
-      else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
-    });
-    ctx.closePath();
-    ctx.strokeStyle = loop.isHole ? '#38bdf8' : '#f43f5e';
-    ctx.lineWidth = loop.isHole ? 1.6 : 2.2;
-    ctx.stroke();
+    drawContourWithTabsOnCanvas(
+      ctx,
+      loop.points,
+      loop.isHole,
+      loop.isHole ? '#38bdf8' : '#f43f5e',
+      loop.isHole ? 1.6 : 2.2,
+      toScreenX,
+      toScreenY
+    );
   });
 
   // 1. GUÍA DE LA LÁMINA INFERIOR (#N-1) - Violeta/Magenta en trazo continuo

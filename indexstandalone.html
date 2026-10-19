@@ -349,6 +349,70 @@ input[type="range"] {
             <input type="number" id="rodDiameterInput" value="4" min="1" max="50" step="0.5" onchange="onRodSettingsChange()" class="w-16 bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-right text-white" />
           </div>
         </div>
+
+        <!-- Micro-uniones / Pestañas de sujeción para desprender por presión (Holding Tabs) -->
+        <div class="pt-2 border-t border-slate-700/60 space-y-2">
+          <label class="flex items-center justify-between text-xs font-semibold text-yellow-300 cursor-pointer" title="Deja pequeños puentes sin cortar en el perímetro para que la pieza no se suelte sola y pueda desprenderse del tablero haciendo presión">
+            <span>🔗 Sujeción por presión (Micro-uniones)</span>
+            <input type="checkbox" id="tabsEnabledCheck" onchange="setTabsEnabled(this.checked)" class="accent-yellow-400 w-3.5 h-3.5" />
+          </label>
+
+          <div id="tabsConfigPanel" class="hidden space-y-2 bg-slate-900/80 border border-yellow-500/30 rounded-lg p-2.5">
+            <p class="text-[10px] text-slate-400 leading-relaxed">
+              Deja micro-puentes sin cortar en el contorno láser/CNC para mantener las piezas fijas al tablero y desprenderlas presionando con los dedos.
+            </p>
+
+            <!-- Modo de distribución de micro-uniones -->
+            <div class="grid grid-cols-2 gap-1">
+              <button onclick="setTabMode('count')" id="btnTabModeCount" class="py-1 px-2 rounded bg-amber-500/20 border border-amber-500 text-amber-300 text-[11px] font-semibold">
+                Por Nº Puntos
+              </button>
+              <button onclick="setTabMode('spacing')" id="btnTabModeSpacing" class="py-1 px-2 rounded bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-semibold">
+                Cada X mm
+              </button>
+            </div>
+
+            <div id="tabCountBox" class="flex items-center justify-between text-[11px]">
+              <span class="text-slate-300">Puntos sin cortar / pieza:</span>
+              <input type="number" id="tabCountInput" value="4" min="1" max="32" step="1" onchange="onTabSettingsChange()" class="w-16 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-white font-semibold" />
+            </div>
+
+            <div id="tabSpacingBox" class="hidden flex items-center justify-between text-[11px]">
+              <span class="text-slate-300">Un punto cada (mm):</span>
+              <input type="number" id="tabSpacingInput" value="60" min="5" max="1000" step="5" onchange="onTabSettingsChange()" class="w-16 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-white font-semibold" />
+            </div>
+
+            <div class="flex items-center justify-between text-[11px]">
+              <span class="text-slate-300">Ancho de cada punto (mm):</span>
+              <input type="number" id="tabWidthInput" value="1.0" min="0.15" max="15" step="0.1" onchange="onTabSettingsChange()" class="w-16 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-yellow-300 font-semibold" />
+            </div>
+
+            <!-- Ajustes rápidos habituales en corte láser -->
+            <div class="space-y-1">
+              <span class="text-[10px] text-slate-400 block">Ajustes rápidos recomendados:</span>
+              <div class="grid grid-cols-4 gap-1">
+                <button onclick="setPresetTabConfig(4, 0.5)" class="py-1 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-200" title="4 puntos de 0.5 mm (cartón / MDF fino)">4×0.5mm</button>
+                <button onclick="setPresetTabConfig(4, 1.0)" class="py-1 bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/40 rounded text-[9px] text-yellow-300 font-semibold" title="4 puntos de 1.0 mm (estándar MDF / contrachapado 3-5mm)">4×1.0mm</button>
+                <button onclick="setPresetTabConfig(4, 1.5)" class="py-1 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-200" title="4 puntos de 1.5 mm (piezas grandes o pesadas)">4×1.5mm</button>
+                <button onclick="setPresetTabConfig(6, 1.0)" class="py-1 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-200" title="6 puntos de 1.0 mm (perímetros largos)">6×1.0mm</button>
+              </div>
+            </div>
+
+            <label class="flex items-center justify-between text-[11px] text-slate-300 cursor-pointer pt-0.5" title="Mantiene también sujetos los recortes de los agujeros interiores para que no salten durante el corte">
+              <span>Aplicar también en huecos internos</span>
+              <input type="checkbox" id="tabApplyHolesCheck" onchange="onTabSettingsChange()" class="accent-yellow-400" />
+            </label>
+
+            <label class="flex items-center justify-between text-[11px] text-slate-300 cursor-pointer" title="Dibuja pequeños anillos amarillos en el visor 2D indicando exactamente dónde quedan los puntos de sujeción">
+              <span>Resaltar puentes en visor 2D</span>
+              <input type="checkbox" id="tabShowMarkersCheck" checked onchange="onTabSettingsChange()" class="accent-yellow-400" />
+            </label>
+
+            <div id="tabsSummaryBadge" class="text-[10px] text-yellow-300 bg-yellow-950/40 border border-yellow-500/30 rounded p-1.5 text-center font-medium">
+              4 puntos de 1.0 mm por pieza (desprendimiento por presión)
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- 4. SELECCIÓN DE LASCAS Y FILTRO DE ISLAS PEQUEÑAS -->
@@ -593,6 +657,10 @@ input[type="range"] {
                 <input type="checkbox" id="inspectorPrevGuideCheck" checked onchange="setIncludePrevGuide(this.checked)" class="accent-fuchsia-500" />
                 <span class="text-fuchsia-300 font-medium">Guía Inf.</span>
               </label>
+              <label class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-xs cursor-pointer" title="Activar/desactivar micro-uniones de sujeción (puntos sin cortar para desprender la pieza haciendo presión)">
+                <input type="checkbox" id="inspectorTabsCheck" onchange="setTabsEnabled(this.checked)" class="accent-yellow-400" />
+                <span class="text-yellow-300 font-medium">🔗 Sujeción</span>
+              </label>
               <button onclick="downloadCurrentSlice('svg')" class="px-2.5 py-1 rounded-lg bg-rose-600/90 hover:bg-rose-500 text-white text-xs font-semibold transition" title="Descargar SVG actual (Lasca o Tablero)">⬇ SVG</button>
               <button onclick="downloadCurrentSlice('dxf')" class="px-2.5 py-1 rounded-lg bg-amber-600/90 hover:bg-amber-500 text-white text-xs font-semibold transition" title="Descargar DXF actual (Lasca o Tablero)">⬇ DXF</button>
               <button onclick="downloadCurrentSlice('stl')" class="px-2.5 py-1 rounded-lg bg-indigo-600/90 hover:bg-indigo-500 text-white text-xs font-semibold transition" title="Descargar STL 3D de esta lasca">⬇ STL</button>
@@ -623,6 +691,7 @@ input[type="range"] {
             <div class="absolute bottom-3 left-3 flex flex-wrap items-center gap-3 text-[11px] bg-slate-900/90 px-3 py-1.5 rounded-lg border border-slate-800 pointer-events-none">
               <span class="flex items-center gap-1 text-rose-400"><span class="w-2.5 h-0.5 bg-rose-500 inline-block"></span> Corte Exterior</span>
               <span class="flex items-center gap-1 text-sky-400"><span class="w-2.5 h-0.5 bg-sky-400 inline-block"></span> Huecos / Varillas</span>
+              <span id="legendHoldingTabs" class="hidden flex items-center gap-1 text-yellow-300"><span class="w-2.5 h-2.5 rounded-full border border-yellow-400 bg-yellow-400/30 inline-block"></span> Micro-uniones (Sin cortar)</span>
               <span id="legendNextGuide" class="flex items-center gap-1 text-amber-400"><span class="w-3.5 h-0.5 bg-amber-400 inline-block"></span> Guía Superior (#N+1)</span>
               <span id="legendPrevGuide" class="flex items-center gap-1 text-fuchsia-400"><span class="w-3.5 h-0.5 bg-fuchsia-400 inline-block"></span> Guía Inferior (#N-1)</span>
               <span class="flex items-center gap-1 text-emerald-400"><span class="w-2.5 h-0.5 bg-emerald-400 inline-block"></span> Grabado (#N / Sup / Inf / Ambas)</span>
@@ -754,6 +823,18 @@ input[type="range"] {
             <span class="text-slate-300">Incluir etiqueta de número y cota de lasca</span>
             <input type="checkbox" id="modalIncludeLabelsCheck" checked onchange="setIncludeLabels(this.checked)" class="accent-sky-500" />
           </label>
+          <div class="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-xs">
+            <label class="flex items-center gap-2 text-yellow-300 font-semibold cursor-pointer" title="Deja pequeños puentes sin cortar para que las piezas no se suelten solas y se desprendan haciendo presión">
+              <input type="checkbox" id="modalTabsEnabledCheck" onchange="setTabsEnabled(this.checked)" class="accent-yellow-400" />
+              <span>🔗 Micro-uniones por presión:</span>
+            </label>
+            <div class="flex items-center gap-1.5 text-[11px]">
+              <input type="number" id="modalTabCountInput" value="4" min="1" max="32" step="1" onchange="onModalTabQuickChange()" class="w-12 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-white" title="Número de puntos sin cortar por pieza" />
+              <span class="text-slate-400">pts ×</span>
+              <input type="number" id="modalTabWidthInput" value="1.0" min="0.15" max="15" step="0.1" onchange="onModalTabQuickChange()" class="w-14 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-yellow-300" title="Ancho en mm de cada punto sin cortar" />
+              <span class="text-slate-400">mm</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1043,6 +1124,14 @@ const state = {
   guideClipToSlice: true,      // true = recorta las guías que sobresalgan fuera del contorno de la lasca actual
   rodCount: 0,
   rodDiameter: 4,
+  // Sistema de Micro-uniones / Pestañas de sujeción por presión (Holding Tabs / Bridges)
+  tabsEnabled: false,          // true = deja puntos sin cortar para desprender la pieza haciendo presión
+  tabMode: 'count',            // 'count' (nº fijo de puntos por pieza) | 'spacing' (cada X mm de perímetro)
+  tabCount: 4,                 // Nº de puntos sin cortar por pieza (ej. 4 puntos)
+  tabSpacingMM: 60,            // Distancia entre puntos en mm cuando tabMode === 'spacing'
+  tabWidthMM: 1.0,             // Longitud sin cortar de cada micro-unión en mm (ej. 1.0 mm)
+  tabApplyToHoles: false,      // true = aplica también micro-uniones a los huecos interiores
+  tabShowMarkers: true,        // true = resalta visualmente los puentes de sujeción en el visor 2D
   // Filtro de eliminación de islas pequeñas
   filterSmallIslands: false,   // true = descarta islas inferiores al umbral indicado
   minIslandSizeMM: 10,         // Valor umbral en mm (o mm² si el criterio es área)
@@ -2206,6 +2295,259 @@ function onRodSettingsChange() {
   if (state.nestingEnabled) recomputeBoardNesting();
   render2DSlice();
 }
+
+// =========================================================================
+// MOTOR DE MICRO-UNIONES / PESTAÑAS DE SUJECIÓN POR PRESIÓN (HOLDING TABS)
+// =========================================================================
+/**
+ * Divide un contorno cerrado 2D (pts) dejando sin cortar N puntos (puentes/pestañas
+ * de sujeción de p. ej. 1.0 mm) para poder desprender la pieza del tablero haciendo presión.
+ */
+function computeLoopWithHoldingTabs(pts, isHole = false) {
+  if (!pts || pts.length < 3) {
+    return { isClosed: true, subpaths: [], tabBridges: [] };
+  }
+  if (!state.tabsEnabled || (isHole && !state.tabApplyToHoles)) {
+    return { isClosed: true, subpaths: [pts], tabBridges: [] };
+  }
+
+  const n = pts.length;
+  const edges = [];
+  let totalPerimeter = 0;
+
+  for (let i = 0; i < n; i++) {
+    const p1 = pts[i];
+    const p2 = pts[(i + 1) % n];
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const len = Math.hypot(dx, dy);
+    if (len > 1e-6) {
+      edges.push({
+        p1,
+        p2,
+        dx,
+        dy,
+        len,
+        startDist: totalPerimeter,
+        endDist: totalPerimeter + len
+      });
+      totalPerimeter += len;
+    }
+  }
+
+  const tabWidth = Math.max(0.15, Number(state.tabWidthMM) || 1.0);
+  if (edges.length === 0 || totalPerimeter <= tabWidth * 2.2) {
+    return { isClosed: true, subpaths: [pts], tabBridges: [] };
+  }
+
+  let desiredTabs = 4;
+  if (state.tabMode === 'spacing') {
+    const spacing = Math.max(5, Number(state.tabSpacingMM) || 60);
+    desiredTabs = Math.max(2, Math.round(totalPerimeter / spacing));
+  } else {
+    desiredTabs = Math.max(1, parseInt(state.tabCount, 10) || 4);
+  }
+
+  // Evitar que los puentes sin cortar superen el 40% del perímetro en islas pequeñas
+  const maxAllowedTabs = Math.max(1, Math.floor((totalPerimeter * 0.4) / tabWidth));
+  const numTabs = Math.min(desiredTabs, maxAllowedTabs);
+  if (numTabs < 1) {
+    return { isClosed: true, subpaths: [pts], tabBridges: [] };
+  }
+
+  const getPointAtDist = (dist) => {
+    const d = ((dist % totalPerimeter) + totalPerimeter) % totalPerimeter;
+    for (let i = 0; i < edges.length; i++) {
+      const e = edges[i];
+      if (d <= e.endDist + 1e-7 || i === edges.length - 1) {
+        const localT = e.len > 1e-8 ? Math.max(0, Math.min(1, (d - e.startDist) / e.len)) : 0;
+        return {
+          x: e.p1.x + e.dx * localT,
+          y: e.p1.y + e.dy * localT
+        };
+      }
+    }
+    return { x: edges[0].p1.x, y: edges[0].p1.y };
+  };
+
+  const extractSubpathLinear = (sStart, sEnd) => {
+    const poly = [];
+    const pushUnique = (pt) => {
+      if (poly.length === 0) {
+        poly.push(pt);
+        return;
+      }
+      const last = poly[poly.length - 1];
+      if (Math.hypot(pt.x - last.x, pt.y - last.y) > 1e-5) {
+        poly.push(pt);
+      }
+    };
+
+    pushUnique(getPointAtDist(sStart));
+    for (let i = 0; i < edges.length; i++) {
+      const vDist = edges[i].startDist;
+      if (vDist > sStart + 1e-5 && vDist < sEnd - 1e-5) {
+        pushUnique({ x: edges[i].p1.x, y: edges[i].p1.y });
+      }
+    }
+    pushUnique(getPointAtDist(sEnd));
+    return poly;
+  };
+
+  const step = totalPerimeter / numTabs;
+  const halfW = tabWidth * 0.5;
+  const tabs = [];
+  const tabBridges = [];
+
+  for (let k = 0; k < numTabs; k++) {
+    const centerS = (k + 0.5) * step;
+    const a = centerS - halfW;
+    const b = centerS + halfW;
+    tabs.push({ a, b, centerS });
+    const cPt = getPointAtDist(centerS);
+    const pStart = getPointAtDist(a);
+    const pEnd = getPointAtDist(b);
+    tabBridges.push({
+      x: cPt.x,
+      y: cPt.y,
+      pStart,
+      pEnd,
+      widthMM: tabWidth
+    });
+  }
+
+  const subpaths = [];
+  for (let k = 0; k < numTabs; k++) {
+    if (k < numTabs - 1) {
+      const poly = extractSubpathLinear(tabs[k].b, tabs[k + 1].a);
+      if (poly.length >= 2) subpaths.push(poly);
+    } else {
+      const part1 = extractSubpathLinear(tabs[k].b, totalPerimeter);
+      const part2 = extractSubpathLinear(0, tabs[0].a);
+      const merged = part1.slice();
+      for (let m = 0; m < part2.length; m++) {
+        const pt = part2[m];
+        const last = merged[merged.length - 1];
+        if (!last || Math.hypot(pt.x - last.x, pt.y - last.y) > 1e-5) {
+          merged.push(pt);
+        }
+      }
+      if (merged.length >= 2) subpaths.push(merged);
+    }
+  }
+
+  return {
+    isClosed: false,
+    subpaths,
+    tabBridges
+  };
+}
+
+function syncHoldingTabsUI() {
+  const chkSidebar = document.getElementById('tabsEnabledCheck');
+  const chkModal = document.getElementById('modalTabsEnabledCheck');
+  const chkInspector = document.getElementById('inspectorTabsCheck');
+  const panel = document.getElementById('tabsConfigPanel');
+  const legendTabs = document.getElementById('legendHoldingTabs');
+
+  if (chkSidebar) chkSidebar.checked = state.tabsEnabled;
+  if (chkModal) chkModal.checked = state.tabsEnabled;
+  if (chkInspector) chkInspector.checked = state.tabsEnabled;
+  if (panel) panel.classList.toggle('hidden', !state.tabsEnabled);
+  if (legendTabs) legendTabs.classList.toggle('hidden', !state.tabsEnabled);
+
+  const btnModeCount = document.getElementById('btnTabModeCount');
+  const btnModeSpacing = document.getElementById('btnTabModeSpacing');
+  const boxCount = document.getElementById('tabCountBox');
+  const boxSpacing = document.getElementById('tabSpacingBox');
+
+  if (btnModeCount && btnModeSpacing) {
+    if (state.tabMode === 'count') {
+      btnModeCount.className = 'py-1 px-2 rounded bg-amber-500/20 border border-amber-500 text-amber-300 text-[11px] font-semibold';
+      btnModeSpacing.className = 'py-1 px-2 rounded bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-semibold';
+    } else {
+      btnModeSpacing.className = 'py-1 px-2 rounded bg-amber-500/20 border border-amber-500 text-amber-300 text-[11px] font-semibold';
+      btnModeCount.className = 'py-1 px-2 rounded bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-semibold';
+    }
+  }
+  if (boxCount) boxCount.classList.toggle('hidden', state.tabMode !== 'count');
+  if (boxSpacing) boxSpacing.classList.toggle('hidden', state.tabMode !== 'spacing');
+
+  const countInput = document.getElementById('tabCountInput');
+  const modalCountInput = document.getElementById('modalTabCountInput');
+  const spacingInput = document.getElementById('tabSpacingInput');
+  const widthInput = document.getElementById('tabWidthInput');
+  const modalWidthInput = document.getElementById('modalTabWidthInput');
+  const holesCheck = document.getElementById('tabApplyHolesCheck');
+  const markersCheck = document.getElementById('tabShowMarkersCheck');
+  const summaryBadge = document.getElementById('tabsSummaryBadge');
+
+  if (countInput) countInput.value = state.tabCount;
+  if (modalCountInput) modalCountInput.value = state.tabCount;
+  if (spacingInput) spacingInput.value = state.tabSpacingMM;
+  if (widthInput) widthInput.value = state.tabWidthMM;
+  if (modalWidthInput) modalWidthInput.value = state.tabWidthMM;
+  if (holesCheck) holesCheck.checked = state.tabApplyToHoles;
+  if (markersCheck) markersCheck.checked = state.tabShowMarkers;
+
+  if (summaryBadge) {
+    if (!state.tabsEnabled) {
+      summaryBadge.textContent = 'Corte continuo cerrado (sin puentes)';
+    } else if (state.tabMode === 'count') {
+      summaryBadge.textContent = state.tabCount + ' puntos de ' + state.tabWidthMM.toFixed(1) + ' mm por pieza (desprendimiento por presión)';
+    } else {
+      summaryBadge.textContent = '1 punto de ' + state.tabWidthMM.toFixed(1) + ' mm cada ' + state.tabSpacingMM.toFixed(0) + ' mm de perímetro';
+    }
+  }
+}
+
+function setTabsEnabled(val) {
+  state.tabsEnabled = Boolean(val);
+  syncHoldingTabsUI();
+  render2DSlice();
+}
+
+function setTabMode(mode) {
+  state.tabMode = mode === 'spacing' ? 'spacing' : 'count';
+  syncHoldingTabsUI();
+  render2DSlice();
+}
+
+function onTabSettingsChange() {
+  const countInput = document.getElementById('tabCountInput');
+  const spacingInput = document.getElementById('tabSpacingInput');
+  const widthInput = document.getElementById('tabWidthInput');
+  const holesCheck = document.getElementById('tabApplyHolesCheck');
+  const markersCheck = document.getElementById('tabShowMarkersCheck');
+
+  if (countInput) state.tabCount = Math.max(1, Math.min(32, parseInt(countInput.value, 10) || 4));
+  if (spacingInput) state.tabSpacingMM = Math.max(5, Math.min(1000, parseFloat(spacingInput.value) || 60));
+  if (widthInput) state.tabWidthMM = Math.max(0.15, Math.min(15, parseFloat(widthInput.value) || 1.0));
+  if (holesCheck) state.tabApplyToHoles = Boolean(holesCheck.checked);
+  if (markersCheck) state.tabShowMarkers = Boolean(markersCheck.checked);
+
+  syncHoldingTabsUI();
+  render2DSlice();
+}
+
+function onModalTabQuickChange() {
+  const modalCountInput = document.getElementById('modalTabCountInput');
+  const modalWidthInput = document.getElementById('modalTabWidthInput');
+  if (modalCountInput) state.tabCount = Math.max(1, Math.min(32, parseInt(modalCountInput.value, 10) || 4));
+  if (modalWidthInput) state.tabWidthMM = Math.max(0.15, Math.min(15, parseFloat(modalWidthInput.value) || 1.0));
+  syncHoldingTabsUI();
+  render2DSlice();
+}
+
+function setPresetTabConfig(count, widthMM) {
+  state.tabsEnabled = true;
+  state.tabMode = 'count';
+  state.tabCount = count;
+  state.tabWidthMM = widthMM;
+  syncHoldingTabsUI();
+  render2DSlice();
+}
+
 
 
 /**
@@ -4131,6 +4473,11 @@ function generateFullAssemblyGuideText() {
     'Grosor por lámina: ' + state.thickness.toFixed(2) + ' mm',
     'Total láminas a montar: ' + plan.selectedSlices.length,
     'Varillas guía de alineación: ' + (state.rodCount > 0 ? (state.rodCount + ' varilla(s) de Ø' + state.rodDiameter + ' mm') : 'Sin varillas (alineación por guías grabadas)'),
+    'Micro-uniones de sujeción (corte por presión): ' + (state.tabsEnabled
+      ? (state.tabMode === 'count'
+          ? ('ACTIVAS (' + state.tabCount + ' puntos sin cortar de ' + state.tabWidthMM.toFixed(1) + ' mm por pieza para desprender a presión)')
+          : ('ACTIVAS (1 punto de ' + state.tabWidthMM.toFixed(1) + ' mm cada ' + state.tabSpacingMM.toFixed(0) + ' mm de perímetro)'))
+      : 'Desactivadas (corte perimetral 100% continuo)'),
     'Tableros generados: ' + state.nestedBoards.length + ' tablero(s) de ' + state.boardWidthMM.toFixed(0) + ' x ' + state.boardHeightMM.toFixed(0) + ' mm',
     '',
     '------------------------------------------------------------------------',
@@ -4534,6 +4881,53 @@ function drawAdaptiveIslandTextOnCanvas(ctx, tLayout, toScreenX, toScreenY, scal
   ctx.restore();
 }
 
+// Dibuja un contorno 2D en el Canvas respetando las micro-uniones (holding tabs) si están activas
+function drawContourWithTabsOnCanvas(ctx, pts, isHole, strokeColor, lineWidth, toScreenX, toScreenY) {
+  if (!pts || pts.length < 3) return;
+  const tabRes = computeLoopWithHoldingTabs(pts, isHole);
+
+  ctx.save();
+  ctx.strokeStyle = strokeColor;
+  ctx.lineWidth = lineWidth;
+
+  if (tabRes.isClosed) {
+    ctx.beginPath();
+    pts.forEach((pt, i) => {
+      if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+      else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+    });
+    ctx.closePath();
+    ctx.stroke();
+  } else {
+    ctx.lineCap = 'butt';
+    ctx.beginPath();
+    tabRes.subpaths.forEach((poly) => {
+      if (!poly || poly.length < 2) return;
+      poly.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+        else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+      });
+    });
+    ctx.stroke();
+
+    // Resaltar visualmente los puentes de sujeción sin cortar si el indicador está activo
+    if (state.tabShowMarkers && tabRes.tabBridges.length > 0) {
+      tabRes.tabBridges.forEach((br) => {
+        const sx = toScreenX(br.x);
+        const sy = toScreenY(br.y);
+        ctx.beginPath();
+        ctx.arc(sx, sy, 3.2, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(250, 204, 21, 0.25)';
+        ctx.fill();
+        ctx.strokeStyle = '#facc15';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      });
+    }
+  }
+  ctx.restore();
+}
+
 function render2DBoard(ctx, canvas) {
   const board = state.nestedBoards[state.activeBoardIndex];
   if (!board || board.placements.length === 0) {
@@ -4604,28 +4998,20 @@ function render2DBoard(ctx, canvas) {
     ctx.fill('evenodd');
     ctx.restore();
 
-    // Contorno exterior (rojo)
-    ctx.beginPath();
-    pl.outerPoints.forEach((pt, i) => {
-      if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
-      else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
-    });
-    ctx.closePath();
-    ctx.strokeStyle = isCurrentSlice ? '#fb7185' : '#f43f5e';
-    ctx.lineWidth = isCurrentSlice ? 2.4 : 1.7;
-    ctx.stroke();
+    // Contorno exterior (rojo) con soporte de micro-uniones
+    drawContourWithTabsOnCanvas(
+      ctx,
+      pl.outerPoints,
+      false,
+      isCurrentSlice ? '#fb7185' : '#f43f5e',
+      isCurrentSlice ? 2.4 : 1.7,
+      toScreenX,
+      toScreenY
+    );
 
-    // Contornos de huecos interiores (azul)
+    // Contornos de huecos interiores (azul) con soporte opcional de micro-uniones
     pl.holes.forEach((h) => {
-      ctx.beginPath();
-      h.points.forEach((pt, i) => {
-        if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
-        else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
-      });
-      ctx.closePath();
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 1.4;
-      ctx.stroke();
+      drawContourWithTabsOnCanvas(ctx, h.points, true, '#38bdf8', 1.4, toScreenX, toScreenY);
     });
 
     // Guía inferior (#N-1) si está activa
@@ -4738,17 +5124,17 @@ function render2DSlice() {
   ctx.fill('evenodd');
   ctx.restore();
 
-  // Contornos exteriores (rojo) e interiores (azul) de la lasca actual
+  // Contornos exteriores (rojo) e interiores (azul) de la lasca actual con soporte de micro-uniones
   slice.loops.forEach((loop) => {
-    ctx.beginPath();
-    loop.points.forEach((pt, i) => {
-      if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
-      else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
-    });
-    ctx.closePath();
-    ctx.strokeStyle = loop.isHole ? '#38bdf8' : '#f43f5e';
-    ctx.lineWidth = loop.isHole ? 1.6 : 2.2;
-    ctx.stroke();
+    drawContourWithTabsOnCanvas(
+      ctx,
+      loop.points,
+      loop.isHole,
+      loop.isHole ? '#38bdf8' : '#f43f5e',
+      loop.isHole ? 1.6 : 2.2,
+      toScreenX,
+      toScreenY
+    );
   });
 
   // 1. GUÍA DE LA LÁMINA INFERIOR (#N-1) - Violeta/Magenta en trazo continuo
@@ -5006,6 +5392,71 @@ function escapeXmlAttr(val) {
     .replace(/>/g, '&gt;');
 }
 
+// Construye el atributo d="..." para corte láser SVG aplicando micro-uniones (holding tabs) si están activas
+function buildSvgCutPathD(pts, isHole, toX, toY) {
+  if (!pts || pts.length < 3) return '';
+  const tabRes = computeLoopWithHoldingTabs(pts, isHole);
+  if (tabRes.isClosed) {
+    let d = 'M ' + toX(pts[0].x) + ' ' + toY(pts[0].y);
+    for (let i = 1; i < pts.length; i++) {
+      d += ' L ' + toX(pts[i].x) + ' ' + toY(pts[i].y);
+    }
+    return d + ' Z';
+  }
+  const parts = [];
+  tabRes.subpaths.forEach((poly) => {
+    if (!poly || poly.length < 2) return;
+    let subD = 'M ' + toX(poly[0].x) + ' ' + toY(poly[0].y);
+    for (let i = 1; i < poly.length; i++) {
+      subD += ' L ' + toX(poly[i].x) + ' ' + toY(poly[i].y);
+    }
+    parts.push(subD);
+  });
+  return parts.join(' ');
+}
+
+// Añade entidades LINE a un documento DXF aplicando micro-uniones (holding tabs) si están activas
+function pushLoopLinesWithTabsDXF(dxf, pts, isHole, layer, color, ox = 0, oy = 0) {
+  if (!pts || pts.length < 3) return;
+  const tabRes = computeLoopWithHoldingTabs(pts, isHole);
+  if (tabRes.isClosed) {
+    for (let i = 0, n = pts.length; i < n; i++) {
+      const p1 = pts[i];
+      const p2 = pts[(i + 1) % n];
+      dxf.push(
+        '0', 'LINE',
+        '8', layer,
+        '62', color,
+        '10', (p1.x - ox).toFixed(4),
+        '20', (p1.y - oy).toFixed(4),
+        '30', '0.0',
+        '11', (p2.x - ox).toFixed(4),
+        '21', (p2.y - oy).toFixed(4),
+        '31', '0.0'
+      );
+    }
+    return;
+  }
+  tabRes.subpaths.forEach((poly) => {
+    if (!poly || poly.length < 2) return;
+    for (let i = 0; i < poly.length - 1; i++) {
+      const p1 = poly[i];
+      const p2 = poly[i + 1];
+      dxf.push(
+        '0', 'LINE',
+        '8', layer,
+        '62', color,
+        '10', (p1.x - ox).toFixed(4),
+        '20', (p1.y - oy).toFixed(4),
+        '30', '0.0',
+        '11', (p2.x - ox).toFixed(4),
+        '21', (p2.y - oy).toFixed(4),
+        '31', '0.0'
+      );
+    }
+  });
+}
+
 function generateSliceSVG(slice, idx) {
   // El tamaño del documento SVG es siempre el tamaño total de la pieza en el eje activo
   const docBounds = getModelBounds2D();
@@ -5031,16 +5482,19 @@ function generateSliceSVG(slice, idx) {
   (slice.loops || []).forEach((loop) => {
     if (!loop.points || loop.points.length < 3) return;
     const pts = loop.points;
-    let d = 'M ' + toX(pts[0].x) + ' ' + toY(pts[0].y);
+    let dClosed = 'M ' + toX(pts[0].x) + ' ' + toY(pts[0].y);
     for (let i = 1; i < pts.length; i++) {
-      d += ' L ' + toX(pts[i].x) + ' ' + toY(pts[i].y);
+      dClosed += ' L ' + toX(pts[i].x) + ' ' + toY(pts[i].y);
     }
-    d += ' Z';
-    compoundPath += d + ' ';
+    dClosed += ' Z';
+    compoundPath += dClosed + ' ';
+
+    const cutD = buildSvgCutPathD(pts, loop.isHole, toX, toY);
+    if (!cutD) return;
     if (loop.isHole) {
-      holePaths.push(d);
+      holePaths.push(cutD);
     } else {
-      outerPaths.push(d);
+      outerPaths.push(cutD);
     }
   });
 
@@ -5177,23 +5631,29 @@ function generateBoardSVG(board) {
   board.placements.forEach((pl, pIdx) => {
     const pts = pl.outerPoints;
     if (!pts || pts.length < 3) return;
-    let dOut = 'M ' + toX(pts[0].x) + ' ' + toY(pts[0].y);
+    let dOutClosed = 'M ' + toX(pts[0].x) + ' ' + toY(pts[0].y);
     for (let i = 1; i < pts.length; i++) {
-      dOut += ' L ' + toX(pts[i].x) + ' ' + toY(pts[i].y);
+      dOutClosed += ' L ' + toX(pts[i].x) + ' ' + toY(pts[i].y);
     }
-    dOut += ' Z';
-    compoundPath += dOut + ' ';
-    outerPaths.push({ id: 'isla_' + (pIdx + 1) + '_lasca_' + (pl.island.sliceIndex + 1), d: dOut });
+    dOutClosed += ' Z';
+    compoundPath += dOutClosed + ' ';
+
+    const dOutCut = buildSvgCutPathD(pts, false, toX, toY);
+    if (dOutCut) {
+      outerPaths.push({ id: 'isla_' + (pIdx + 1) + '_lasca_' + (pl.island.sliceIndex + 1), d: dOutCut });
+    }
 
     pl.holes.forEach((h) => {
       if (!h.points || h.points.length < 3) return;
-      let dHole = 'M ' + toX(h.points[0].x) + ' ' + toY(h.points[0].y);
+      let dHoleClosed = 'M ' + toX(h.points[0].x) + ' ' + toY(h.points[0].y);
       for (let i = 1; i < h.points.length; i++) {
-        dHole += ' L ' + toX(h.points[i].x) + ' ' + toY(h.points[i].y);
+        dHoleClosed += ' L ' + toX(h.points[i].x) + ' ' + toY(h.points[i].y);
       }
-      dHole += ' Z';
-      compoundPath += dHole + ' ';
-      holePaths.push(dHole);
+      dHoleClosed += ' Z';
+      compoundPath += dHoleClosed + ' ';
+
+      const dHoleCut = buildSvgCutPathD(h.points, true, toX, toY);
+      if (dHoleCut) holePaths.push(dHoleCut);
     });
 
     pl.rods.forEach((r) => {
@@ -5305,27 +5765,8 @@ function generateBoardDXF(board) {
   const dxf = ['0', 'SECTION', '2', 'ENTITIES'];
 
   board.placements.forEach((pl) => {
-    const pushLoopLines = (pts, layer, color) => {
-      if (!pts || pts.length < 3) return;
-      for (let i = 0, n = pts.length; i < n; i++) {
-        const p1 = pts[i];
-        const p2 = pts[(i + 1) % n];
-        dxf.push(
-          '0', 'LINE',
-          '8', layer,
-          '62', color,
-          '10', p1.x.toFixed(4),
-          '20', p1.y.toFixed(4),
-          '30', '0.0',
-          '11', p2.x.toFixed(4),
-          '21', p2.y.toFixed(4),
-          '31', '0.0'
-        );
-      }
-    };
-
-    pushLoopLines(pl.outerPoints, 'CORTE_EXTERIOR', '1');
-    pl.holes.forEach((h) => pushLoopLines(h.points, 'CORTE_INTERIOR', '5'));
+    pushLoopLinesWithTabsDXF(dxf, pl.outerPoints, false, 'CORTE_EXTERIOR', '1', 0, 0);
+    pl.holes.forEach((h) => pushLoopLinesWithTabsDXF(dxf, h.points, true, 'CORTE_INTERIOR', '5', 0, 0));
 
     if (state.includePrevSliceGuide && pl.lowerPolys.length > 0) {
       pl.lowerPolys.forEach((poly) => {
@@ -5414,22 +5855,7 @@ function generateSliceDXF(slice, idx) {
     if (!loop.points || loop.points.length < 3) return;
     const layer = loop.isHole ? 'CORTE_INTERIOR' : 'CORTE_EXTERIOR';
     const color = loop.isHole ? '5' : '1';
-    const n = loop.points.length;
-    for (let i = 0; i < n; i++) {
-      const p1 = loop.points[i];
-      const p2 = loop.points[(i + 1) % n];
-      dxf.push(
-        '0', 'LINE',
-        '8', layer,
-        '62', color,
-        '10', (p1.x - ox).toFixed(4),
-        '20', (p1.y - oy).toFixed(4),
-        '30', '0.0',
-        '11', (p2.x - ox).toFixed(4),
-        '21', (p2.y - oy).toFixed(4),
-        '31', '0.0'
-      );
-    }
+    pushLoopLinesWithTabsDXF(dxf, loop.points, loop.isHole, layer, color, ox, oy);
   });
 
   // Incluir guía de la lámina INFERIOR (#N-1) en capa independiente DXF si está activada
@@ -5584,6 +6010,7 @@ function openExportModal() {
   const modalClipChk = document.getElementById('modalNestClipOversizedCheck');
   if (modalClipChk) modalClipChk.checked = state.nestClipOversized;
   updateFilteredIslandsUI();
+  syncHoldingTabsUI();
   document.getElementById('modalNestingSubOptions').classList.toggle('hidden', !state.nestingEnabled);
   syncBoardInputsUI();
   document.getElementById('exportModal').classList.remove('hidden');
@@ -5704,6 +6131,13 @@ function exportProjectFile() {
     nestEngraveGuideType: state.nestEngraveGuideType,
     rodCount: state.rodCount,
     rodDiameter: state.rodDiameter,
+    tabsEnabled: state.tabsEnabled,
+    tabMode: state.tabMode,
+    tabCount: state.tabCount,
+    tabSpacingMM: state.tabSpacingMM,
+    tabWidthMM: state.tabWidthMM,
+    tabApplyToHoles: state.tabApplyToHoles,
+    tabShowMarkers: state.tabShowMarkers,
     dimsMM: state.dimsMM,
     selectedIndices: state.slices.filter((s) => s.selected).map((s) => s.index),
     baseVertices: Array.from(state.baseVertices || [])
@@ -5727,6 +6161,14 @@ function importProjectFile(file) {
       state.thickness = data.thickness || 5;
       state.rodCount = data.rodCount || 0;
       state.rodDiameter = data.rodDiameter || 4;
+      if (typeof data.tabsEnabled === 'boolean') state.tabsEnabled = data.tabsEnabled;
+      if (data.tabMode === 'count' || data.tabMode === 'spacing') state.tabMode = data.tabMode;
+      if (typeof data.tabCount === 'number') state.tabCount = data.tabCount;
+      if (typeof data.tabSpacingMM === 'number') state.tabSpacingMM = data.tabSpacingMM;
+      if (typeof data.tabWidthMM === 'number') state.tabWidthMM = data.tabWidthMM;
+      if (typeof data.tabApplyToHoles === 'boolean') state.tabApplyToHoles = data.tabApplyToHoles;
+      if (typeof data.tabShowMarkers === 'boolean') state.tabShowMarkers = data.tabShowMarkers;
+      syncHoldingTabsUI();
 
       if (typeof data.filterSmallIslands === 'boolean') state.filterSmallIslands = data.filterSmallIslands;
       if (typeof data.minIslandSizeMM === 'number') state.minIslandSizeMM = data.minIslandSizeMM;

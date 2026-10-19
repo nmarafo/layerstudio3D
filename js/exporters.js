@@ -27,6 +27,71 @@ function escapeXmlAttr(val) {
     .replace(/>/g, '&gt;');
 }
 
+// Construye el atributo d="..." para corte láser SVG aplicando micro-uniones (holding tabs) si están activas
+function buildSvgCutPathD(pts, isHole, toX, toY) {
+  if (!pts || pts.length < 3) return '';
+  const tabRes = computeLoopWithHoldingTabs(pts, isHole);
+  if (tabRes.isClosed) {
+    let d = 'M ' + toX(pts[0].x) + ' ' + toY(pts[0].y);
+    for (let i = 1; i < pts.length; i++) {
+      d += ' L ' + toX(pts[i].x) + ' ' + toY(pts[i].y);
+    }
+    return d + ' Z';
+  }
+  const parts = [];
+  tabRes.subpaths.forEach((poly) => {
+    if (!poly || poly.length < 2) return;
+    let subD = 'M ' + toX(poly[0].x) + ' ' + toY(poly[0].y);
+    for (let i = 1; i < poly.length; i++) {
+      subD += ' L ' + toX(poly[i].x) + ' ' + toY(poly[i].y);
+    }
+    parts.push(subD);
+  });
+  return parts.join(' ');
+}
+
+// Añade entidades LINE a un documento DXF aplicando micro-uniones (holding tabs) si están activas
+function pushLoopLinesWithTabsDXF(dxf, pts, isHole, layer, color, ox = 0, oy = 0) {
+  if (!pts || pts.length < 3) return;
+  const tabRes = computeLoopWithHoldingTabs(pts, isHole);
+  if (tabRes.isClosed) {
+    for (let i = 0, n = pts.length; i < n; i++) {
+      const p1 = pts[i];
+      const p2 = pts[(i + 1) % n];
+      dxf.push(
+        '0', 'LINE',
+        '8', layer,
+        '62', color,
+        '10', (p1.x - ox).toFixed(4),
+        '20', (p1.y - oy).toFixed(4),
+        '30', '0.0',
+        '11', (p2.x - ox).toFixed(4),
+        '21', (p2.y - oy).toFixed(4),
+        '31', '0.0'
+      );
+    }
+    return;
+  }
+  tabRes.subpaths.forEach((poly) => {
+    if (!poly || poly.length < 2) return;
+    for (let i = 0; i < poly.length - 1; i++) {
+      const p1 = poly[i];
+      const p2 = poly[i + 1];
+      dxf.push(
+        '0', 'LINE',
+        '8', layer,
+        '62', color,
+        '10', (p1.x - ox).toFixed(4),
+        '20', (p1.y - oy).toFixed(4),
+        '30', '0.0',
+        '11', (p2.x - ox).toFixed(4),
+        '21', (p2.y - oy).toFixed(4),
+        '31', '0.0'
+      );
+    }
+  });
+}
+
 function generateSliceSVG(slice, idx) {
   // El tamaño del documento SVG es siempre el tamaño total de la pieza en el eje activo
   const docBounds = getModelBounds2D();
@@ -52,16 +117,19 @@ function generateSliceSVG(slice, idx) {
   (slice.loops || []).forEach((loop) => {
     if (!loop.points || loop.points.length < 3) return;
     const pts = loop.points;
-    let d = 'M ' + toX(pts[0].x) + ' ' + toY(pts[0].y);
+    let dClosed = 'M ' + toX(pts[0].x) + ' ' + toY(pts[0].y);
     for (let i = 1; i < pts.length; i++) {
-      d += ' L ' + toX(pts[i].x) + ' ' + toY(pts[i].y);
+      dClosed += ' L ' + toX(pts[i].x) + ' ' + toY(pts[i].y);
     }
-    d += ' Z';
-    compoundPath += d + ' ';
+    dClosed += ' Z';
+    compoundPath += dClosed + ' ';
+
+    const cutD = buildSvgCutPathD(pts, loop.isHole, toX, toY);
+    if (!cutD) return;
     if (loop.isHole) {
-      holePaths.push(d);
+      holePaths.push(cutD);
     } else {
-      outerPaths.push(d);
+      outerPaths.push(cutD);
     }
   });
 
@@ -198,23 +266,29 @@ function generateBoardSVG(board) {
   board.placements.forEach((pl, pIdx) => {
     const pts = pl.outerPoints;
     if (!pts || pts.length < 3) return;
-    let dOut = 'M ' + toX(pts[0].x) + ' ' + toY(pts[0].y);
+    let dOutClosed = 'M ' + toX(pts[0].x) + ' ' + toY(pts[0].y);
     for (let i = 1; i < pts.length; i++) {
-      dOut += ' L ' + toX(pts[i].x) + ' ' + toY(pts[i].y);
+      dOutClosed += ' L ' + toX(pts[i].x) + ' ' + toY(pts[i].y);
     }
-    dOut += ' Z';
-    compoundPath += dOut + ' ';
-    outerPaths.push({ id: 'isla_' + (pIdx + 1) + '_lasca_' + (pl.island.sliceIndex + 1), d: dOut });
+    dOutClosed += ' Z';
+    compoundPath += dOutClosed + ' ';
+
+    const dOutCut = buildSvgCutPathD(pts, false, toX, toY);
+    if (dOutCut) {
+      outerPaths.push({ id: 'isla_' + (pIdx + 1) + '_lasca_' + (pl.island.sliceIndex + 1), d: dOutCut });
+    }
 
     pl.holes.forEach((h) => {
       if (!h.points || h.points.length < 3) return;
-      let dHole = 'M ' + toX(h.points[0].x) + ' ' + toY(h.points[0].y);
+      let dHoleClosed = 'M ' + toX(h.points[0].x) + ' ' + toY(h.points[0].y);
       for (let i = 1; i < h.points.length; i++) {
-        dHole += ' L ' + toX(h.points[i].x) + ' ' + toY(h.points[i].y);
+        dHoleClosed += ' L ' + toX(h.points[i].x) + ' ' + toY(h.points[i].y);
       }
-      dHole += ' Z';
-      compoundPath += dHole + ' ';
-      holePaths.push(dHole);
+      dHoleClosed += ' Z';
+      compoundPath += dHoleClosed + ' ';
+
+      const dHoleCut = buildSvgCutPathD(h.points, true, toX, toY);
+      if (dHoleCut) holePaths.push(dHoleCut);
     });
 
     pl.rods.forEach((r) => {
@@ -326,27 +400,8 @@ function generateBoardDXF(board) {
   const dxf = ['0', 'SECTION', '2', 'ENTITIES'];
 
   board.placements.forEach((pl) => {
-    const pushLoopLines = (pts, layer, color) => {
-      if (!pts || pts.length < 3) return;
-      for (let i = 0, n = pts.length; i < n; i++) {
-        const p1 = pts[i];
-        const p2 = pts[(i + 1) % n];
-        dxf.push(
-          '0', 'LINE',
-          '8', layer,
-          '62', color,
-          '10', p1.x.toFixed(4),
-          '20', p1.y.toFixed(4),
-          '30', '0.0',
-          '11', p2.x.toFixed(4),
-          '21', p2.y.toFixed(4),
-          '31', '0.0'
-        );
-      }
-    };
-
-    pushLoopLines(pl.outerPoints, 'CORTE_EXTERIOR', '1');
-    pl.holes.forEach((h) => pushLoopLines(h.points, 'CORTE_INTERIOR', '5'));
+    pushLoopLinesWithTabsDXF(dxf, pl.outerPoints, false, 'CORTE_EXTERIOR', '1', 0, 0);
+    pl.holes.forEach((h) => pushLoopLinesWithTabsDXF(dxf, h.points, true, 'CORTE_INTERIOR', '5', 0, 0));
 
     if (state.includePrevSliceGuide && pl.lowerPolys.length > 0) {
       pl.lowerPolys.forEach((poly) => {
@@ -435,22 +490,7 @@ function generateSliceDXF(slice, idx) {
     if (!loop.points || loop.points.length < 3) return;
     const layer = loop.isHole ? 'CORTE_INTERIOR' : 'CORTE_EXTERIOR';
     const color = loop.isHole ? '5' : '1';
-    const n = loop.points.length;
-    for (let i = 0; i < n; i++) {
-      const p1 = loop.points[i];
-      const p2 = loop.points[(i + 1) % n];
-      dxf.push(
-        '0', 'LINE',
-        '8', layer,
-        '62', color,
-        '10', (p1.x - ox).toFixed(4),
-        '20', (p1.y - oy).toFixed(4),
-        '30', '0.0',
-        '11', (p2.x - ox).toFixed(4),
-        '21', (p2.y - oy).toFixed(4),
-        '31', '0.0'
-      );
-    }
+    pushLoopLinesWithTabsDXF(dxf, loop.points, loop.isHole, layer, color, ox, oy);
   });
 
   // Incluir guía de la lámina INFERIOR (#N-1) en capa independiente DXF si está activada
@@ -605,6 +645,7 @@ function openExportModal() {
   const modalClipChk = document.getElementById('modalNestClipOversizedCheck');
   if (modalClipChk) modalClipChk.checked = state.nestClipOversized;
   updateFilteredIslandsUI();
+  syncHoldingTabsUI();
   document.getElementById('modalNestingSubOptions').classList.toggle('hidden', !state.nestingEnabled);
   syncBoardInputsUI();
   document.getElementById('exportModal').classList.remove('hidden');
@@ -725,6 +766,13 @@ function exportProjectFile() {
     nestEngraveGuideType: state.nestEngraveGuideType,
     rodCount: state.rodCount,
     rodDiameter: state.rodDiameter,
+    tabsEnabled: state.tabsEnabled,
+    tabMode: state.tabMode,
+    tabCount: state.tabCount,
+    tabSpacingMM: state.tabSpacingMM,
+    tabWidthMM: state.tabWidthMM,
+    tabApplyToHoles: state.tabApplyToHoles,
+    tabShowMarkers: state.tabShowMarkers,
     dimsMM: state.dimsMM,
     selectedIndices: state.slices.filter((s) => s.selected).map((s) => s.index),
     baseVertices: Array.from(state.baseVertices || [])
@@ -748,6 +796,14 @@ function importProjectFile(file) {
       state.thickness = data.thickness || 5;
       state.rodCount = data.rodCount || 0;
       state.rodDiameter = data.rodDiameter || 4;
+      if (typeof data.tabsEnabled === 'boolean') state.tabsEnabled = data.tabsEnabled;
+      if (data.tabMode === 'count' || data.tabMode === 'spacing') state.tabMode = data.tabMode;
+      if (typeof data.tabCount === 'number') state.tabCount = data.tabCount;
+      if (typeof data.tabSpacingMM === 'number') state.tabSpacingMM = data.tabSpacingMM;
+      if (typeof data.tabWidthMM === 'number') state.tabWidthMM = data.tabWidthMM;
+      if (typeof data.tabApplyToHoles === 'boolean') state.tabApplyToHoles = data.tabApplyToHoles;
+      if (typeof data.tabShowMarkers === 'boolean') state.tabShowMarkers = data.tabShowMarkers;
+      syncHoldingTabsUI();
 
       if (typeof data.filterSmallIslands === 'boolean') state.filterSmallIslands = data.filterSmallIslands;
       if (typeof data.minIslandSizeMM === 'number') state.minIslandSizeMM = data.minIslandSizeMM;

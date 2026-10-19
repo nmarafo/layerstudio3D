@@ -37,6 +37,14 @@ const state = {
   guideClipToSlice: true,      // true = recorta las guías que sobresalgan fuera del contorno de la lasca actual
   rodCount: 0,
   rodDiameter: 4,
+  // Sistema de Micro-uniones / Pestañas de sujeción por presión (Holding Tabs / Bridges)
+  tabsEnabled: false,          // true = deja puntos sin cortar para desprender la pieza haciendo presión
+  tabMode: 'count',            // 'count' (nº fijo de puntos por pieza) | 'spacing' (cada X mm de perímetro)
+  tabCount: 4,                 // Nº de puntos sin cortar por pieza (ej. 4 puntos)
+  tabSpacingMM: 60,            // Distancia entre puntos en mm cuando tabMode === 'spacing'
+  tabWidthMM: 1.0,             // Longitud sin cortar de cada micro-unión en mm (ej. 1.0 mm)
+  tabApplyToHoles: false,      // true = aplica también micro-uniones a los huecos interiores
+  tabShowMarkers: true,        // true = resalta visualmente los puentes de sujeción en el visor 2D
   // Filtro de eliminación de islas pequeñas
   filterSmallIslands: false,   // true = descarta islas inferiores al umbral indicado
   minIslandSizeMM: 10,         // Valor umbral en mm (o mm² si el criterio es área)

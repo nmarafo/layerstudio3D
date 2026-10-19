@@ -292,6 +292,70 @@
             <input type="number" id="rodDiameterInput" value="4" min="1" max="50" step="0.5" onchange="onRodSettingsChange()" class="w-16 bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-right text-white" />
           </div>
         </div>
+
+        <!-- Micro-uniones / Pestañas de sujeción para desprender por presión (Holding Tabs) -->
+        <div class="pt-2 border-t border-slate-700/60 space-y-2">
+          <label class="flex items-center justify-between text-xs font-semibold text-yellow-300 cursor-pointer" title="Deja pequeños puentes sin cortar en el perímetro para que la pieza no se suelte sola y pueda desprenderse del tablero haciendo presión">
+            <span>🔗 Sujeción por presión (Micro-uniones)</span>
+            <input type="checkbox" id="tabsEnabledCheck" onchange="setTabsEnabled(this.checked)" class="accent-yellow-400 w-3.5 h-3.5" />
+          </label>
+
+          <div id="tabsConfigPanel" class="hidden space-y-2 bg-slate-900/80 border border-yellow-500/30 rounded-lg p-2.5">
+            <p class="text-[10px] text-slate-400 leading-relaxed">
+              Deja micro-puentes sin cortar en el contorno láser/CNC para mantener las piezas fijas al tablero y desprenderlas presionando con los dedos.
+            </p>
+
+            <!-- Modo de distribución de micro-uniones -->
+            <div class="grid grid-cols-2 gap-1">
+              <button onclick="setTabMode('count')" id="btnTabModeCount" class="py-1 px-2 rounded bg-amber-500/20 border border-amber-500 text-amber-300 text-[11px] font-semibold">
+                Por Nº Puntos
+              </button>
+              <button onclick="setTabMode('spacing')" id="btnTabModeSpacing" class="py-1 px-2 rounded bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-semibold">
+                Cada X mm
+              </button>
+            </div>
+
+            <div id="tabCountBox" class="flex items-center justify-between text-[11px]">
+              <span class="text-slate-300">Puntos sin cortar / pieza:</span>
+              <input type="number" id="tabCountInput" value="4" min="1" max="32" step="1" onchange="onTabSettingsChange()" class="w-16 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-white font-semibold" />
+            </div>
+
+            <div id="tabSpacingBox" class="hidden flex items-center justify-between text-[11px]">
+              <span class="text-slate-300">Un punto cada (mm):</span>
+              <input type="number" id="tabSpacingInput" value="60" min="5" max="1000" step="5" onchange="onTabSettingsChange()" class="w-16 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-white font-semibold" />
+            </div>
+
+            <div class="flex items-center justify-between text-[11px]">
+              <span class="text-slate-300">Ancho de cada punto (mm):</span>
+              <input type="number" id="tabWidthInput" value="1.0" min="0.15" max="15" step="0.1" onchange="onTabSettingsChange()" class="w-16 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-yellow-300 font-semibold" />
+            </div>
+
+            <!-- Ajustes rápidos habituales en corte láser -->
+            <div class="space-y-1">
+              <span class="text-[10px] text-slate-400 block">Ajustes rápidos recomendados:</span>
+              <div class="grid grid-cols-4 gap-1">
+                <button onclick="setPresetTabConfig(4, 0.5)" class="py-1 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-200" title="4 puntos de 0.5 mm (cartón / MDF fino)">4×0.5mm</button>
+                <button onclick="setPresetTabConfig(4, 1.0)" class="py-1 bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/40 rounded text-[9px] text-yellow-300 font-semibold" title="4 puntos de 1.0 mm (estándar MDF / contrachapado 3-5mm)">4×1.0mm</button>
+                <button onclick="setPresetTabConfig(4, 1.5)" class="py-1 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-200" title="4 puntos de 1.5 mm (piezas grandes o pesadas)">4×1.5mm</button>
+                <button onclick="setPresetTabConfig(6, 1.0)" class="py-1 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-200" title="6 puntos de 1.0 mm (perímetros largos)">6×1.0mm</button>
+              </div>
+            </div>
+
+            <label class="flex items-center justify-between text-[11px] text-slate-300 cursor-pointer pt-0.5" title="Mantiene también sujetos los recortes de los agujeros interiores para que no salten durante el corte">
+              <span>Aplicar también en huecos internos</span>
+              <input type="checkbox" id="tabApplyHolesCheck" onchange="onTabSettingsChange()" class="accent-yellow-400" />
+            </label>
+
+            <label class="flex items-center justify-between text-[11px] text-slate-300 cursor-pointer" title="Dibuja pequeños anillos amarillos en el visor 2D indicando exactamente dónde quedan los puntos de sujeción">
+              <span>Resaltar puentes en visor 2D</span>
+              <input type="checkbox" id="tabShowMarkersCheck" checked onchange="onTabSettingsChange()" class="accent-yellow-400" />
+            </label>
+
+            <div id="tabsSummaryBadge" class="text-[10px] text-yellow-300 bg-yellow-950/40 border border-yellow-500/30 rounded p-1.5 text-center font-medium">
+              4 puntos de 1.0 mm por pieza (desprendimiento por presión)
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- 4. SELECCIÓN DE LASCAS Y FILTRO DE ISLAS PEQUEÑAS -->
@@ -536,6 +600,10 @@
                 <input type="checkbox" id="inspectorPrevGuideCheck" checked onchange="setIncludePrevGuide(this.checked)" class="accent-fuchsia-500" />
                 <span class="text-fuchsia-300 font-medium">Guía Inf.</span>
               </label>
+              <label class="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-xs cursor-pointer" title="Activar/desactivar micro-uniones de sujeción (puntos sin cortar para desprender la pieza haciendo presión)">
+                <input type="checkbox" id="inspectorTabsCheck" onchange="setTabsEnabled(this.checked)" class="accent-yellow-400" />
+                <span class="text-yellow-300 font-medium">🔗 Sujeción</span>
+              </label>
               <button onclick="downloadCurrentSlice('svg')" class="px-2.5 py-1 rounded-lg bg-rose-600/90 hover:bg-rose-500 text-white text-xs font-semibold transition" title="Descargar SVG actual (Lasca o Tablero)">⬇ SVG</button>
               <button onclick="downloadCurrentSlice('dxf')" class="px-2.5 py-1 rounded-lg bg-amber-600/90 hover:bg-amber-500 text-white text-xs font-semibold transition" title="Descargar DXF actual (Lasca o Tablero)">⬇ DXF</button>
               <button onclick="downloadCurrentSlice('stl')" class="px-2.5 py-1 rounded-lg bg-indigo-600/90 hover:bg-indigo-500 text-white text-xs font-semibold transition" title="Descargar STL 3D de esta lasca">⬇ STL</button>
@@ -566,6 +634,7 @@
             <div class="absolute bottom-3 left-3 flex flex-wrap items-center gap-3 text-[11px] bg-slate-900/90 px-3 py-1.5 rounded-lg border border-slate-800 pointer-events-none">
               <span class="flex items-center gap-1 text-rose-400"><span class="w-2.5 h-0.5 bg-rose-500 inline-block"></span> Corte Exterior</span>
               <span class="flex items-center gap-1 text-sky-400"><span class="w-2.5 h-0.5 bg-sky-400 inline-block"></span> Huecos / Varillas</span>
+              <span id="legendHoldingTabs" class="hidden flex items-center gap-1 text-yellow-300"><span class="w-2.5 h-2.5 rounded-full border border-yellow-400 bg-yellow-400/30 inline-block"></span> Micro-uniones (Sin cortar)</span>
               <span id="legendNextGuide" class="flex items-center gap-1 text-amber-400"><span class="w-3.5 h-0.5 bg-amber-400 inline-block"></span> Guía Superior (#N+1)</span>
               <span id="legendPrevGuide" class="flex items-center gap-1 text-fuchsia-400"><span class="w-3.5 h-0.5 bg-fuchsia-400 inline-block"></span> Guía Inferior (#N-1)</span>
               <span class="flex items-center gap-1 text-emerald-400"><span class="w-2.5 h-0.5 bg-emerald-400 inline-block"></span> Grabado (#N / Sup / Inf / Ambas)</span>
@@ -697,6 +766,18 @@
             <span class="text-slate-300">Incluir etiqueta de número y cota de lasca</span>
             <input type="checkbox" id="modalIncludeLabelsCheck" checked onchange="setIncludeLabels(this.checked)" class="accent-sky-500" />
           </label>
+          <div class="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-xs">
+            <label class="flex items-center gap-2 text-yellow-300 font-semibold cursor-pointer" title="Deja pequeños puentes sin cortar para que las piezas no se suelten solas y se desprendan haciendo presión">
+              <input type="checkbox" id="modalTabsEnabledCheck" onchange="setTabsEnabled(this.checked)" class="accent-yellow-400" />
+              <span>🔗 Micro-uniones por presión:</span>
+            </label>
+            <div class="flex items-center gap-1.5 text-[11px]">
+              <input type="number" id="modalTabCountInput" value="4" min="1" max="32" step="1" onchange="onModalTabQuickChange()" class="w-12 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-white" title="Número de puntos sin cortar por pieza" />
+              <span class="text-slate-400">pts ×</span>
+              <input type="number" id="modalTabWidthInput" value="1.0" min="0.15" max="15" step="0.1" onchange="onModalTabQuickChange()" class="w-14 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-yellow-300" title="Ancho en mm de cada punto sin cortar" />
+              <span class="text-slate-400">mm</span>
+            </div>
+          </div>
         </div>
       </div>
 
