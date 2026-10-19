@@ -28,11 +28,11 @@
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
 
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
 
   <!-- Hoja de estilos principal -->
   <style>
@@ -102,7 +102,10 @@ input[type="range"] {
   display: block;
 }
 
-  </style>
+</style>
+
+  <!-- Módulos de la aplicación (cargados en orden de dependencia con defer y cache-busting) -->
+  <!-- Application JS injected at bottom of body -->
 </head>
 <body class="h-screen w-screen flex flex-col">
 
@@ -213,6 +216,118 @@ input[type="range"] {
             <button onclick="setMaxDimensionMM(1000)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300">1m</button>
             <button onclick="setMaxDimensionMM(2000)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300">2m</button>
             <button onclick="setMaxDimensionMM(3000)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300">3m</button>
+          </div>
+        </div>
+
+        <!-- SUBDIVISIÓN MODULAR 3D EN PARTES / CONJUNTOS (GRAN FORMATO) -->
+        <div class="pt-2.5 border-t border-fuchsia-500/35 space-y-2">
+          <label class="flex items-center justify-between text-xs font-bold text-fuchsia-300 cursor-pointer" title="Divide automáticamente el modelo 3D en varios conjuntos o bloques encajables (A1, A2, B1, B2...) para fabricar figuras de 60×60 cm, 90×90 cm o 120×120 cm uniendo tableros de 30×30 cm (o cualquier medida)">
+            <span>🧩 Dividir Modelo en Partes (Gran Formato)</span>
+            <input type="checkbox" id="splitModelEnabledCheck" onchange="setSplitModelEnabled(this.checked)" class="accent-fuchsia-500 w-3.5 h-3.5" />
+          </label>
+
+          <div id="splitModelConfigPanel" class="hidden space-y-2.5 bg-slate-900/90 border border-fuchsia-500/40 rounded-xl p-2.5">
+            <!-- Selector de modo de subdivisión -->
+            <div class="grid grid-cols-2 gap-1">
+              <button onclick="setSplitMode('max_size')" id="btnSplitModeMaxSize" class="py-1 px-2 rounded bg-fuchsia-500/20 border border-fuchsia-500 text-fuchsia-300 text-[11px] font-semibold" title="Divide automáticamente según el tamaño máximo de tu tablero o área de trabajo (ej. 30×30 cm)">
+                Por Tamaño Parte
+              </button>
+              <button onclick="setSplitMode('grid')" id="btnSplitModeGrid" class="py-1 px-2 rounded bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-semibold" title="Divide en un número fijo de Columnas × Filas (ej. 2×2, 3×3, 4×4)">
+                Cuadrícula (C×F)
+              </button>
+            </div>
+
+            <!-- Modo 1: Por Tamaño Máximo de Parte / Tablero -->
+            <div id="splitMaxSizeBox" class="space-y-2">
+              <div class="flex items-center justify-between">
+                <span class="text-[10px] text-fuchsia-200 font-semibold">Tamaño máx. de cada parte (mm):</span>
+                <button onclick="syncSplitWithBoardSize()" class="px-1.5 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-[9px] text-emerald-300 font-semibold transition" title="Ajustar al área útil del tablero de la sección 5">
+                  = Tablero
+                </button>
+              </div>
+              <div class="grid grid-cols-2 gap-1.5">
+                <div>
+                  <span class="text-[10px] text-slate-400 block mb-0.5">Ancho máx. (mm)</span>
+                  <input type="number" id="splitMaxPartWidthInput" value="300" min="20" max="3000" step="10" onchange="onSplitSettingsChange()" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white font-semibold" />
+                </div>
+                <div>
+                  <span class="text-[10px] text-slate-400 block mb-0.5">Fondo/Alto máx. (mm)</span>
+                  <input type="number" id="splitMaxPartHeightInput" value="300" min="20" max="3000" step="10" onchange="onSplitSettingsChange()" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white font-semibold" />
+                </div>
+              </div>
+
+              <!-- Presets de tamaño de tablero/parte base -->
+              <div>
+                <span class="text-[9px] text-slate-400 block mb-1">Medida de tu tablero / bloque base:</span>
+                <div class="grid grid-cols-5 gap-1">
+                  <button onclick="setSplitPartPresetMM(150, 150)" class="py-0.5 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300">15×15cm</button>
+                  <button onclick="setSplitPartPresetMM(200, 200)" class="py-0.5 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300">20×20cm</button>
+                  <button onclick="setSplitPartPresetMM(300, 300)" class="py-0.5 bg-fuchsia-500/20 hover:bg-fuchsia-500/30 border border-fuchsia-500/40 rounded text-[9px] text-fuchsia-300 font-bold">30×30cm</button>
+                  <button onclick="setSplitPartPresetMM(400, 400)" class="py-0.5 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300">40×40cm</button>
+                  <button onclick="setSplitPartPresetMM(600, 400)" class="py-0.5 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300">60×40cm</button>
+                </div>
+              </div>
+
+              <!-- Escalado rápido por múltiplos de conjuntos (ej. 60×60, 90×90, 120×120 con bloques de 30×30) -->
+              <div class="pt-1.5 border-t border-slate-800 space-y-1">
+                <span class="text-[10px] text-fuchsia-300 font-semibold block">🚀 Escalar Figura a Múltiplo de Conjuntos:</span>
+                <div class="grid grid-cols-3 gap-1">
+                  <button onclick="scaleModelToSplitMultiple(2, 2)" id="splitScaleBtn_2x2" class="py-1 px-1 bg-fuchsia-500/20 hover:bg-fuchsia-500/35 border border-fuchsia-500/40 rounded text-[9px] text-fuchsia-200 font-bold transition" title="Escalar la figura para unir 2×2 = 4 conjuntos (ej. 60×60 cm con bloques de 30×30 cm)">
+                    2×2 (60×60 cm)
+                  </button>
+                  <button onclick="scaleModelToSplitMultiple(3, 3)" id="splitScaleBtn_3x3" class="py-1 px-1 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-200 font-semibold transition" title="Escalar la figura para unir 3×3 = 9 conjuntos (ej. 90×90 cm con bloques de 30×30 cm)">
+                    3×3 (90×90 cm)
+                  </button>
+                  <button onclick="scaleModelToSplitMultiple(4, 4)" id="splitScaleBtn_4x4" class="py-1 px-1 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-200 font-semibold transition" title="Escalar la figura para unir 4×4 = 16 conjuntos (ej. 120×120 cm con bloques de 30×30 cm)">
+                    4×4 (120×120 cm)
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Modo 2: Cuadrícula Fija (Columnas × Filas) -->
+            <div id="splitGridBox" class="hidden space-y-2">
+              <div class="grid grid-cols-2 gap-1.5">
+                <div>
+                  <span class="text-[10px] text-slate-400 block mb-0.5">Columnas (1..12)</span>
+                  <input type="number" id="splitColsInput" value="2" min="1" max="12" step="1" onchange="onSplitSettingsChange()" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white font-semibold" />
+                </div>
+                <div>
+                  <span class="text-[10px] text-slate-400 block mb-0.5">Filas (1..12)</span>
+                  <input type="number" id="splitRowsInput" value="2" min="1" max="12" step="1" onchange="onSplitSettingsChange()" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white font-semibold" />
+                </div>
+              </div>
+              <div class="grid grid-cols-4 gap-1">
+                <button onclick="document.getElementById('splitColsInput').value=2;document.getElementById('splitRowsInput').value=1;onSplitSettingsChange();" class="py-0.5 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300">2×1 (2)</button>
+                <button onclick="document.getElementById('splitColsInput').value=2;document.getElementById('splitRowsInput').value=2;onSplitSettingsChange();" class="py-0.5 bg-fuchsia-500/20 hover:bg-fuchsia-500/30 border border-fuchsia-500/40 rounded text-[9px] text-fuchsia-300 font-bold">2×2 (4)</button>
+                <button onclick="document.getElementById('splitColsInput').value=3;document.getElementById('splitRowsInput').value=3;onSplitSettingsChange();" class="py-0.5 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300">3×3 (9)</button>
+                <button onclick="document.getElementById('splitColsInput').value=4;document.getElementById('splitRowsInput').value=4;onSplitSettingsChange();" class="py-0.5 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300">4×4 (16)</button>
+              </div>
+            </div>
+
+            <!-- Sistema de Unión / Encaje entre Conjuntos -->
+            <div class="pt-1.5 border-t border-slate-800 space-y-1.5">
+              <div class="flex items-center justify-between text-[11px]">
+                <span class="text-slate-300">Conector de unión:</span>
+                <select id="splitJointTypeSelect" onchange="onSplitSettingsChange()" class="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-[11px] text-fuchsia-300 font-semibold outline-none">
+                  <option value="dovetail" selected>⏢ Cola de Milano (Encaje)</option>
+                  <option value="tenon">▭ Espiga Rectangular</option>
+                  <option value="straight">∣ Corte Recto (A tope)</option>
+                </select>
+              </div>
+              <div class="flex items-center justify-between text-[11px]">
+                <span class="text-slate-400">Profundidad encaje (mm):</span>
+                <input type="number" id="splitJointDepthInput" value="6.0" min="2" max="35" step="0.5" onchange="onSplitSettingsChange()" class="w-16 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-fuchsia-300 font-semibold" />
+              </div>
+              <label class="flex items-center justify-between text-[11px] text-slate-300 cursor-pointer" title="Desplaza las pestañas de encaje entre capas pares e impares para reforzar el trabado vertical entre conjuntos">
+                <span>Alternar encaje en capas pares/impares</span>
+                <input type="checkbox" id="splitStaggerCheck" checked onchange="onSplitSettingsChange()" class="accent-fuchsia-500" />
+              </label>
+            </div>
+
+            <div id="splitSummaryBadge" class="text-[10px] text-fuchsia-200 bg-fuchsia-950/40 border border-fuchsia-500/30 rounded-lg p-2 text-center font-medium leading-snug">
+              Subdivisión activa (Conjuntos A1, A2, B1, B2...)
+            </div>
           </div>
         </div>
       </div>
@@ -340,6 +455,14 @@ input[type="range"] {
             <span id="explodeValLabel" class="text-sky-400 font-semibold">0%</span>
           </div>
           <input type="range" id="explodeSlider" min="0" max="200" value="0" oninput="onExplodeInput(this.value)" class="w-full" />
+        </div>
+
+        <div id="splitExplodeControlBox" class="hidden pt-1">
+          <div class="flex justify-between text-xs mb-1">
+            <span class="text-fuchsia-300 font-medium">Separar Conjuntos 3D (A1, A2...):</span>
+            <span id="splitExplodeValLabel" class="text-fuchsia-400 font-semibold">0%</span>
+          </div>
+          <input type="range" id="splitExplodeSlider" min="0" max="200" value="0" oninput="onSplitExplodeInput(this.value)" class="w-full accent-fuchsia-500" />
         </div>
 
         <div class="flex flex-col gap-1.5 pt-1">
@@ -674,6 +797,7 @@ input[type="range"] {
             <div class="absolute bottom-3 left-3 flex flex-wrap items-center gap-3 text-[11px] bg-slate-900/90 px-3 py-1.5 rounded-lg border border-slate-800 pointer-events-none">
               <span class="flex items-center gap-1 text-rose-400"><span class="w-2.5 h-0.5 bg-rose-500 inline-block"></span> Corte Exterior</span>
               <span class="flex items-center gap-1 text-sky-400"><span class="w-2.5 h-0.5 bg-sky-400 inline-block"></span> Huecos Internos</span>
+              <span id="legendSplitSeams" class="hidden items-center gap-1 text-fuchsia-300"><span class="w-2.5 h-2.5 rounded-sm border border-fuchsia-400 bg-fuchsia-500/20 inline-block"></span> Unión Modular (⏢ A1..D4)</span>
               <span id="legendPuzzleSlots" class="hidden items-center gap-1 text-amber-300"><span class="w-2.5 h-2.5 rounded-sm border border-amber-400 bg-amber-400/20 inline-block"></span> Ranuras Encaje (⊔ / ⊓)</span>
               <span id="legendHoldingTabs" class="hidden flex items-center gap-1 text-yellow-300"><span class="w-2.5 h-2.5 rounded-full border border-yellow-400 bg-yellow-400/30 inline-block"></span> Micro-uniones (Sin cortar)</span>
               <span id="legendNextGuide" class="flex items-center gap-1 text-amber-400"><span class="w-3.5 h-0.5 bg-amber-400 inline-block"></span> Guía Sup. (#N+1)</span>
@@ -1047,8 +1171,9 @@ input[type="range"] {
     </div>
   </div>
 
+<script>
 
-  <script>
+// === state.js ===
 /**
  * LayerStudio 3D - Global State & 3D Scene References
  * Estado reactivo centralizado de la aplicación y referencias de escena Three.js.
@@ -1109,6 +1234,19 @@ const state = {
   minIslandSizeMM: 10,         // Valor umbral en mm (o mm² si el criterio es área)
   minIslandCriteria: 'max_dim',// 'max_dim' | 'min_dim' | 'area'
   filteredIslandsCount: 0,     // Total de islas descartadas en el modelo actual
+  // Subdivisión Modular del Modelo en Partes / Conjuntos (Gran Formato)
+  splitModelEnabled: false,    // true = divide la figura en conjuntos/bloques modulares (ej. bloques de 30x30 cm para armar figuras de 60x60 o 120x120 cm)
+  splitMode: 'max_size',       // 'max_size' (según tamaño máx. de parte/tablero) | 'grid' (según cuadrícula manual Columnas x Filas)
+  splitMaxPartWidthMM: 300,    // Ancho máximo por conjunto/parte en mm (ej. 300 mm = 30 cm)
+  splitMaxPartHeightMM: 300,   // Alto máximo por conjunto/parte en mm (ej. 300 mm = 30 cm)
+  splitCols: 2,                // Nº de columnas de división en modo 'grid'
+  splitRows: 2,                // Nº de filas de división en modo 'grid'
+  splitJointType: 'dovetail',  // 'dovetail' (Cola de Milano / Puzzle ⏢) | 'tenon' (Espiga Rectangular ▭) | 'straight' (Corte Recto ∣)
+  splitJointDepthMM: 6.0,      // Profundidad de la pestaña de unión en mm
+  splitStaggerLayers: false,   // true = alterna (desfasa) las juntas entre capas pares e impares (aparejo tipo ladrillo)
+  splitExplodeFactor: 0,       // Separación visual 3D entre conjuntos/bloques (0% a 100%)
+  splitTotalPartsCount: 0,     // Total de sub-piezas generadas tras dividir en bloques
+  splitTotalJointsCount: 0,    // Total de conectores mecánicos (colas de milano/espigas) tallados
   // Configuración de Distribución en Tablero (Nesting de islas)
   nestingEnabled: false,
   boardWidthMM: 600,
@@ -1151,7 +1289,7 @@ let scene, camera, renderer, controls, raycaster, mouse;
 let sliceGroup3D, ghostMesh3D, gridHelper3D;
 
 
-
+// === viewer3d.js ===
 /**
  * LayerStudio 3D - 3D Viewport, Loaders & Dynamic Sizing
  * Motor 3D Three.js, importación STL/GLB/GLTF, modelos paramétricos y dimensionamiento mm/cm/m.
@@ -1479,7 +1617,7 @@ function onAxisDimChange(axis, valStr) {
   resetCamera3D();
 }
 
-
+// === slicer.js ===
 /**
  * LayerStudio 3D - Geometric Slicing Engine & Layer Guides
  * Intersección plano-malla X/Y/Z, filtro de islas pequeñas, extrusión 3D y guías de pegado (#N+1 / #N-1).
@@ -2081,6 +2219,393 @@ function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB) {
   return totalSlots;
 }
 
+// =========================================================================
+// SUBDIVISIÓN MODULAR 3D EN PARTES / CONJUNTOS (GRAN FORMATO)
+// =========================================================================
+
+// Devuelve las dimensiones 2D (ancho X y alto Y en el plano de corte) según el eje perpendicular a la lasca
+function getSlicePlaneSpan2D(sliceAxis) {
+  const ax = sliceAxis || state.axis;
+  if (ax === 'x') {
+    return { spanX: state.dimsMM.y || 100, spanY: state.dimsMM.z || 100, labelX: 'Y', labelY: 'Z' };
+  }
+  if (ax === 'y') {
+    return { spanX: state.dimsMM.x || 100, spanY: state.dimsMM.z || 100, labelX: 'X', labelY: 'Z' };
+  }
+  return { spanX: state.dimsMM.x || 100, spanY: state.dimsMM.y || 100, labelX: 'X', labelY: 'Y' };
+}
+
+// Calcula la cuadrícula de subdivisión 2D (columnas, filas y coordenadas de líneas de corte)
+function getSliceSplitGrid(sliceAxis, sliceIndex = 0) {
+  const { spanX, spanY, labelX, labelY } = getSlicePlaneSpan2D(sliceAxis);
+  let cols = 1;
+  let rows = 1;
+
+  if (state.splitModelEnabled) {
+    if (state.splitMode === 'grid') {
+      cols = Math.max(1, Math.min(12, parseInt(state.splitCols, 10) || 2));
+      rows = Math.max(1, Math.min(12, parseInt(state.splitRows, 10) || 2));
+    } else {
+      const maxW = Math.max(20, Number(state.splitMaxPartWidthMM) || 300);
+      const maxH = Math.max(20, Number(state.splitMaxPartHeightMM) || 300);
+      cols = Math.max(1, Math.min(12, Math.ceil((spanX - 0.05) / maxW)));
+      rows = Math.max(1, Math.min(12, Math.ceil((spanY - 0.05) / maxH)));
+    }
+  }
+
+  const minX = -spanX * 0.5;
+  const maxX = spanX * 0.5;
+  const minY = -spanY * 0.5;
+  const maxY = spanY * 0.5;
+  const partW = spanX / cols;
+  const partH = spanY / rows;
+
+  // Trabado alterno entre capas pares e impares (desplaza ligeramente la línea de unión para mayor rigidez estructural)
+  let staggerX = 0;
+  let staggerY = 0;
+  if (state.splitModelEnabled && state.splitStaggerLayers && state.constructionMode !== 'puzzle3d') {
+    const sign = (sliceIndex % 2 === 0) ? -1 : 1;
+    if (cols > 1) staggerX = sign * Math.min(10, partW * 0.1);
+    if (rows > 1) staggerY = sign * Math.min(10, partH * 0.1);
+  }
+
+  const xCuts = [];
+  for (let c = 1; c < cols; c++) {
+    xCuts.push(minX + c * partW + staggerX);
+  }
+  const yCuts = [];
+  for (let r = 1; r < rows; r++) {
+    yCuts.push(minY + r * partH + staggerY);
+  }
+
+  return {
+    cols,
+    rows,
+    totalParts: cols * rows,
+    spanX,
+    spanY,
+    minX,
+    maxX,
+    minY,
+    maxY,
+    partW,
+    partH,
+    xCuts,
+    yCuts,
+    labelX,
+    labelY
+  };
+}
+
+// Verifica si una caja delimitadora 2D está íntegramente contenida dentro del material sólido de la lasca
+function isBoxInsideLoopsSolid(minX, maxX, minY, maxY, loops) {
+  const samplePts = [
+    { x: minX, y: minY },
+    { x: maxX, y: minY },
+    { x: maxX, y: maxY },
+    { x: minX, y: maxY },
+    { x: (minX + maxX) * 0.5, y: (minY + maxY) * 0.5 },
+    { x: (minX + maxX) * 0.5, y: minY },
+    { x: (minX + maxX) * 0.5, y: maxY },
+    { x: minX, y: (minY + maxY) * 0.5 },
+    { x: maxX, y: (minY + maxY) * 0.5 }
+  ];
+  for (let i = 0; i < samplePts.length; i++) {
+    if (!isPointInLoopsSolid(samplePts[i], loops)) return false;
+  }
+  return true;
+}
+
+// Divide un conjunto de contornos 2D a lo largo de la recta x = cutVal o y = cutVal, insertando conectores cola de milano / espiga
+function splitLoopsAlongLine(loops, axis, cutVal, jointType, jointDepthMM) {
+  if (!loops || loops.length === 0) {
+    return { negLoops: [], posLoops: [], jointsCount: 0, seamPolylines: [] };
+  }
+  const eps = 1e-6;
+  const nudgedLoops = loops.map((l) => ({
+    points: l.points.map((p) => ({
+      x: axis === 'x' && Math.abs(p.x - cutVal) < eps ? (p.x >= cutVal ? cutVal + eps : cutVal - eps) : p.x,
+      y: axis === 'y' && Math.abs(p.y - cutVal) < eps ? (p.y >= cutVal ? cutVal + eps : cutVal - eps) : p.y
+    })),
+    isHole: l.isHole,
+    absArea: l.absArea,
+    sectorCol: l.sectorCol,
+    sectorRow: l.sectorRow,
+    sectorCode: l.sectorCode
+  }));
+
+  const negSegs = [];
+  const posSegs = [];
+  const crossCoords = [];
+
+  nudgedLoops.forEach((l) => {
+    const pts = l.points;
+    for (let i = 0, n = pts.length; i < n; i++) {
+      const a = pts[i];
+      const b = pts[(i + 1) % n];
+      const va = (axis === 'x' ? a.x : a.y) - cutVal;
+      const vb = (axis === 'x' ? b.x : b.y) - cutVal;
+
+      if (va < 0 && vb < 0) {
+        negSegs.push([a, b]);
+      } else if (va > 0 && vb > 0) {
+        posSegs.push([a, b]);
+      } else {
+        const t = va / (va - vb);
+        const ix = axis === 'x' ? cutVal : a.x + t * (b.x - a.x);
+        const iy = axis === 'y' ? cutVal : a.y + t * (b.y - a.y);
+        const sharedNeg = { x: ix, y: iy };
+        const sharedPos = { x: ix, y: iy };
+        crossCoords.push(axis === 'x' ? iy : ix);
+
+        if (va < 0) {
+          negSegs.push([a, sharedNeg]);
+          posSegs.push([sharedPos, b]);
+        } else {
+          posSegs.push([a, sharedPos]);
+          negSegs.push([sharedNeg, b]);
+        }
+      }
+    }
+  });
+
+  crossCoords.sort((a, b) => a - b);
+  let jointsCount = 0;
+  const seamPolylines = [];
+
+  for (let k = 0; k + 1 < crossCoords.length; k += 2) {
+    const c0 = crossCoords[k];
+    const c1 = crossCoords[k + 1];
+    const span = c1 - c0;
+    if (span < 1e-5) continue;
+
+    const midC = (c0 + c1) * 0.5;
+    const testPt = axis === 'x' ? { x: cutVal, y: midC } : { x: midC, y: cutVal };
+    if (!isPointInLoopsSolid(testPt, nudgedLoops)) continue;
+
+    const pStartNeg = axis === 'x' ? { x: cutVal, y: c0 } : { x: c0, y: cutVal };
+    const pEndNeg = axis === 'x' ? { x: cutVal, y: c1 } : { x: c1, y: cutVal };
+    const pStartPos = axis === 'x' ? { x: cutVal, y: c0 } : { x: c0, y: cutVal };
+    const pEndPos = axis === 'x' ? { x: cutVal, y: c1 } : { x: c1, y: cutVal };
+
+    const d = Math.min(Math.max(2.0, Number(jointDepthMM) || 6.0), span * 0.22);
+    const neckHalf = d * 0.65;
+    const headHalf = jointType === 'dovetail' ? d * 1.05 : neckHalf;
+
+    let canPlaceJoint = (jointType === 'dovetail' || jointType === 'tenon') && span >= Math.max(14, d * 3.6);
+    if (canPlaceJoint) {
+      const margin = 0.8;
+      const boxMinX = axis === 'x' ? cutVal - margin : midC - headHalf - margin;
+      const boxMaxX = axis === 'x' ? cutVal + d + margin : midC + headHalf + margin;
+      const boxMinY = axis === 'y' ? cutVal - margin : midC - headHalf - margin;
+      const boxMaxY = axis === 'y' ? cutVal + d + margin : midC + headHalf + margin;
+      if (!isBoxInsideLoopsSolid(boxMinX, boxMaxX, boxMinY, boxMaxY, nudgedLoops)) {
+        canPlaceJoint = false;
+      }
+    }
+
+    if (canPlaceJoint) {
+      jointsCount++;
+      const makePt = (uAlong, vPerp) => (
+        axis === 'x'
+          ? { x: cutVal + vPerp, y: uAlong }
+          : { x: uAlong, y: cutVal + vPerp }
+      );
+
+      // Si el tramo es largo (> 95 mm), colocamos 2 conectores simétricos para evitar giro en el plano
+      const numJointsInSpan = (span >= Math.max(95, d * 8.5)) ? 2 : 1;
+      const centers = numJointsInSpan === 2
+        ? [c0 + span * 0.3, c0 + span * 0.7]
+        : [midC];
+
+      // Verificar que todos los centros candidatos estén dentro del sólido
+      let allCentersValid = true;
+      if (numJointsInSpan === 2) {
+        for (let m = 0; m < centers.length; m++) {
+          const mc = centers[m];
+          const margin = 0.8;
+          const bMinX = axis === 'x' ? cutVal - margin : mc - headHalf - margin;
+          const bMaxX = axis === 'x' ? cutVal + d + margin : mc + headHalf + margin;
+          const bMinY = axis === 'y' ? cutVal - margin : mc - headHalf - margin;
+          const bMaxY = axis === 'y' ? cutVal + d + margin : mc + headHalf + margin;
+          if (!isBoxInsideLoopsSolid(bMinX, bMaxX, bMinY, bMaxY, nudgedLoops)) {
+            allCentersValid = false;
+            break;
+          }
+        }
+      }
+      const activeCenters = allCentersValid ? centers : [midC];
+      if (activeCenters.length === 2) jointsCount++; // segundo conector en el tramo
+
+      const chainNeg = [pStartNeg];
+      const chainPos = [pStartPos];
+      const seamPts = [{ x: pStartNeg.x, y: pStartNeg.y }];
+
+      for (let m = 0; m < activeCenters.length; m++) {
+        const mc = activeCenters[m];
+        const j1N = makePt(mc - neckHalf, 0);
+        const j2N = makePt(mc - headHalf, d);
+        const j3N = makePt(mc + headHalf, d);
+        const j4N = makePt(mc + neckHalf, 0);
+        chainNeg.push(j1N, j2N, j3N, j4N);
+
+        const j1P = makePt(mc - neckHalf, 0);
+        const j2P = makePt(mc - headHalf, d);
+        const j3P = makePt(mc + headHalf, d);
+        const j4P = makePt(mc + neckHalf, 0);
+        chainPos.push(j1P, j2P, j3P, j4P);
+
+        seamPts.push(
+          { x: j1N.x, y: j1N.y },
+          { x: j2N.x, y: j2N.y },
+          { x: j3N.x, y: j3N.y },
+          { x: j4N.x, y: j4N.y }
+        );
+      }
+
+      chainNeg.push(pEndNeg);
+      chainPos.push(pEndPos);
+      seamPts.push({ x: pEndNeg.x, y: pEndNeg.y });
+      seamPolylines.push(seamPts);
+
+      for (let m = 0; m < chainNeg.length - 1; m++) {
+        negSegs.push([chainNeg[m], chainNeg[m + 1]]);
+        posSegs.push([chainPos[m], chainPos[m + 1]]);
+      }
+    } else {
+      negSegs.push([pStartNeg, pEndNeg]);
+      posSegs.push([pStartPos, pEndPos]);
+      seamPolylines.push([
+        { x: pStartNeg.x, y: pStartNeg.y },
+        { x: pEndNeg.x, y: pEndNeg.y }
+      ]);
+    }
+  }
+
+  return {
+    negLoops: classifyLoopsOuterAndHoles(chainExactBooleanSegments(negSegs)),
+    posLoops: classifyLoopsOuterAndHoles(chainExactBooleanSegments(posSegs)),
+    jointsCount,
+    seamPolylines
+  };
+}
+
+// Aplica la subdivisión modular en bloques sobre todas las lascas actuales
+function applyModelSplitToExistingSlices(triggerRender = true) {
+  let totalJoints = 0;
+  const activeSectorsSet = new Set();
+
+  state.slices.forEach((slice) => {
+    if (!slice.unsplitLoops) {
+      slice.unsplitLoops = (slice.loops || []).slice();
+    }
+
+    if (!state.splitModelEnabled) {
+      slice.loops = slice.unsplitLoops.map((l) => ({
+        points: l.points,
+        absArea: l.absArea,
+        signedArea: l.signedArea,
+        isHole: l.isHole
+      }));
+      slice.splitGrid = null;
+      slice.splitCutSeams = [];
+      return;
+    }
+
+    const grid = getSliceSplitGrid(slice.sliceAxis || state.axis, slice.index);
+    slice.splitGrid = grid;
+    slice.splitCutSeams = [];
+
+    if (grid.cols <= 1 && grid.rows <= 1) {
+      slice.loops = slice.unsplitLoops.map((l) => ({
+        points: l.points,
+        absArea: l.absArea,
+        signedArea: l.signedArea,
+        isHole: l.isHole,
+        sectorCol: 0,
+        sectorRow: 0,
+        sectorCode: 'A1'
+      }));
+      if (slice.loops.some((l) => !l.isHole)) activeSectorsSet.add('A1');
+      return;
+    }
+
+    // 1. Subdividir a lo largo de las líneas verticales X
+    const xStrips = [{ col: 0, loops: slice.unsplitLoops.slice() }];
+    for (let c = 1; c < grid.cols; c++) {
+      const cutX = grid.xCuts[c - 1];
+      const currentStrip = xStrips[xStrips.length - 1];
+      const res = splitLoopsAlongLine(currentStrip.loops, 'x', cutX, state.splitJointType, state.splitJointDepthMM);
+      currentStrip.loops = res.negLoops;
+      xStrips.push({ col: c, loops: res.posLoops });
+      totalJoints += res.jointsCount;
+      res.seamPolylines.forEach((pl) => slice.splitCutSeams.push(pl));
+    }
+
+    // 2. Subdividir cada franja X a lo largo de las líneas horizontales Y
+    const finalLoops = [];
+    for (let c = 0; c < xStrips.length; c++) {
+      const strip = xStrips[c];
+      if (!strip.loops || strip.loops.length === 0) continue;
+
+      const yCells = [{ row: 0, loops: strip.loops }];
+      for (let r = 1; r < grid.rows; r++) {
+        const cutY = grid.yCuts[r - 1];
+        const currentCell = yCells[yCells.length - 1];
+        const res = splitLoopsAlongLine(currentCell.loops, 'y', cutY, state.splitJointType, state.splitJointDepthMM);
+        currentCell.loops = res.negLoops;
+        yCells.push({ row: r, loops: res.posLoops });
+        totalJoints += res.jointsCount;
+        res.seamPolylines.forEach((pl) => slice.splitCutSeams.push(pl));
+      }
+
+      for (let r = 0; r < yCells.length; r++) {
+        const cell = yCells[r];
+        if (!cell.loops || cell.loops.length === 0) continue;
+        // Etiqueta de sector: Fila superior = A, B, C... (invertimos índice Y para que A1 sea arriba-izquierda en el visor 2D)
+        const displayRow = (grid.rows - 1) - cell.row;
+        const rowLetter = String.fromCharCode(65 + Math.max(0, Math.min(25, displayRow)));
+        const sectorCode = rowLetter + (strip.col + 1);
+
+        let hasOuter = false;
+        cell.loops.forEach((l) => {
+          if (l.absArea < 0.04) return;
+          if (!l.isHole) hasOuter = true;
+          finalLoops.push({
+            points: l.points,
+            absArea: l.absArea,
+            signedArea: l.signedArea,
+            isHole: l.isHole,
+            sectorCol: strip.col,
+            sectorRow: displayRow,
+            sectorCode: sectorCode
+          });
+        });
+        if (hasOuter) activeSectorsSet.add(sectorCode);
+      }
+    }
+
+    slice.loops = finalLoops;
+  });
+
+  const mainGrid = getSliceSplitGrid(state.axis, 0);
+  state.splitTotalPartsCount = state.splitModelEnabled ? mainGrid.totalParts : 1;
+  state.splitTotalJointsCount = state.splitModelEnabled ? totalJoints : 0;
+  state.splitActiveSectorsCount = state.splitModelEnabled ? activeSectorsSet.size : 1;
+
+  syncSplitModelUI();
+
+  if (triggerRender) {
+    build3DSlicesMesh();
+    if (state.nestingEnabled) {
+      recomputeBoardNesting();
+    }
+    renderSliceStripUI();
+    update2DInspectorHeader();
+    render2DSlice();
+  }
+}
+
 function rebuildGhostAndSlices() {
   if (!state.baseVertices) return;
   const verts = getScaledTriangles();
@@ -2165,6 +2690,7 @@ function rebuildGhostAndSlices() {
 
     state.thickness = state.puzzleMaterialThicknessMM;
     state.slices = slicesA.concat(slicesB);
+    state.slices.forEach((s) => { s.unsplitLoops = (s.loops || []).slice(); });
     state.filteredIslandsCount = totalRemovedIslands;
     updateFilteredIslandsUI();
     syncConstructionModeUI();
@@ -2199,6 +2725,7 @@ function rebuildGhostAndSlices() {
         puzzleCode: null,
         selected: true,
         rawLoops: rawLoops,
+        unsplitLoops: filteredRes.loops.slice(),
         loops: filteredRes.loops,
         slots: []
       });
@@ -2208,6 +2735,8 @@ function rebuildGhostAndSlices() {
     state.filteredIslandsCount = totalRemovedIslands;
     updateFilteredIslandsUI();
   }
+
+  applyModelSplitToExistingSlices(false);
 
   if (state.activeSliceIndex >= state.slices.length) {
     state.activeSliceIndex = Math.max(0, state.slices.length - 1);
@@ -2298,6 +2827,7 @@ function applyIslandFilterToExistingSlices() {
     const base = slice.rawLoops || slice.loops || [];
     const res = filterLoopsByMinIslandSize(base);
     slice.baseLoops = res.loops;
+    slice.unsplitLoops = res.loops.slice();
     slice.loops = res.loops;
     totalRemoved += res.removedCount;
   });
@@ -2307,8 +2837,11 @@ function applyIslandFilterToExistingSlices() {
     const slicesA = state.slices.filter((s) => s.puzzleSeries === 'A');
     const slicesB = state.slices.filter((s) => s.puzzleSeries === 'B');
     carveInterlockingPuzzleSlots(slicesA, slicesB, cfg.axisA, cfg.axisB);
+    state.slices.forEach((s) => { s.unsplitLoops = (s.loops || []).slice(); });
     syncConstructionModeUI();
   }
+
+  applyModelSplitToExistingSlices(false);
 
   state.filteredIslandsCount = totalRemoved;
   updateFilteredIslandsUI();
@@ -2556,9 +3089,10 @@ function classifyLoopsOuterAndHoles(rawLoops) {
 }
 
 // =========================================================================
-// CONSTRUCCIÓN DE LASCAS 3D EXTRUIDAS (APILADO 1 EJE Y PUZZLE 3D 2 EJES)
+// CONSTRUCCIÓN DE LASCAS 3D EXTRUIDAS (APILADO 1 EJE, PUZZLE 3D Y BLOQUES MODULARES)
 // =========================================================================
 function build3DSlicesMesh() {
+  if (!sliceGroup3D || typeof THREE === 'undefined') return;
   while (sliceGroup3D.children.length > 0) {
     const m = sliceGroup3D.children.pop();
     if (m.geometry) m.geometry.dispose();
@@ -2574,6 +3108,103 @@ function build3DSlicesMesh() {
     const outers = slice.loops.filter((l) => !l.isHole);
     const holes = slice.loops.filter((l) => l.isHole);
     if (outers.length === 0) return;
+
+    const ax = slice.sliceAxis || state.axis;
+    let baseCol;
+    if (isPuzzle) {
+      if (slice.puzzleSeries === 'A') {
+        const hueA = 0.54 - ((slice.seriesIndex || 0) / Math.max(1, state.puzzleCountA - 1)) * 0.08;
+        baseCol = new THREE.Color().setHSL(hueA, 0.80, 0.50);
+      } else {
+        const hueB = 0.11 - ((slice.seriesIndex || 0) / Math.max(1, state.puzzleCountB - 1)) * 0.05;
+        baseCol = new THREE.Color().setHSL(hueB, 0.85, 0.54);
+      }
+    } else {
+      const hue = 0.55 - (idx / Math.max(1, state.slices.length - 1)) * 0.14;
+      baseCol = new THREE.Color().setHSL(hue, 0.75, 0.52);
+    }
+
+    const isSplitMulti = Boolean(state.splitModelEnabled && slice.splitGrid && slice.splitGrid.totalParts > 1);
+
+    if (isSplitMulti) {
+      // Agrupar contornos exteriores por sector (A1, A2, B1, B2...) para poder separarlos en 3D y distinguirlos
+      const sectorMap = new Map();
+      outers.forEach((outer) => {
+        const key = outer.sectorCode || 'A1';
+        if (!sectorMap.has(key)) {
+          sectorMap.set(key, {
+            sectorCode: key,
+            sectorCol: outer.sectorCol || 0,
+            sectorRow: outer.sectorRow || 0,
+            outers: []
+          });
+        }
+        sectorMap.get(key).outers.push(outer);
+      });
+
+      sectorMap.forEach((secGroup) => {
+        const shapes = secGroup.outers.map((outer) => {
+          const sh = new THREE.Shape();
+          outer.points.forEach((pt, i) => {
+            if (i === 0) sh.moveTo(pt.x, pt.y);
+            else sh.lineTo(pt.x, pt.y);
+          });
+          sh.closePath();
+
+          holes.forEach((h) => {
+            if (isPointInPolygon(h.points[0], outer.points)) {
+              const path = new THREE.Path();
+              h.points.forEach((pt, i) => {
+                if (i === 0) path.moveTo(pt.x, pt.y);
+                else path.lineTo(pt.x, pt.y);
+              });
+              path.closePath();
+              sh.holes.push(path);
+            }
+          });
+          return sh;
+        });
+
+        const geom = new THREE.ExtrudeGeometry(shapes, { depth: extrudeDepth, bevelEnabled: false });
+        geom.translate(0, 0, -extrudeDepth / 2);
+
+        if (ax === 'x') {
+          geom.rotateY(Math.PI / 2);
+          geom.rotateZ(Math.PI / 2);
+        } else if (ax === 'y') {
+          geom.rotateX(Math.PI / 2);
+        }
+
+        const secCol = baseCol.clone();
+        const parity = (secGroup.sectorCol + secGroup.sectorRow) % 2;
+        if (parity === 1) {
+          secCol.offsetHSL(0.035, 0.04, 0.07);
+        }
+
+        const mat = new THREE.MeshStandardMaterial({
+          color: secCol,
+          roughness: 0.35,
+          metalness: 0.1,
+          transparent: true,
+          opacity: slice.selected ? 0.95 : 0.2
+        });
+
+        const mesh = new THREE.Mesh(geom, mat);
+        mesh.userData = {
+          sliceIndex: idx,
+          baseColor: secCol.getHex(),
+          sectorCode: secGroup.sectorCode,
+          sectorCol: secGroup.sectorCol,
+          sectorRow: secGroup.sectorRow,
+          gridCols: slice.splitGrid.cols,
+          gridRows: slice.splitGrid.rows,
+          partW: slice.splitGrid.partW,
+          partH: slice.splitGrid.partH
+        };
+        sliceGroup3D.add(mesh);
+      });
+      return;
+    }
 
     const shapes = outers.map((outer) => {
       const sh = new THREE.Shape();
@@ -2600,7 +3231,6 @@ function build3DSlicesMesh() {
     const geom = new THREE.ExtrudeGeometry(shapes, { depth: extrudeDepth, bevelEnabled: false });
     geom.translate(0, 0, -extrudeDepth / 2);
 
-    const ax = slice.sliceAxis || state.axis;
     if (ax === 'x') {
       geom.rotateY(Math.PI / 2);
       geom.rotateZ(Math.PI / 2);
@@ -2608,22 +3238,8 @@ function build3DSlicesMesh() {
       geom.rotateX(Math.PI / 2);
     }
 
-    let col;
-    if (isPuzzle) {
-      if (slice.puzzleSeries === 'A') {
-        const hueA = 0.54 - ((slice.seriesIndex || 0) / Math.max(1, state.puzzleCountA - 1)) * 0.08;
-        col = new THREE.Color().setHSL(hueA, 0.80, 0.50);
-      } else {
-        const hueB = 0.11 - ((slice.seriesIndex || 0) / Math.max(1, state.puzzleCountB - 1)) * 0.05;
-        col = new THREE.Color().setHSL(hueB, 0.85, 0.54);
-      }
-    } else {
-      const hue = 0.55 - (idx / Math.max(1, state.slices.length - 1)) * 0.14;
-      col = new THREE.Color().setHSL(hue, 0.75, 0.52);
-    }
-
     const mat = new THREE.MeshStandardMaterial({
-      color: col,
+      color: baseCol,
       roughness: 0.35,
       metalness: 0.1,
       transparent: true,
@@ -2631,7 +3247,7 @@ function build3DSlicesMesh() {
     });
 
     const mesh = new THREE.Mesh(geom, mat);
-    mesh.userData = { sliceIndex: idx, baseColor: col.getHex() };
+    mesh.userData = { sliceIndex: idx, baseColor: baseCol.getHex() };
     sliceGroup3D.add(mesh);
   });
 
@@ -2639,7 +3255,9 @@ function build3DSlicesMesh() {
 }
 
 function update3DSlicesTransforms() {
+  if (!sliceGroup3D) return;
   const exp = state.explodeFactor / 100;
+  const splitExp = (state.splitExplodeFactor || 0) / 100;
   const isPuzzle = state.constructionMode === 'puzzle3d';
   const puzzleCfg = isPuzzle ? getPuzzleAxesConfig() : null;
 
@@ -2649,13 +3267,14 @@ function update3DSlicesTransforms() {
     if (!slice) return;
 
     const ax = slice.sliceAxis || state.axis;
+    let px = 0, py = 0, pz = 0;
+
     if (isPuzzle && puzzleCfg) {
       // En modo Puzzle 3D, al aumentar Explosión 3D la Serie B se desliza a lo largo del eje común de encaje saliendo de las ranuras de la Serie A
       const spreadCoord = slice.coord * (1 + exp * 0.3);
       const liftSpan = state.dimsMM[puzzleCfg.axisCommon] || 100;
       const slideOffset = (slice.puzzleSeries === 'B' ? 1 : -0.15) * exp * liftSpan * 0.65;
 
-      let px = 0, py = 0, pz = 0;
       if (ax === 'x') px = spreadCoord;
       else if (ax === 'y') py = spreadCoord;
       else pz = spreadCoord;
@@ -2663,16 +3282,39 @@ function update3DSlicesTransforms() {
       if (puzzleCfg.axisCommon === 'x') px += slideOffset;
       else if (puzzleCfg.axisCommon === 'y') py += slideOffset;
       else pz += slideOffset;
-
-      mesh.position.set(px, py, pz);
     } else {
       const offset = slice.coord * (1 + exp * 1.4);
-      mesh.position.set(
-        ax === 'x' ? offset : 0,
-        ax === 'y' ? offset : 0,
-        ax === 'z' ? offset : 0
-      );
+      if (ax === 'x') px = offset;
+      else if (ax === 'y') py = offset;
+      else pz = offset;
     }
+
+    // Separación lateral entre bloques modulares (A1, A2, B1, B2...) si está activa la subdivisión
+    if (state.splitModelEnabled && mesh.userData.gridCols && (mesh.userData.gridCols > 1 || mesh.userData.gridRows > 1) && splitExp > 0) {
+      const gCols = mesh.userData.gridCols;
+      const gRows = mesh.userData.gridRows;
+      const sCol = mesh.userData.sectorCol || 0;
+      const sRow = mesh.userData.sectorRow || 0;
+      const yCellIdx = (gRows - 1) - sRow;
+
+      const maxSepX = Math.max(25, (mesh.userData.partW || 120) * 0.42);
+      const maxSepY = Math.max(25, (mesh.userData.partH || 120) * 0.42);
+      const sepX2D = (sCol - (gCols - 1) * 0.5) * maxSepX * splitExp;
+      const sepY2D = (yCellIdx - (gRows - 1) * 0.5) * maxSepY * splitExp;
+
+      if (ax === 'z') {
+        px += sepX2D;
+        py += sepY2D;
+      } else if (ax === 'y') {
+        px += sepX2D;
+        pz += sepY2D;
+      } else {
+        py += sepX2D;
+        pz += sepY2D;
+      }
+    }
+
+    mesh.position.set(px, py, pz);
 
     const isActive = idx === state.activeSliceIndex;
     if (state.isolateCurrent) {
@@ -2799,10 +3441,11 @@ function getSvgDashAttr(style) {
 
 // Determina si un punto 2D está dentro del material sólido de la lasca (regla par-impar)
 function isPointOnSliceMaterial(pt, slice) {
-  if (!slice || !slice.loops) return false;
+  const refLoops = slice ? (slice.unsplitLoops || slice.loops) : null;
+  if (!refLoops) return false;
   let insideCount = 0;
-  for (let i = 0; i < slice.loops.length; i++) {
-    const poly = slice.loops[i].points;
+  for (let i = 0; i < refLoops.length; i++) {
+    const poly = refLoops[i].points;
     if (poly && poly.length >= 3 && isPointInPolygon(pt, poly)) {
       insideCount++;
     }
@@ -2825,7 +3468,9 @@ function intersectSegmentParam(a, b, c, d) {
 
 // Extrae polilíneas continuas de la guía (recortadas al contorno de la lasca actual si está activo)
 function getGuidePolylinesForSlice(slice, guideSlice) {
-  if (!guideSlice || !guideSlice.loops) return [];
+  const guideLoops = guideSlice ? (guideSlice.unsplitLoops || guideSlice.loops) : null;
+  if (!guideLoops) return [];
+  const sliceLoops = slice ? (slice.unsplitLoops || slice.loops || []) : [];
   const allPolylines = [];
   const connectTolSq = 1e-6;
 
@@ -2835,7 +3480,7 @@ function getGuidePolylinesForSlice(slice, guideSlice) {
     return (dx * dx + dy * dy) <= connectTolSq;
   };
 
-  guideSlice.loops.forEach((loop) => {
+  guideLoops.forEach((loop) => {
     if (state.guideOnlyOuter && loop.isHole) return;
     const pts = loop.points;
     if (!pts || pts.length < 3) return;
@@ -2869,7 +3514,7 @@ function getGuidePolylinesForSlice(slice, guideSlice) {
 
       // Buscar intersecciones del segmento guía con los bordes de la lasca actual
       const tValues = [0, 1];
-      (slice.loops || []).forEach((sLoop) => {
+      sliceLoops.forEach((sLoop) => {
         const sPts = sLoop.points;
         if (!sPts || sPts.length < 3) return;
         for (let j = 0, m = sPts.length; j < m; j++) {
@@ -3180,8 +3825,208 @@ function setPresetTabConfig(count, widthMM) {
   render2DSlice();
 }
 
+// =========================================================================
+// CONTROLADORES UI DE SUBDIVISIÓN MODULAR 3D (GRAN FORMATO)
+// =========================================================================
+function syncSplitModelUI() {
+  const chkSidebar = document.getElementById('splitModelEnabledCheck');
+  const panel = document.getElementById('splitModelConfigPanel');
+  const legendSeams = document.getElementById('legendSplitSeams');
+  const splitExplodeBox = document.getElementById('splitExplodeControlBox');
+
+  if (chkSidebar) chkSidebar.checked = state.splitModelEnabled;
+  if (panel) panel.classList.toggle('hidden', !state.splitModelEnabled);
+  if (legendSeams) {
+    legendSeams.classList.toggle('hidden', !state.splitModelEnabled);
+    legendSeams.classList.toggle('flex', state.splitModelEnabled);
+  }
+  if (splitExplodeBox) splitExplodeBox.classList.toggle('hidden', !state.splitModelEnabled);
+
+  const btnMaxSize = document.getElementById('btnSplitModeMaxSize');
+  const btnGrid = document.getElementById('btnSplitModeGrid');
+  const boxMaxSize = document.getElementById('splitMaxSizeBox');
+  const boxGrid = document.getElementById('splitGridBox');
+
+  if (btnMaxSize && btnGrid) {
+    if (state.splitMode === 'max_size') {
+      btnMaxSize.className = 'py-1 px-2 rounded bg-fuchsia-500/20 border border-fuchsia-500 text-fuchsia-300 text-[11px] font-semibold';
+      btnGrid.className = 'py-1 px-2 rounded bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-semibold';
+    } else {
+      btnGrid.className = 'py-1 px-2 rounded bg-fuchsia-500/20 border border-fuchsia-500 text-fuchsia-300 text-[11px] font-semibold';
+      btnMaxSize.className = 'py-1 px-2 rounded bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-semibold';
+    }
+  }
+  if (boxMaxSize) boxMaxSize.classList.toggle('hidden', state.splitMode !== 'max_size');
+  if (boxGrid) boxGrid.classList.toggle('hidden', state.splitMode !== 'grid');
+
+  const wInput = document.getElementById('splitMaxPartWidthInput');
+  const hInput = document.getElementById('splitMaxPartHeightInput');
+  const colsInput = document.getElementById('splitColsInput');
+  const rowsInput = document.getElementById('splitRowsInput');
+  const jointSelect = document.getElementById('splitJointTypeSelect');
+  const depthInput = document.getElementById('splitJointDepthInput');
+  const staggerCheck = document.getElementById('splitStaggerCheck');
+  const expSlider = document.getElementById('splitExplodeSlider');
+  const expLabel = document.getElementById('splitExplodeValLabel');
+
+  if (wInput) wInput.value = state.splitMaxPartWidthMM;
+  if (hInput) hInput.value = state.splitMaxPartHeightMM;
+  if (colsInput) colsInput.value = state.splitCols;
+  if (rowsInput) rowsInput.value = state.splitRows;
+  if (jointSelect) jointSelect.value = state.splitJointType;
+  if (depthInput) depthInput.value = state.splitJointDepthMM;
+  if (staggerCheck) staggerCheck.checked = state.splitStaggerLayers;
+  if (expSlider) expSlider.value = state.splitExplodeFactor;
+  if (expLabel) expLabel.textContent = state.splitExplodeFactor + '%';
+
+  // Actualizar textos de botones rápidos de múltiplos (p. ej. 2×2 = 60×60 cm, 3×3 = 90×90 cm, 4×4 = 120×120 cm)
+  const wCm = (state.splitMaxPartWidthMM / 10);
+  const hCm = (state.splitMaxPartHeightMM / 10);
+  const b2 = document.getElementById('splitScaleBtn_2x2');
+  const b3 = document.getElementById('splitScaleBtn_3x3');
+  const b4 = document.getElementById('splitScaleBtn_4x4');
+  if (b2) b2.textContent = '2×2 (' + (wCm * 2).toFixed(0) + '×' + (hCm * 2).toFixed(0) + ' cm)';
+  if (b3) b3.textContent = '3×3 (' + (wCm * 3).toFixed(0) + '×' + (hCm * 3).toFixed(0) + ' cm)';
+  if (b4) b4.textContent = '4×4 (' + (wCm * 4).toFixed(0) + '×' + (hCm * 4).toFixed(0) + ' cm)';
+
+  const badge = document.getElementById('splitSummaryBadge');
+  if (badge) {
+    if (!state.splitModelEnabled) {
+      badge.textContent = 'Subdivisión desactivada (1 pieza entera por capa)';
+    } else {
+      const grid = getSliceSplitGrid(state.axis, 0);
+      const figWCm = (grid.spanX / 10).toFixed(1);
+      const figHCm = (grid.spanY / 10).toFixed(1);
+      const partWCm = (grid.partW / 10).toFixed(1);
+      const partHCm = (grid.partH / 10).toFixed(1);
+      const jointLabel = state.splitJointType === 'dovetail'
+        ? 'cola de milano ⏢'
+        : (state.splitJointType === 'tenon' ? 'espiga ▭' : 'corte recto ∣');
+      if (grid.totalParts <= 1) {
+        badge.textContent = 'La figura (' + figWCm + '×' + figHCm + ' cm) cabe en 1 bloque de ' + wCm.toFixed(0) + '×' + hCm.toFixed(0) + ' cm. Pulsa 2×2 o 4×4 arriba para Gran Formato.';
+      } else {
+        const lastSector = String.fromCharCode(65 + grid.rows - 1) + grid.cols;
+        badge.textContent = '🧩 Figura ' + figWCm + '×' + figHCm + ' cm → ' + grid.cols + '×' + grid.rows + ' (' + grid.totalParts + ' conjuntos A1..' + lastSector + ' de ' + partWCm + '×' + partHCm + ' cm · ' + jointLabel + ')';
+      }
+    }
+  }
+}
+
+function setSplitModelEnabled(val) {
+  state.splitModelEnabled = Boolean(val);
+  if (state.splitModelEnabled && state.splitMode === 'max_size') {
+    const { spanX, spanY } = getSlicePlaneSpan2D(state.axis);
+    if (spanX <= state.splitMaxPartWidthMM + 0.1 && spanY <= state.splitMaxPartHeightMM + 0.1) {
+      // Si el modelo actual es menor que el bloque máximo (ej. 12 cm vs 30 cm), escalamos automáticamente a 2×2 conjuntos (ej. 60×60 cm)
+      scaleModelToSplitMultiple(2, 2);
+      return;
+    }
+  }
+  applyModelSplitToExistingSlices(true);
+}
+
+function setSplitMode(mode) {
+  state.splitMode = mode === 'grid' ? 'grid' : 'max_size';
+  applyModelSplitToExistingSlices(true);
+}
+
+function onSplitSettingsChange() {
+  const wInput = document.getElementById('splitMaxPartWidthInput');
+  const hInput = document.getElementById('splitMaxPartHeightInput');
+  const colsInput = document.getElementById('splitColsInput');
+  const rowsInput = document.getElementById('splitRowsInput');
+  const jointSelect = document.getElementById('splitJointTypeSelect');
+  const depthInput = document.getElementById('splitJointDepthInput');
+  const staggerCheck = document.getElementById('splitStaggerCheck');
+
+  if (wInput) state.splitMaxPartWidthMM = Math.max(20, Math.min(3000, parseFloat(wInput.value) || 300));
+  if (hInput) state.splitMaxPartHeightMM = Math.max(20, Math.min(3000, parseFloat(hInput.value) || 300));
+  if (colsInput) state.splitCols = Math.max(1, Math.min(12, parseInt(colsInput.value, 10) || 2));
+  if (rowsInput) state.splitRows = Math.max(1, Math.min(12, parseInt(rowsInput.value, 10) || 2));
+  if (jointSelect) state.splitJointType = jointSelect.value;
+  if (depthInput) state.splitJointDepthMM = Math.max(2, Math.min(35, parseFloat(depthInput.value) || 6.0));
+  if (staggerCheck) state.splitStaggerLayers = Boolean(staggerCheck.checked);
+
+  applyModelSplitToExistingSlices(true);
+}
+
+function setSplitPartPresetMM(wMM, hMM) {
+  state.splitModelEnabled = true;
+  state.splitMode = 'max_size';
+  state.splitMaxPartWidthMM = wMM;
+  state.splitMaxPartHeightMM = hMM;
+  applyModelSplitToExistingSlices(true);
+}
+
+function syncSplitWithBoardSize() {
+  state.splitModelEnabled = true;
+  state.splitMode = 'max_size';
+  const usableW = Math.max(40, Math.round(state.boardWidthMM - state.boardMarginMM * 2));
+  const usableH = Math.max(40, Math.round(state.boardHeightMM - state.boardMarginMM * 2));
+  state.splitMaxPartWidthMM = usableW;
+  state.splitMaxPartHeightMM = usableH;
+  applyModelSplitToExistingSlices(true);
+}
+
+function scaleModelToSplitMultiple(multCols, multRows) {
+  const c = Math.max(1, parseInt(multCols, 10) || 2);
+  const r = Math.max(1, parseInt(multRows, 10) || 2);
+  state.splitModelEnabled = true;
+  state.splitMode = 'max_size';
+
+  const targetW = c * state.splitMaxPartWidthMM;
+  const targetH = r * state.splitMaxPartHeightMM;
+  const ax = state.axis;
+  const { spanX, spanY } = getSlicePlaneSpan2D(ax);
+
+  const lockEl = document.getElementById('lockAspectCheckbox');
+  const locked = lockEl ? lockEl.checked : true;
+
+  if (locked) {
+    const curPlanarMax = Math.max(spanX, spanY, 0.001);
+    const desiredPlanarMax = Math.max(targetW, targetH);
+    const ratio = desiredPlanarMax / curPlanarMax;
+    state.dimsMM.x = Number(Math.max(1, state.dimsMM.x * ratio).toFixed(2));
+    state.dimsMM.y = Number(Math.max(1, state.dimsMM.y * ratio).toFixed(2));
+    state.dimsMM.z = Number(Math.max(1, state.dimsMM.z * ratio).toFixed(2));
+  } else {
+    if (ax === 'z') {
+      state.dimsMM.x = targetW;
+      state.dimsMM.y = targetH;
+    } else if (ax === 'y') {
+      state.dimsMM.x = targetW;
+      state.dimsMM.z = targetH;
+    } else {
+      state.dimsMM.y = targetW;
+      state.dimsMM.z = targetH;
+    }
+  }
+
+  if (typeof syncDimensionInputsUI === 'function') syncDimensionInputsUI();
+  rebuildGhostAndSlices();
+  if (typeof resetCamera3D === 'function') resetCamera3D();
+}
+
+function onSplitExplodeInput(val) {
+  state.splitExplodeFactor = parseFloat(val) || 0;
+  const lbl = document.getElementById('splitExplodeValLabel');
+  if (lbl) lbl.textContent = state.splitExplodeFactor + '%';
+  update3DSlicesTransforms();
+}
+
+if (typeof window !== 'undefined') {
+  window.setSplitModelEnabled = setSplitModelEnabled;
+  window.setSplitMode = setSplitMode;
+  window.onSplitSettingsChange = onSplitSettingsChange;
+  window.setSplitPartPresetMM = setSplitPartPresetMM;
+  window.syncSplitWithBoardSize = syncSplitWithBoardSize;
+  window.scaleModelToSplitMultiple = scaleModelToSplitMultiple;
+  window.onSplitExplodeInput = onSplitExplodeInput;
+}
 
 
+
+// === nesting.js ===
 /**
  * LayerStudio 3D - 2D Board Nesting Engine (MaxRects)
  * Empaquetado automático multi-tablero, aprovechamiento de huecos y encaje geométrico de texto por isla.
@@ -3388,7 +4233,8 @@ function isPointInIslandMaterial(pt, outerPts, holeLoops) {
 
 // Recorta las polilíneas de una lasca adyacente (superior o inferior) exclusivamente dentro de una isla
 function getGuidePolylinesForIsland(outerPts, holeLoops, guideSlice) {
-  if (!guideSlice || !guideSlice.loops) return [];
+  const guideLoops = guideSlice ? (guideSlice.unsplitLoops || guideSlice.loops) : null;
+  if (!guideLoops) return [];
   const allPolylines = [];
   const connectTolSq = 1e-6;
   const boundaryLoops = [{ points: outerPts }].concat(holeLoops || []);
@@ -3399,7 +4245,7 @@ function getGuidePolylinesForIsland(outerPts, holeLoops, guideSlice) {
     return (dx * dx + dy * dy) <= connectTolSq;
   };
 
-  guideSlice.loops.forEach((loop) => {
+  guideLoops.forEach((loop) => {
     if (state.guideOnlyOuter && loop.isHole) return;
     const pts = loop.points;
     if (!pts || pts.length < 3) return;
@@ -3569,9 +4415,13 @@ function getIslandTextLineOptions(item) {
     : ('#' + (item.sliceIndex + 1));
 
   if (state.nestEngraveSliceNum) {
-    numPart = item.totalIslandsInSlice > 1
-      ? baseCode + '.' + (item.islandIdxInSlice + 1)
-      : baseCode;
+    if (item.customCode) {
+      numPart = item.customCode;
+    } else {
+      numPart = item.totalIslandsInSlice > 1
+        ? baseCode + '.' + (item.islandIdxInSlice + 1)
+        : baseCode;
+    }
   }
   if (state.nestEngraveGuideType) {
     if (state.constructionMode === 'puzzle3d' || item.puzzleSeries || (sliceRef && sliceRef.puzzleSeries)) {
@@ -3777,6 +4627,19 @@ function extractIslandsFromSlices(targetSlices) {
     const prevSlice = (!isPuzzle && idx - 1 >= 0) ? state.slices[idx - 1] : null;
     const sliceRods = getAlignmentHoles2D(slice);
 
+    const isSplitMulti = Boolean(state.splitModelEnabled && slice.splitGrid && slice.splitGrid.totalParts > 1);
+    const baseCode = slice.puzzleCode ? slice.puzzleCode : ('#' + (idx + 1));
+
+    // Contar cuántas islas hay por cada sectorCode en esta lasca para numerar #1-A1 o #1-A1.1
+    const sectorTotalCounts = {};
+    const sectorSeenCounts = {};
+    if (isSplitMulti) {
+      outers.forEach((o) => {
+        const sc = o.sectorCode || 'A1';
+        sectorTotalCounts[sc] = (sectorTotalCounts[sc] || 0) + 1;
+      });
+    }
+
     outers.forEach((outer, oIdx) => {
       // Asignar solo los huecos que pertenecen directamente a esta isla exterior
       const islandHoles = holes.filter((h) => {
@@ -3808,12 +4671,25 @@ function extractIslandsFromSlices(targetSlices) {
       const upperPolys = nextSlice ? getGuidePolylinesForIsland(outer.points, islandHoles, nextSlice) : [];
       const lowerPolys = prevSlice ? getGuidePolylinesForIsland(outer.points, islandHoles, prevSlice) : [];
 
+      let customCode = null;
+      if (isSplitMulti && outer.sectorCode) {
+        const sc = outer.sectorCode;
+        sectorSeenCounts[sc] = (sectorSeenCounts[sc] || 0) + 1;
+        customCode = sectorTotalCounts[sc] > 1
+          ? (baseCode + '-' + sc + '.' + sectorSeenCounts[sc])
+          : (baseCode + '-' + sc);
+      }
+
       const itemObj = {
         sliceIndex: idx,
         puzzleCode: slice.puzzleCode || null,
         puzzleSeries: slice.puzzleSeries || null,
         sliceAxis: slice.sliceAxis || state.axis,
         puzzleSlotsCount: slice.puzzleSlots ? slice.puzzleSlots.length : 0,
+        sectorCode: outer.sectorCode || null,
+        sectorCol: typeof outer.sectorCol === 'number' ? outer.sectorCol : null,
+        sectorRow: typeof outer.sectorRow === 'number' ? outer.sectorRow : null,
+        customCode: customCode,
         islandIdxInSlice: oIdx,
         totalIslandsInSlice: outers.length,
         outerPoints: outer.points,
@@ -4446,10 +5322,13 @@ function update2DInspectorHeader() {
     const slotsStr = (state.constructionMode === 'puzzle3d' && slice.puzzleSlots)
       ? (' | Ranuras de encaje: ' + slice.puzzleSlots.length)
       : '';
+    const splitStr = (state.splitModelEnabled && slice.splitGrid && slice.splitGrid.totalParts > 1)
+      ? (' | 🧩 Conjuntos: ' + slice.splitGrid.cols + '×' + slice.splitGrid.rows + ' (' + (slice.splitGrid.partW / f).toFixed(dec) + '×' + (slice.splitGrid.partH / f).toFixed(dec) + ' ' + state.unit + ')')
+      : '';
     document.getElementById('slice2DStats').textContent =
       'Corte: ' + (b.width / f).toFixed(dec) + ' × ' + (b.height / f).toFixed(dec) + ' ' + state.unit +
       ' | Doc SVG (Pieza): ' + (docB.width / f).toFixed(dec) + ' × ' + (docB.height / f).toFixed(dec) + ' ' + state.unit +
-      ' | Contornos: ' + slice.loops.length + slotsStr;
+      ' | Contornos: ' + slice.loops.length + slotsStr + splitStr;
   }
 }
 
@@ -4475,7 +5354,7 @@ function selectActiveBoard(bIdx) {
   render2DSlice();
 }
 
-
+// === modals-guide.js ===
 /**
  * LayerStudio 3D - Board Inspector & Vector-Illustrated Step-by-Step Assembly Guide
  * Modales de detalle de láminas por tablero y guía interactiva ilustrada algorítmicamente
@@ -4720,11 +5599,11 @@ function generateBoardIllustrationSVG(board, opts) {
       }
     }
 
-    // Código de la isla (#N o X1 / Y1)
+    // Código de la isla (#N, #N-A1 o X1 / Y1)
     const baseCode = (isPuzzle && isl.puzzleCode) ? isl.puzzleCode : ('#' + (sIdx + 1));
-    const code = isl.totalIslandsInSlice > 1
+    const code = isl.customCode || (isl.totalIslandsInSlice > 1
       ? baseCode + '.' + (isl.islandIdxInSlice + 1)
-      : baseCode;
+      : baseCode);
     const labelStr = code + (pl.rotated ? '↻' : '');
     const cx = pl.textLayout ? pl.textLayout.x : (pl.x + pl.w * 0.5);
     const cy = pl.textLayout ? pl.textLayout.y : (pl.y + pl.h * 0.5);
@@ -5460,9 +6339,9 @@ function renderBoardInfoModalContent(bIdx) {
     group.placements.forEach((pl) => {
       const isl = pl.island;
       const islandBase = (isPuzzle && isl.puzzleCode) ? isl.puzzleCode : ('#' + (isl.sliceIndex + 1));
-      const islandCode = isl.totalIslandsInSlice > 1
+      const islandCode = isl.customCode || (isl.totalIslandsInSlice > 1
         ? islandBase + '.' + (isl.islandIdxInSlice + 1)
-        : islandBase;
+        : islandBase);
 
       let guideTag = '<span class="text-slate-400">Sin guía</span>';
       if (isPuzzle) {
@@ -5600,14 +6479,15 @@ function buildAssemblyAndCuttingPlan() {
         slicePlacementsMap.set(sIdx, []);
       }
       const baseCode = (isPuzzle && isl.puzzleCode) ? isl.puzzleCode : ('#' + (sIdx + 1));
-      const islandCode = isl.totalIslandsInSlice > 1
+      const islandCode = isl.customCode || (isl.totalIslandsInSlice > 1
         ? baseCode + '.' + (isl.islandIdxInSlice + 1)
-        : baseCode;
+        : baseCode);
       const hasSup = !isPuzzle && state.includeNextSliceGuide && pl.upperPolys && pl.upperPolys.length > 0;
       const hasInf = !isPuzzle && state.includePrevSliceGuide && pl.lowerPolys && pl.lowerPolys.length > 0;
 
       slicePlacementsMap.get(sIdx).push({
         islandCode: islandCode,
+        sectorCode: isl.sectorCode || null,
         puzzleSeries: isl.puzzleSeries || null,
         islandIdx: isl.islandIdxInSlice,
         totalIslandsInSlice: isl.totalIslandsInSlice,
@@ -5723,9 +6603,9 @@ function renderAssemblyGuideModalContent() {
         const sIdx = pl.island.sliceIndex;
         const sNum = sIdx + 1;
         const baseCode = (isPuzzle && pl.island.puzzleCode) ? pl.island.puzzleCode : ('#' + sNum);
-        const code = pl.island.totalIslandsInSlice > 1
+        const code = pl.island.customCode || (pl.island.totalIslandsInSlice > 1
           ? baseCode + '.' + (pl.island.islandIdxInSlice + 1)
-          : baseCode;
+          : baseCode);
         if (!bySlice.has(sNum)) bySlice.set(sNum, []);
         bySlice.get(sNum).push({ code, rotated: pl.rotated });
       });
@@ -6061,7 +6941,7 @@ function generateIllustratedAssemblyGuideHTML() {
     const codes = board.placements.map((pl) => {
       const sNum = pl.island.sliceIndex + 1;
       const baseCode = (isPuzzle && pl.island.puzzleCode) ? pl.island.puzzleCode : ('#' + sNum);
-      const code = pl.island.totalIslandsInSlice > 1 ? (baseCode + '.' + (pl.island.islandIdxInSlice + 1)) : baseCode;
+      const code = pl.island.customCode || (pl.island.totalIslandsInSlice > 1 ? (baseCode + '.' + (pl.island.islandIdxInSlice + 1)) : baseCode);
       return '<span class="chip">' + escapeGuideXml(code + (pl.rotated ? ' (90°↻)' : '')) + '</span>';
     }).join(' ');
 
@@ -6178,9 +7058,16 @@ function generateIllustratedAssemblyGuideHTML() {
         : ('1 micro-unión de ' + state.tabWidthMM.toFixed(1) + ' mm cada ' + state.tabSpacingMM.toFixed(0) + ' mm'))
     : 'Corte perimetral continuo';
 
-  const modeMetaStr = isPuzzle
+  const splitGridMeta = (state.splitModelEnabled && typeof getSliceSplitGrid === 'function')
+    ? getSliceSplitGrid(state.axis, 0)
+    : null;
+  const splitSummaryHtml = (splitGridMeta && splitGridMeta.totalParts > 1)
+    ? (' · Subdivisión Gran Formato: ' + splitGridMeta.cols + '×' + splitGridMeta.rows + ' (' + splitGridMeta.totalParts + ' conjuntos de ' + (splitGridMeta.partW / 10).toFixed(0) + '×' + (splitGridMeta.partH / 10).toFixed(0) + ' cm)')
+    : '';
+
+  const modeMetaStr = (isPuzzle
     ? ('Puzzle 3D (' + state.puzzleAxes.toUpperCase() + ') · ' + totalSteps + ' costillas (' + state.puzzleMaterialThicknessMM.toFixed(2) + ' mm · ' + state.puzzleTotalSlotsCount + ' ranuras)')
-    : ('Eje ' + axisName + ' · ' + totalSteps + ' láminas (' + state.thickness.toFixed(2) + ' mm / capa)');
+    : ('Eje ' + axisName + ' · ' + totalSteps + ' láminas (' + state.thickness.toFixed(2) + ' mm / capa)')) + splitSummaryHtml;
 
   return [
     '<!DOCTYPE html>',
@@ -6312,6 +7199,13 @@ function generateFullAssemblyGuideText() {
   const isPuzzle = state.constructionMode === 'puzzle3d';
   const plan = buildAssemblyAndCuttingPlan();
   const axisName = state.axis.toUpperCase();
+  const splitGridTxt = (state.splitModelEnabled && typeof getSliceSplitGrid === 'function')
+    ? getSliceSplitGrid(state.axis, 0)
+    : null;
+  const splitTxtLine = (splitGridTxt && splitGridTxt.totalParts > 1)
+    ? ('Subdivisión Modular Gran Formato: ACTIVA (' + splitGridTxt.cols + 'x' + splitGridTxt.rows + ' = ' + splitGridTxt.totalParts + ' conjuntos modulares de ' + splitGridTxt.partW.toFixed(1) + 'x' + splitGridTxt.partH.toFixed(1) + ' mm | Unión: ' + state.splitJointType + ')')
+    : 'Subdivisión Modular Gran Formato: Desactivada (1 bloque único)';
+
   const lines = [
     '========================================================================',
     isPuzzle
@@ -6326,6 +7220,7 @@ function generateFullAssemblyGuideText() {
     isPuzzle
       ? ('Total costillas e intersecciones: ' + plan.selectedSlices.length + ' costillas (' + state.puzzleTotalSlotsCount + ' ranuras de encaje a media madera)')
       : ('Grosor por lámina: ' + state.thickness.toFixed(2) + ' mm | Total láminas: ' + plan.selectedSlices.length),
+    splitTxtLine,
     'Varillas guía de alineación: ' + ((!isPuzzle && state.rodCount > 0) ? (state.rodCount + ' varilla(s) de Ø' + state.rodDiameter + ' mm') : (isPuzzle ? 'No necesarias (auto-alineación por ranuras a media madera)' : 'Sin varillas (alineación por guías grabadas)')),
     'Micro-uniones de sujeción (corte por presión): ' + (state.tabsEnabled
       ? (state.tabMode === 'count'
@@ -6353,7 +7248,7 @@ function generateFullAssemblyGuideText() {
     const codes = board.placements.map((pl) => {
       const sNum = pl.island.sliceIndex + 1;
       const baseCode = (isPuzzle && pl.island.puzzleCode) ? pl.island.puzzleCode : ('#' + sNum);
-      const code = pl.island.totalIslandsInSlice > 1 ? (baseCode + '.' + (pl.island.islandIdxInSlice + 1)) : baseCode;
+      const code = pl.island.customCode || (pl.island.totalIslandsInSlice > 1 ? (baseCode + '.' + (pl.island.islandIdxInSlice + 1)) : baseCode);
       return code + (pl.rotated ? ' (Rotada 90°)' : '');
     });
     lines.push('  * TABLERO #' + (bIdx + 1) + ' (' + board.placements.length + ' piezas | Uso ' + board.efficiency.toFixed(1) + '%): ' + codes.join(', '));
@@ -6473,7 +7368,7 @@ if (typeof window !== 'undefined') {
 }
 
 
-
+// === viewer2d.js ===
 /**
  * LayerStudio 3D - 2D Interactive Canvas Inspector & Slice Strip
  * Visor 2D con zoom/pan, selección interactiva de islas, reproductor de capas y galería inferior.
@@ -7007,6 +7902,51 @@ function render2DSlice() {
   ctx.strokeRect(docX, docY, docB.width * scale, docB.height * scale);
   ctx.restore();
 
+  // Cuadrícula de Subdivisión Modular 3D (A1, A2, B1, B2...) si está activa
+  const isSplitMulti = Boolean(state.splitModelEnabled && slice.splitGrid && slice.splitGrid.totalParts > 1);
+  if (isSplitMulti) {
+    const g = slice.splitGrid;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(232, 121, 249, 0.38)';
+    ctx.setLineDash([6, 4]);
+    ctx.lineWidth = 1.2;
+
+    g.xCuts.forEach((cxVal) => {
+      ctx.beginPath();
+      ctx.moveTo(toScreenX(cxVal), toScreenY(g.minY));
+      ctx.lineTo(toScreenX(cxVal), toScreenY(g.maxY));
+      ctx.stroke();
+    });
+    g.yCuts.forEach((cyVal) => {
+      ctx.beginPath();
+      ctx.moveTo(toScreenX(g.minX), toScreenY(cyVal));
+      ctx.lineTo(toScreenX(g.maxX), toScreenY(cyVal));
+      ctx.stroke();
+    });
+
+    // Etiquetas de sector (A1, A2, B1, B2...) en la esquina superior izquierda de cada celda
+    ctx.setLineDash([]);
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    const partWCm = (g.partW / 10).toFixed(0);
+    const partHCm = (g.partH / 10).toFixed(0);
+    for (let r = 0; r < g.rows; r++) {
+      const displayRow = (g.rows - 1) - r;
+      const rowLetter = String.fromCharCode(65 + Math.max(0, Math.min(25, displayRow)));
+      const cellMaxY = r === g.rows - 1 ? g.maxY : g.yCuts[r];
+      for (let c = 0; c < g.cols; c++) {
+        const cellMinX = c === 0 ? g.minX : g.xCuts[c - 1];
+        const secCode = rowLetter + (c + 1);
+        const sx = toScreenX(cellMinX) + 5;
+        const sy = toScreenY(cellMaxY) + 4;
+        ctx.fillStyle = 'rgba(232, 121, 249, 0.78)';
+        ctx.fillText('Conjunto ' + secCode + ' (' + partWCm + '×' + partHCm + 'cm)', sx, sy);
+      }
+    }
+    ctx.restore();
+  }
+
   // Relleno sombreado con regla evenodd
   ctx.save();
   ctx.beginPath();
@@ -7033,6 +7973,23 @@ function render2DSlice() {
       toScreenY
     );
   });
+
+  // Resaltar uniones de encaje modular (colas de milano / espigas) entre conjuntos
+  if (isSplitMulti && slice.splitCutSeams && slice.splitCutSeams.length > 0) {
+    ctx.save();
+    ctx.strokeStyle = '#e879f9';
+    ctx.lineWidth = 2.0;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    slice.splitCutSeams.forEach((seam) => {
+      seam.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+        else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+      });
+    });
+    ctx.stroke();
+    ctx.restore();
+  }
 
   // 1. GUÍA DE LA LÁMINA INFERIOR (#N-1) - Violeta/Magenta en trazo continuo
   if (lowerSlice && lowerSlice.loops.length > 0) {
@@ -7297,7 +8254,7 @@ function updateSelectedCountBadge() {
   document.getElementById('selectedCountBadge').textContent = sel + ' / ' + state.slices.length;
 }
 
-
+// === exporters.js ===
 /**
  * LayerStudio 3D - CAD/CAM Exporters (SVG, DXF, STL, ZIP, LASCA)
  * Generadores vectoriales 1:1 en mm (SVG/DXF), mallas 3D por capa (STL), paquete ZIP y proyectos .lasca.
@@ -7980,6 +8937,114 @@ function closeExportModal() {
   }
 }
 
+// Genera un archivo SVG individual acotado exactamente al bloque de un Conjunto Modular (ej. Conjunto A1 de 300×300 mm)
+function generateSectorSliceSVG(slice, idx, sectorCode, sectorCol, sectorRow) {
+  if (typeof idx === 'string') {
+    sectorCode = idx;
+    idx = slice && typeof slice.index === 'number' ? slice.index : 0;
+  }
+  const g = slice.splitGrid || getSliceSplitGrid(slice.sliceAxis || state.axis, idx);
+  if (typeof sectorCol !== 'number' || typeof sectorRow !== 'number') {
+    const matchLoop = (slice.loops || []).find((l) => l.sectorCode === sectorCode);
+    sectorCol = matchLoop && typeof matchLoop.sectorCol === 'number' ? matchLoop.sectorCol : 0;
+    sectorRow = matchLoop && typeof matchLoop.sectorRow === 'number' ? matchLoop.sectorRow : 0;
+  }
+  const yCellIdx = (g.rows - 1) - sectorRow;
+  const cellMinX = sectorCol === 0 ? g.minX : g.xCuts[sectorCol - 1];
+  const cellMaxX = sectorCol === g.cols - 1 ? g.maxX : g.xCuts[sectorCol];
+  const cellMinY = yCellIdx === 0 ? g.minY : g.yCuts[yCellIdx - 1];
+  const cellMaxY = yCellIdx === g.rows - 1 ? g.maxY : g.yCuts[yCellIdx];
+
+  // Expandir ligeramente el lienzo si algún diente cola de milano sobresale hacia el bloque vecino
+  const pad = state.splitJointType !== 'straight' ? Math.max(2, Number(state.splitJointDepthMM) || 6) + 2 : 0;
+  const minX = cellMinX - pad;
+  const minY = cellMinY - pad;
+  const svgW = Math.max(10, (cellMaxX - cellMinX) + pad * 2);
+  const svgH = Math.max(10, (cellMaxY - cellMinY) + pad * 2);
+
+  const toX = (x) => (Number(x) - minX).toFixed(4);
+  const toY = (y) => (svgH - (Number(y) - minY)).toFixed(4);
+  const strokeMm = Math.max(0.15, Math.min(svgW, svgH) * 0.0025).toFixed(4);
+
+  const sectorLoops = (slice.loops || []).filter((l) => l.sectorCode === sectorCode);
+  let compoundPath = '';
+  const outerPaths = [];
+  const holePaths = [];
+
+  sectorLoops.forEach((loop) => {
+    if (!loop.points || loop.points.length < 3) return;
+    const pts = loop.points;
+    let dClosed = 'M ' + toX(pts[0].x) + ' ' + toY(pts[0].y);
+    for (let i = 1; i < pts.length; i++) {
+      dClosed += ' L ' + toX(pts[i].x) + ' ' + toY(pts[i].y);
+    }
+    dClosed += ' Z';
+    compoundPath += dClosed + ' ';
+
+    const cutD = buildSvgCutPathD(pts, loop.isHole, toX, toY);
+    if (!cutD) return;
+    if (loop.isHole) holePaths.push(cutD);
+    else outerPaths.push(cutD);
+  });
+
+  const displayBase = slice.puzzleCode ? slice.puzzleCode : ('#' + (idx + 1));
+  const fullCode = displayBase + '-' + sectorCode;
+  const xmlHeader = '<' + '?xml version="1.0" encoding="UTF-8" standalone="no"?' + '>';
+
+  const lines = [
+    xmlHeader,
+    '<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="' + svgW.toFixed(3) + 'mm" height="' + svgH.toFixed(3) + 'mm" viewBox="0 0 ' + svgW.toFixed(4) + ' ' + svgH.toFixed(4) + '" style="background:#ffffff;max-width:100vw;max-height:95vh;">',
+    '  <title>' + escapeXmlAttr('Conjunto ' + sectorCode + ' - Pieza ' + fullCode) + '</title>',
+    '  <desc>' + escapeXmlAttr('Conjunto Modular ' + sectorCode + ' (' + g.partW.toFixed(1) + 'x' + g.partH.toFixed(1) + 'mm) | Pieza ' + fullCode) + '</desc>'
+  ];
+
+  if (compoundPath.trim().length > 0) {
+    lines.push('  <g id="VISTA_PREVIA_PIEZA">');
+    lines.push('    <path d="' + compoundPath.trim() + '" fill="#0ea5e9" fill-opacity="0.14" fill-rule="evenodd" stroke="none" />');
+    lines.push('  </g>');
+  }
+
+  lines.push('  <g id="CORTE_EXTERIOR" fill="none" stroke="#ff0000" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+  outerPaths.forEach((d, pIdx) => {
+    lines.push('    <path id="ext_' + (pIdx + 1) + '" d="' + d + '" vector-effect="non-scaling-stroke" />');
+  });
+  lines.push('  </g>');
+
+  if (holePaths.length > 0) {
+    lines.push('  <g id="CORTE_INTERIOR_HUECOS" fill="none" stroke="#0055ff" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    holePaths.forEach((d, hIdx) => {
+      lines.push('    <path id="hueco_' + (hIdx + 1) + '" d="' + d + '" vector-effect="non-scaling-stroke" />');
+    });
+    lines.push('  </g>');
+  }
+
+  if (state.includeLabels) {
+    const tempSlice = Object.assign({}, slice, { loops: sectorLoops });
+    const sectorIslands = extractIslandsFromSlices([tempSlice]);
+    if (sectorIslands.length > 0) {
+      lines.push('  <g id="GRABADO_TEXTO" fill="#008800" stroke="none" font-family="monospace, sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="central">');
+      sectorIslands.forEach((isl, iIdx) => {
+        const tl = isl.textLayout;
+        if (!tl || !tl.lines || tl.lines.length === 0 || tl.fontSizeMM <= 0.04) return;
+        const fs = tl.fontSizeMM.toFixed(3);
+        const lineStep = tl.fontSizeMM * 1.12;
+        const n = tl.lines.length;
+        for (let k = 0; k < n; k++) {
+          const yVal = tl.y - (k - (n - 1) * 0.5) * lineStep;
+          lines.push(
+            '    <text id="etiqueta_sec_' + (iIdx + 1) + '_' + (k + 1) + '" x="' + toX(tl.x) + '" y="' + toY(yVal) + '" font-size="' + fs + '">' +
+            escapeXmlAttr(tl.lines[k]) + '</text>'
+          );
+        }
+      });
+      lines.push('  </g>');
+    }
+  }
+
+  lines.push('</svg>');
+  return lines.join('\n');
+}
+
 async function executeZipExport() {
   const scopeEl = document.querySelector('input[name="exportScope"]:checked');
   const scope = scopeEl ? scopeEl.value : 'selected';
@@ -8009,7 +9074,6 @@ async function executeZipExport() {
   const folderSTL = wantSTL ? zip.folder('STL_Impresion_3D') : null;
 
   // Si la distribución en tablero está activa, generamos los tableros anidados para las lascas objetivo
-  let exportedBoardsCount = 0;
   if (state.nestingEnabled && (wantSVG || wantDXF)) {
     const islands = extractIslandsFromSlices(targetSlices);
     const packRes = packIslandsIntoBoards(
@@ -8022,7 +9086,6 @@ async function executeZipExport() {
       state.nestUseInnerHoles
     );
     const boardsForExport = packRes.boards;
-    exportedBoardsCount = boardsForExport.length;
 
     const folderBoardsSVG = wantSVG ? zip.folder('SVG_Tableros_Anidados') : null;
     const folderBoardsDXF = wantDXF ? zip.folder('DXF_Tableros_Anidados') : null;
@@ -8035,6 +9098,9 @@ async function executeZipExport() {
     });
   }
 
+  // Si la Subdivisión Modular 3D está activa, generamos también una carpeta organizada por Conjunto (Conjunto_A1, Conjunto_A2, etc.)
+  const folderModularSVG = (wantSVG && state.splitModelEnabled) ? zip.folder('SVG_Conjuntos_Modulares') : null;
+
   targetSlices.forEach((slice) => {
     const idx = slice.index;
     const numStr = String(idx + 1).padStart(3, '0');
@@ -8046,6 +9112,22 @@ async function executeZipExport() {
     if (folderSVG) folderSVG.file(fname + '.svg', generateSliceSVG(slice, idx));
     if (folderDXF) folderDXF.file(fname + '.dxf', generateSliceDXF(slice, idx));
     if (folderSTL) folderSTL.file(fname + '.stl', generateSliceSTL(slice, idx));
+
+    if (folderModularSVG && slice.splitGrid && slice.splitGrid.totalParts > 1) {
+      const seenSectors = new Map();
+      (slice.loops || []).forEach((l) => {
+        if (!l.isHole && l.sectorCode && !seenSectors.has(l.sectorCode)) {
+          seenSectors.set(l.sectorCode, { code: l.sectorCode, col: l.sectorCol || 0, row: l.sectorRow || 0 });
+        }
+      });
+      seenSectors.forEach((sec) => {
+        const secFolder = folderModularSVG.folder('Conjunto_' + sec.code);
+        const secFname = slice.puzzleCode
+          ? ('costilla_' + slice.puzzleCode + '_' + sec.code + '.svg')
+          : ('lasca_' + numStr + '_' + sec.code + '.svg');
+        secFolder.file(secFname, generateSectorSliceSVG(slice, idx, sec.code, sec.col, sec.row));
+      });
+    }
   });
 
   const resumen = generateFullAssemblyGuideText();
@@ -8070,7 +9152,7 @@ async function executeZipExport() {
 // =========================================================================
 function exportProjectFile() {
   const payload = {
-    version: '2.5',
+    version: '2.7',
     modelName: state.modelName,
     unit: state.unit,
     constructionMode: state.constructionMode,
@@ -8079,6 +9161,15 @@ function exportProjectFile() {
     puzzleCountB: state.puzzleCountB,
     puzzleMaterialThicknessMM: state.puzzleMaterialThicknessMM,
     puzzleSlotClearanceMM: state.puzzleSlotClearanceMM,
+    splitModelEnabled: state.splitModelEnabled,
+    splitMode: state.splitMode,
+    splitMaxPartWidthMM: state.splitMaxPartWidthMM,
+    splitMaxPartHeightMM: state.splitMaxPartHeightMM,
+    splitCols: state.splitCols,
+    splitRows: state.splitRows,
+    splitJointType: state.splitJointType,
+    splitJointDepthMM: state.splitJointDepthMM,
+    splitStaggerLayers: state.splitStaggerLayers,
     axis: state.axis,
     mode: state.mode,
     sliceCount: state.sliceCount,
@@ -8138,6 +9229,18 @@ function importProjectFile(file) {
       if (typeof data.puzzleMaterialThicknessMM === 'number') state.puzzleMaterialThicknessMM = data.puzzleMaterialThicknessMM;
       if (typeof data.puzzleSlotClearanceMM === 'number') state.puzzleSlotClearanceMM = data.puzzleSlotClearanceMM;
       if (typeof syncConstructionModeUI === 'function') syncConstructionModeUI();
+
+      if (typeof data.splitModelEnabled === 'boolean') state.splitModelEnabled = data.splitModelEnabled;
+      if (data.splitMode === 'max_size' || data.splitMode === 'grid') state.splitMode = data.splitMode;
+      if (typeof data.splitMaxPartWidthMM === 'number') state.splitMaxPartWidthMM = data.splitMaxPartWidthMM;
+      if (typeof data.splitMaxPartHeightMM === 'number') state.splitMaxPartHeightMM = data.splitMaxPartHeightMM;
+      if (typeof data.splitCols === 'number') state.splitCols = data.splitCols;
+      if (typeof data.splitRows === 'number') state.splitRows = data.splitRows;
+      if (data.splitJointType) state.splitJointType = data.splitJointType;
+      if (typeof data.splitJointDepthMM === 'number') state.splitJointDepthMM = data.splitJointDepthMM;
+      if (typeof data.splitStaggerLayers === 'boolean') state.splitStaggerLayers = data.splitStaggerLayers;
+      if (typeof syncSplitModelUI === 'function') syncSplitModelUI();
+
       state.axis = data.axis || 'z';
       state.mode = data.mode || 'count';
       state.sliceCount = data.sliceCount || 24;
@@ -8231,6 +9334,6 @@ function importProjectFile(file) {
   reader.readAsText(file);
 }
 
-  </script>
+</script>
 </body>
 </html>

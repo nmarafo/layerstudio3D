@@ -242,11 +242,11 @@ function generateBoardIllustrationSVG(board, opts) {
       }
     }
 
-    // Código de la isla (#N o X1 / Y1)
+    // Código de la isla (#N, #N-A1 o X1 / Y1)
     const baseCode = (isPuzzle && isl.puzzleCode) ? isl.puzzleCode : ('#' + (sIdx + 1));
-    const code = isl.totalIslandsInSlice > 1
+    const code = isl.customCode || (isl.totalIslandsInSlice > 1
       ? baseCode + '.' + (isl.islandIdxInSlice + 1)
-      : baseCode;
+      : baseCode);
     const labelStr = code + (pl.rotated ? '↻' : '');
     const cx = pl.textLayout ? pl.textLayout.x : (pl.x + pl.w * 0.5);
     const cy = pl.textLayout ? pl.textLayout.y : (pl.y + pl.h * 0.5);
@@ -982,9 +982,9 @@ function renderBoardInfoModalContent(bIdx) {
     group.placements.forEach((pl) => {
       const isl = pl.island;
       const islandBase = (isPuzzle && isl.puzzleCode) ? isl.puzzleCode : ('#' + (isl.sliceIndex + 1));
-      const islandCode = isl.totalIslandsInSlice > 1
+      const islandCode = isl.customCode || (isl.totalIslandsInSlice > 1
         ? islandBase + '.' + (isl.islandIdxInSlice + 1)
-        : islandBase;
+        : islandBase);
 
       let guideTag = '<span class="text-slate-400">Sin guía</span>';
       if (isPuzzle) {
@@ -1122,14 +1122,15 @@ function buildAssemblyAndCuttingPlan() {
         slicePlacementsMap.set(sIdx, []);
       }
       const baseCode = (isPuzzle && isl.puzzleCode) ? isl.puzzleCode : ('#' + (sIdx + 1));
-      const islandCode = isl.totalIslandsInSlice > 1
+      const islandCode = isl.customCode || (isl.totalIslandsInSlice > 1
         ? baseCode + '.' + (isl.islandIdxInSlice + 1)
-        : baseCode;
+        : baseCode);
       const hasSup = !isPuzzle && state.includeNextSliceGuide && pl.upperPolys && pl.upperPolys.length > 0;
       const hasInf = !isPuzzle && state.includePrevSliceGuide && pl.lowerPolys && pl.lowerPolys.length > 0;
 
       slicePlacementsMap.get(sIdx).push({
         islandCode: islandCode,
+        sectorCode: isl.sectorCode || null,
         puzzleSeries: isl.puzzleSeries || null,
         islandIdx: isl.islandIdxInSlice,
         totalIslandsInSlice: isl.totalIslandsInSlice,
@@ -1245,9 +1246,9 @@ function renderAssemblyGuideModalContent() {
         const sIdx = pl.island.sliceIndex;
         const sNum = sIdx + 1;
         const baseCode = (isPuzzle && pl.island.puzzleCode) ? pl.island.puzzleCode : ('#' + sNum);
-        const code = pl.island.totalIslandsInSlice > 1
+        const code = pl.island.customCode || (pl.island.totalIslandsInSlice > 1
           ? baseCode + '.' + (pl.island.islandIdxInSlice + 1)
-          : baseCode;
+          : baseCode);
         if (!bySlice.has(sNum)) bySlice.set(sNum, []);
         bySlice.get(sNum).push({ code, rotated: pl.rotated });
       });
@@ -1583,7 +1584,7 @@ function generateIllustratedAssemblyGuideHTML() {
     const codes = board.placements.map((pl) => {
       const sNum = pl.island.sliceIndex + 1;
       const baseCode = (isPuzzle && pl.island.puzzleCode) ? pl.island.puzzleCode : ('#' + sNum);
-      const code = pl.island.totalIslandsInSlice > 1 ? (baseCode + '.' + (pl.island.islandIdxInSlice + 1)) : baseCode;
+      const code = pl.island.customCode || (pl.island.totalIslandsInSlice > 1 ? (baseCode + '.' + (pl.island.islandIdxInSlice + 1)) : baseCode);
       return '<span class="chip">' + escapeGuideXml(code + (pl.rotated ? ' (90°↻)' : '')) + '</span>';
     }).join(' ');
 
@@ -1700,9 +1701,16 @@ function generateIllustratedAssemblyGuideHTML() {
         : ('1 micro-unión de ' + state.tabWidthMM.toFixed(1) + ' mm cada ' + state.tabSpacingMM.toFixed(0) + ' mm'))
     : 'Corte perimetral continuo';
 
-  const modeMetaStr = isPuzzle
+  const splitGridMeta = (state.splitModelEnabled && typeof getSliceSplitGrid === 'function')
+    ? getSliceSplitGrid(state.axis, 0)
+    : null;
+  const splitSummaryHtml = (splitGridMeta && splitGridMeta.totalParts > 1)
+    ? (' · Subdivisión Gran Formato: ' + splitGridMeta.cols + '×' + splitGridMeta.rows + ' (' + splitGridMeta.totalParts + ' conjuntos de ' + (splitGridMeta.partW / 10).toFixed(0) + '×' + (splitGridMeta.partH / 10).toFixed(0) + ' cm)')
+    : '';
+
+  const modeMetaStr = (isPuzzle
     ? ('Puzzle 3D (' + state.puzzleAxes.toUpperCase() + ') · ' + totalSteps + ' costillas (' + state.puzzleMaterialThicknessMM.toFixed(2) + ' mm · ' + state.puzzleTotalSlotsCount + ' ranuras)')
-    : ('Eje ' + axisName + ' · ' + totalSteps + ' láminas (' + state.thickness.toFixed(2) + ' mm / capa)');
+    : ('Eje ' + axisName + ' · ' + totalSteps + ' láminas (' + state.thickness.toFixed(2) + ' mm / capa)')) + splitSummaryHtml;
 
   return [
     '<!DOCTYPE html>',
@@ -1834,6 +1842,13 @@ function generateFullAssemblyGuideText() {
   const isPuzzle = state.constructionMode === 'puzzle3d';
   const plan = buildAssemblyAndCuttingPlan();
   const axisName = state.axis.toUpperCase();
+  const splitGridTxt = (state.splitModelEnabled && typeof getSliceSplitGrid === 'function')
+    ? getSliceSplitGrid(state.axis, 0)
+    : null;
+  const splitTxtLine = (splitGridTxt && splitGridTxt.totalParts > 1)
+    ? ('Subdivisión Modular Gran Formato: ACTIVA (' + splitGridTxt.cols + 'x' + splitGridTxt.rows + ' = ' + splitGridTxt.totalParts + ' conjuntos modulares de ' + splitGridTxt.partW.toFixed(1) + 'x' + splitGridTxt.partH.toFixed(1) + ' mm | Unión: ' + state.splitJointType + ')')
+    : 'Subdivisión Modular Gran Formato: Desactivada (1 bloque único)';
+
   const lines = [
     '========================================================================',
     isPuzzle
@@ -1848,6 +1863,7 @@ function generateFullAssemblyGuideText() {
     isPuzzle
       ? ('Total costillas e intersecciones: ' + plan.selectedSlices.length + ' costillas (' + state.puzzleTotalSlotsCount + ' ranuras de encaje a media madera)')
       : ('Grosor por lámina: ' + state.thickness.toFixed(2) + ' mm | Total láminas: ' + plan.selectedSlices.length),
+    splitTxtLine,
     'Varillas guía de alineación: ' + ((!isPuzzle && state.rodCount > 0) ? (state.rodCount + ' varilla(s) de Ø' + state.rodDiameter + ' mm') : (isPuzzle ? 'No necesarias (auto-alineación por ranuras a media madera)' : 'Sin varillas (alineación por guías grabadas)')),
     'Micro-uniones de sujeción (corte por presión): ' + (state.tabsEnabled
       ? (state.tabMode === 'count'
@@ -1875,7 +1891,7 @@ function generateFullAssemblyGuideText() {
     const codes = board.placements.map((pl) => {
       const sNum = pl.island.sliceIndex + 1;
       const baseCode = (isPuzzle && pl.island.puzzleCode) ? pl.island.puzzleCode : ('#' + sNum);
-      const code = pl.island.totalIslandsInSlice > 1 ? (baseCode + '.' + (pl.island.islandIdxInSlice + 1)) : baseCode;
+      const code = pl.island.customCode || (pl.island.totalIslandsInSlice > 1 ? (baseCode + '.' + (pl.island.islandIdxInSlice + 1)) : baseCode);
       return code + (pl.rotated ? ' (Rotada 90°)' : '');
     });
     lines.push('  * TABLERO #' + (bIdx + 1) + ' (' + board.placements.length + ' piezas | Uso ' + board.efficiency.toFixed(1) + '%): ' + codes.join(', '));

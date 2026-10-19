@@ -58,6 +58,19 @@ const state = {
   minIslandSizeMM: 10,         // Valor umbral en mm (o mm² si el criterio es área)
   minIslandCriteria: 'max_dim',// 'max_dim' | 'min_dim' | 'area'
   filteredIslandsCount: 0,     // Total de islas descartadas en el modelo actual
+  // Subdivisión Modular del Modelo en Partes / Conjuntos (Gran Formato)
+  splitModelEnabled: false,    // true = divide la figura en conjuntos/bloques modulares (ej. bloques de 30x30 cm para armar figuras de 60x60 o 120x120 cm)
+  splitMode: 'max_size',       // 'max_size' (según tamaño máx. de parte/tablero) | 'grid' (según cuadrícula manual Columnas x Filas)
+  splitMaxPartWidthMM: 300,    // Ancho máximo por conjunto/parte en mm (ej. 300 mm = 30 cm)
+  splitMaxPartHeightMM: 300,   // Alto máximo por conjunto/parte en mm (ej. 300 mm = 30 cm)
+  splitCols: 2,                // Nº de columnas de división en modo 'grid'
+  splitRows: 2,                // Nº de filas de división en modo 'grid'
+  splitJointType: 'dovetail',  // 'dovetail' (Cola de Milano / Puzzle ⏢) | 'tenon' (Espiga Rectangular ▭) | 'straight' (Corte Recto ∣)
+  splitJointDepthMM: 6.0,      // Profundidad de la pestaña de unión en mm
+  splitStaggerLayers: false,   // true = alterna (desfasa) las juntas entre capas pares e impares (aparejo tipo ladrillo)
+  splitExplodeFactor: 0,       // Separación visual 3D entre conjuntos/bloques (0% a 100%)
+  splitTotalPartsCount: 0,     // Total de sub-piezas generadas tras dividir en bloques
+  splitTotalJointsCount: 0,    // Total de conectores mecánicos (colas de milano/espigas) tallados
   // Configuración de Distribución en Tablero (Nesting de islas)
   nestingEnabled: false,
   boardWidthMM: 600,

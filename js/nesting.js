@@ -204,7 +204,8 @@ function isPointInIslandMaterial(pt, outerPts, holeLoops) {
 
 // Recorta las polilíneas de una lasca adyacente (superior o inferior) exclusivamente dentro de una isla
 function getGuidePolylinesForIsland(outerPts, holeLoops, guideSlice) {
-  if (!guideSlice || !guideSlice.loops) return [];
+  const guideLoops = guideSlice ? (guideSlice.unsplitLoops || guideSlice.loops) : null;
+  if (!guideLoops) return [];
   const allPolylines = [];
   const connectTolSq = 1e-6;
   const boundaryLoops = [{ points: outerPts }].concat(holeLoops || []);
@@ -215,7 +216,7 @@ function getGuidePolylinesForIsland(outerPts, holeLoops, guideSlice) {
     return (dx * dx + dy * dy) <= connectTolSq;
   };
 
-  guideSlice.loops.forEach((loop) => {
+  guideLoops.forEach((loop) => {
     if (state.guideOnlyOuter && loop.isHole) return;
     const pts = loop.points;
     if (!pts || pts.length < 3) return;
@@ -385,9 +386,13 @@ function getIslandTextLineOptions(item) {
     : ('#' + (item.sliceIndex + 1));
 
   if (state.nestEngraveSliceNum) {
-    numPart = item.totalIslandsInSlice > 1
-      ? baseCode + '.' + (item.islandIdxInSlice + 1)
-      : baseCode;
+    if (item.customCode) {
+      numPart = item.customCode;
+    } else {
+      numPart = item.totalIslandsInSlice > 1
+        ? baseCode + '.' + (item.islandIdxInSlice + 1)
+        : baseCode;
+    }
   }
   if (state.nestEngraveGuideType) {
     if (state.constructionMode === 'puzzle3d' || item.puzzleSeries || (sliceRef && sliceRef.puzzleSeries)) {
@@ -593,6 +598,19 @@ function extractIslandsFromSlices(targetSlices) {
     const prevSlice = (!isPuzzle && idx - 1 >= 0) ? state.slices[idx - 1] : null;
     const sliceRods = getAlignmentHoles2D(slice);
 
+    const isSplitMulti = Boolean(state.splitModelEnabled && slice.splitGrid && slice.splitGrid.totalParts > 1);
+    const baseCode = slice.puzzleCode ? slice.puzzleCode : ('#' + (idx + 1));
+
+    // Contar cuántas islas hay por cada sectorCode en esta lasca para numerar #1-A1 o #1-A1.1
+    const sectorTotalCounts = {};
+    const sectorSeenCounts = {};
+    if (isSplitMulti) {
+      outers.forEach((o) => {
+        const sc = o.sectorCode || 'A1';
+        sectorTotalCounts[sc] = (sectorTotalCounts[sc] || 0) + 1;
+      });
+    }
+
     outers.forEach((outer, oIdx) => {
       // Asignar solo los huecos que pertenecen directamente a esta isla exterior
       const islandHoles = holes.filter((h) => {
@@ -624,12 +642,25 @@ function extractIslandsFromSlices(targetSlices) {
       const upperPolys = nextSlice ? getGuidePolylinesForIsland(outer.points, islandHoles, nextSlice) : [];
       const lowerPolys = prevSlice ? getGuidePolylinesForIsland(outer.points, islandHoles, prevSlice) : [];
 
+      let customCode = null;
+      if (isSplitMulti && outer.sectorCode) {
+        const sc = outer.sectorCode;
+        sectorSeenCounts[sc] = (sectorSeenCounts[sc] || 0) + 1;
+        customCode = sectorTotalCounts[sc] > 1
+          ? (baseCode + '-' + sc + '.' + sectorSeenCounts[sc])
+          : (baseCode + '-' + sc);
+      }
+
       const itemObj = {
         sliceIndex: idx,
         puzzleCode: slice.puzzleCode || null,
         puzzleSeries: slice.puzzleSeries || null,
         sliceAxis: slice.sliceAxis || state.axis,
         puzzleSlotsCount: slice.puzzleSlots ? slice.puzzleSlots.length : 0,
+        sectorCode: outer.sectorCode || null,
+        sectorCol: typeof outer.sectorCol === 'number' ? outer.sectorCol : null,
+        sectorRow: typeof outer.sectorRow === 'number' ? outer.sectorRow : null,
+        customCode: customCode,
         islandIdxInSlice: oIdx,
         totalIslandsInSlice: outers.length,
         outerPoints: outer.points,
@@ -1262,10 +1293,13 @@ function update2DInspectorHeader() {
     const slotsStr = (state.constructionMode === 'puzzle3d' && slice.puzzleSlots)
       ? (' | Ranuras de encaje: ' + slice.puzzleSlots.length)
       : '';
+    const splitStr = (state.splitModelEnabled && slice.splitGrid && slice.splitGrid.totalParts > 1)
+      ? (' | 🧩 Conjuntos: ' + slice.splitGrid.cols + '×' + slice.splitGrid.rows + ' (' + (slice.splitGrid.partW / f).toFixed(dec) + '×' + (slice.splitGrid.partH / f).toFixed(dec) + ' ' + state.unit + ')')
+      : '';
     document.getElementById('slice2DStats').textContent =
       'Corte: ' + (b.width / f).toFixed(dec) + ' × ' + (b.height / f).toFixed(dec) + ' ' + state.unit +
       ' | Doc SVG (Pieza): ' + (docB.width / f).toFixed(dec) + ' × ' + (docB.height / f).toFixed(dec) + ' ' + state.unit +
-      ' | Contornos: ' + slice.loops.length + slotsStr;
+      ' | Contornos: ' + slice.loops.length + slotsStr + splitStr;
   }
 }
 

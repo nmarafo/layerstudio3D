@@ -12,9 +12,14 @@
 
 ## ✨ Características Principales
 
-### 1. Carga 3D y Dimensionamiento Dinámico (`mm`, `cm`, `m`)
+### 1. Carga 3D, Dimensionamiento Dinámico (`mm`, `cm`, `m`) y Subdivisión Modular en Partes (Gran Formato)
 - **Importación directa en navegador** de mallas `.STL`, `.GLB` y `.GLTF` (100 % en cliente, sin subir archivos a servidores externos), además de modelos paramétricos de prueba integrados (*Nudo Toroidal*, *Jarrón Hueco*, *Engranaje Mecánico* y *Cristal Facetado*).
 - **Escalado proporcional o independiente** en los ejes **X, Y, Z** con entrada rápida de dimensiones máximas (`10cm`, `50cm`, `1m`, `2m`, `3m` o cualquier valor personalizado).
+- **🧩 Subdivisión Modular 3D en Partes / Conjuntos (*Gran Formato*)**:
+  - Permite dividir automáticamente cualquier modelo 3D en múltiples bloques o conjuntos encajables (**`A1, A2, B1, B2...`**) para construir figuras que superen el tamaño máximo del tablero o cama de corte: por ejemplo, con un tamaño máximo de tablero/parte de **`30 × 30 cm`**, permite fabricar una figura de **`60 × 60 cm`** uniendo **`2 × 2 = 4` conjuntos de `30 × 30 cm`**, de **`90 × 90 cm`** uniendo **`3 × 3 = 9` conjuntos**, o de **`120 × 120 cm`** uniendo **`4 × 4 = 16` conjuntos de `30 × 30 cm`** (`A1..D4`).
+  - **Dos modos de partición**: **Por Tamaño Máximo de Parte / Tablero** (`15×15 cm`, `20×20 cm`, `30×30 cm`, `40×40 cm`, `60×40 cm` o sincronizado con el área útil del tablero `= Tablero`) con botones de escalado rápido a múltiplos exactos (**`2×2`**, **`3×3`**, **`4×4`**), o **Por Cuadrícula Fija (`Columnas × Filas`)**.
+  - **Conectores mecánicos de unión 2D y trabado 3D**: Generación automática de juntas **Cola de Milano (`⏢` encaje mecánico)**, **Espiga Rectangular (`▭` alineación)** o **Corte Recto (`∣` a tope)** a lo largo de las líneas de partición, con opción de **alternar la fase en capas pares e impares** para trabar verticalmente los bloques y control deslizante **Separar Conjuntos 3D (`A1, A2...`)** en el visor 3D.
+  - **Codificación y exportación por conjunto**: Cada sector se identifica y graba como `#1-A1`, `#1-A2`, `#1-B1`, `#1-B2`..., empaquetándose automáticamente en tableros anidados e incluyendo la carpeta `SVG_Conjuntos_Modulares/Conjunto_A1/...` en la exportación `.ZIP`.
 
 ### 2. Dos Sistemas Constructivos: Apilado (1 Eje) y Puzzle 3D Encajable sin Pegamento (2 Ejes)
 - **🧱 Modo Apilado (1 Eje — X, Y o Z)**:

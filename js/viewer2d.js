@@ -531,6 +531,51 @@ function render2DSlice() {
   ctx.strokeRect(docX, docY, docB.width * scale, docB.height * scale);
   ctx.restore();
 
+  // Cuadrícula de Subdivisión Modular 3D (A1, A2, B1, B2...) si está activa
+  const isSplitMulti = Boolean(state.splitModelEnabled && slice.splitGrid && slice.splitGrid.totalParts > 1);
+  if (isSplitMulti) {
+    const g = slice.splitGrid;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(232, 121, 249, 0.38)';
+    ctx.setLineDash([6, 4]);
+    ctx.lineWidth = 1.2;
+
+    g.xCuts.forEach((cxVal) => {
+      ctx.beginPath();
+      ctx.moveTo(toScreenX(cxVal), toScreenY(g.minY));
+      ctx.lineTo(toScreenX(cxVal), toScreenY(g.maxY));
+      ctx.stroke();
+    });
+    g.yCuts.forEach((cyVal) => {
+      ctx.beginPath();
+      ctx.moveTo(toScreenX(g.minX), toScreenY(cyVal));
+      ctx.lineTo(toScreenX(g.maxX), toScreenY(cyVal));
+      ctx.stroke();
+    });
+
+    // Etiquetas de sector (A1, A2, B1, B2...) en la esquina superior izquierda de cada celda
+    ctx.setLineDash([]);
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    const partWCm = (g.partW / 10).toFixed(0);
+    const partHCm = (g.partH / 10).toFixed(0);
+    for (let r = 0; r < g.rows; r++) {
+      const displayRow = (g.rows - 1) - r;
+      const rowLetter = String.fromCharCode(65 + Math.max(0, Math.min(25, displayRow)));
+      const cellMaxY = r === g.rows - 1 ? g.maxY : g.yCuts[r];
+      for (let c = 0; c < g.cols; c++) {
+        const cellMinX = c === 0 ? g.minX : g.xCuts[c - 1];
+        const secCode = rowLetter + (c + 1);
+        const sx = toScreenX(cellMinX) + 5;
+        const sy = toScreenY(cellMaxY) + 4;
+        ctx.fillStyle = 'rgba(232, 121, 249, 0.78)';
+        ctx.fillText('Conjunto ' + secCode + ' (' + partWCm + '×' + partHCm + 'cm)', sx, sy);
+      }
+    }
+    ctx.restore();
+  }
+
   // Relleno sombreado con regla evenodd
   ctx.save();
   ctx.beginPath();
@@ -557,6 +602,23 @@ function render2DSlice() {
       toScreenY
     );
   });
+
+  // Resaltar uniones de encaje modular (colas de milano / espigas) entre conjuntos
+  if (isSplitMulti && slice.splitCutSeams && slice.splitCutSeams.length > 0) {
+    ctx.save();
+    ctx.strokeStyle = '#e879f9';
+    ctx.lineWidth = 2.0;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    slice.splitCutSeams.forEach((seam) => {
+      seam.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+        else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+      });
+    });
+    ctx.stroke();
+    ctx.restore();
+  }
 
   // 1. GUÍA DE LA LÁMINA INFERIOR (#N-1) - Violeta/Magenta en trazo continuo
   if (lowerSlice && lowerSlice.loops.length > 0) {

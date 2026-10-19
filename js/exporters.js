@@ -680,6 +680,114 @@ function closeExportModal() {
   }
 }
 
+// Genera un archivo SVG individual acotado exactamente al bloque de un Conjunto Modular (ej. Conjunto A1 de 300×300 mm)
+function generateSectorSliceSVG(slice, idx, sectorCode, sectorCol, sectorRow) {
+  if (typeof idx === 'string') {
+    sectorCode = idx;
+    idx = slice && typeof slice.index === 'number' ? slice.index : 0;
+  }
+  const g = slice.splitGrid || getSliceSplitGrid(slice.sliceAxis || state.axis, idx);
+  if (typeof sectorCol !== 'number' || typeof sectorRow !== 'number') {
+    const matchLoop = (slice.loops || []).find((l) => l.sectorCode === sectorCode);
+    sectorCol = matchLoop && typeof matchLoop.sectorCol === 'number' ? matchLoop.sectorCol : 0;
+    sectorRow = matchLoop && typeof matchLoop.sectorRow === 'number' ? matchLoop.sectorRow : 0;
+  }
+  const yCellIdx = (g.rows - 1) - sectorRow;
+  const cellMinX = sectorCol === 0 ? g.minX : g.xCuts[sectorCol - 1];
+  const cellMaxX = sectorCol === g.cols - 1 ? g.maxX : g.xCuts[sectorCol];
+  const cellMinY = yCellIdx === 0 ? g.minY : g.yCuts[yCellIdx - 1];
+  const cellMaxY = yCellIdx === g.rows - 1 ? g.maxY : g.yCuts[yCellIdx];
+
+  // Expandir ligeramente el lienzo si algún diente cola de milano sobresale hacia el bloque vecino
+  const pad = state.splitJointType !== 'straight' ? Math.max(2, Number(state.splitJointDepthMM) || 6) + 2 : 0;
+  const minX = cellMinX - pad;
+  const minY = cellMinY - pad;
+  const svgW = Math.max(10, (cellMaxX - cellMinX) + pad * 2);
+  const svgH = Math.max(10, (cellMaxY - cellMinY) + pad * 2);
+
+  const toX = (x) => (Number(x) - minX).toFixed(4);
+  const toY = (y) => (svgH - (Number(y) - minY)).toFixed(4);
+  const strokeMm = Math.max(0.15, Math.min(svgW, svgH) * 0.0025).toFixed(4);
+
+  const sectorLoops = (slice.loops || []).filter((l) => l.sectorCode === sectorCode);
+  let compoundPath = '';
+  const outerPaths = [];
+  const holePaths = [];
+
+  sectorLoops.forEach((loop) => {
+    if (!loop.points || loop.points.length < 3) return;
+    const pts = loop.points;
+    let dClosed = 'M ' + toX(pts[0].x) + ' ' + toY(pts[0].y);
+    for (let i = 1; i < pts.length; i++) {
+      dClosed += ' L ' + toX(pts[i].x) + ' ' + toY(pts[i].y);
+    }
+    dClosed += ' Z';
+    compoundPath += dClosed + ' ';
+
+    const cutD = buildSvgCutPathD(pts, loop.isHole, toX, toY);
+    if (!cutD) return;
+    if (loop.isHole) holePaths.push(cutD);
+    else outerPaths.push(cutD);
+  });
+
+  const displayBase = slice.puzzleCode ? slice.puzzleCode : ('#' + (idx + 1));
+  const fullCode = displayBase + '-' + sectorCode;
+  const xmlHeader = '<' + '?xml version="1.0" encoding="UTF-8" standalone="no"?' + '>';
+
+  const lines = [
+    xmlHeader,
+    '<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="' + svgW.toFixed(3) + 'mm" height="' + svgH.toFixed(3) + 'mm" viewBox="0 0 ' + svgW.toFixed(4) + ' ' + svgH.toFixed(4) + '" style="background:#ffffff;max-width:100vw;max-height:95vh;">',
+    '  <title>' + escapeXmlAttr('Conjunto ' + sectorCode + ' - Pieza ' + fullCode) + '</title>',
+    '  <desc>' + escapeXmlAttr('Conjunto Modular ' + sectorCode + ' (' + g.partW.toFixed(1) + 'x' + g.partH.toFixed(1) + 'mm) | Pieza ' + fullCode) + '</desc>'
+  ];
+
+  if (compoundPath.trim().length > 0) {
+    lines.push('  <g id="VISTA_PREVIA_PIEZA">');
+    lines.push('    <path d="' + compoundPath.trim() + '" fill="#0ea5e9" fill-opacity="0.14" fill-rule="evenodd" stroke="none" />');
+    lines.push('  </g>');
+  }
+
+  lines.push('  <g id="CORTE_EXTERIOR" fill="none" stroke="#ff0000" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+  outerPaths.forEach((d, pIdx) => {
+    lines.push('    <path id="ext_' + (pIdx + 1) + '" d="' + d + '" vector-effect="non-scaling-stroke" />');
+  });
+  lines.push('  </g>');
+
+  if (holePaths.length > 0) {
+    lines.push('  <g id="CORTE_INTERIOR_HUECOS" fill="none" stroke="#0055ff" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    holePaths.forEach((d, hIdx) => {
+      lines.push('    <path id="hueco_' + (hIdx + 1) + '" d="' + d + '" vector-effect="non-scaling-stroke" />');
+    });
+    lines.push('  </g>');
+  }
+
+  if (state.includeLabels) {
+    const tempSlice = Object.assign({}, slice, { loops: sectorLoops });
+    const sectorIslands = extractIslandsFromSlices([tempSlice]);
+    if (sectorIslands.length > 0) {
+      lines.push('  <g id="GRABADO_TEXTO" fill="#008800" stroke="none" font-family="monospace, sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="central">');
+      sectorIslands.forEach((isl, iIdx) => {
+        const tl = isl.textLayout;
+        if (!tl || !tl.lines || tl.lines.length === 0 || tl.fontSizeMM <= 0.04) return;
+        const fs = tl.fontSizeMM.toFixed(3);
+        const lineStep = tl.fontSizeMM * 1.12;
+        const n = tl.lines.length;
+        for (let k = 0; k < n; k++) {
+          const yVal = tl.y - (k - (n - 1) * 0.5) * lineStep;
+          lines.push(
+            '    <text id="etiqueta_sec_' + (iIdx + 1) + '_' + (k + 1) + '" x="' + toX(tl.x) + '" y="' + toY(yVal) + '" font-size="' + fs + '">' +
+            escapeXmlAttr(tl.lines[k]) + '</text>'
+          );
+        }
+      });
+      lines.push('  </g>');
+    }
+  }
+
+  lines.push('</svg>');
+  return lines.join('\n');
+}
+
 async function executeZipExport() {
   const scopeEl = document.querySelector('input[name="exportScope"]:checked');
   const scope = scopeEl ? scopeEl.value : 'selected';
@@ -709,7 +817,6 @@ async function executeZipExport() {
   const folderSTL = wantSTL ? zip.folder('STL_Impresion_3D') : null;
 
   // Si la distribución en tablero está activa, generamos los tableros anidados para las lascas objetivo
-  let exportedBoardsCount = 0;
   if (state.nestingEnabled && (wantSVG || wantDXF)) {
     const islands = extractIslandsFromSlices(targetSlices);
     const packRes = packIslandsIntoBoards(
@@ -722,7 +829,6 @@ async function executeZipExport() {
       state.nestUseInnerHoles
     );
     const boardsForExport = packRes.boards;
-    exportedBoardsCount = boardsForExport.length;
 
     const folderBoardsSVG = wantSVG ? zip.folder('SVG_Tableros_Anidados') : null;
     const folderBoardsDXF = wantDXF ? zip.folder('DXF_Tableros_Anidados') : null;
@@ -735,6 +841,9 @@ async function executeZipExport() {
     });
   }
 
+  // Si la Subdivisión Modular 3D está activa, generamos también una carpeta organizada por Conjunto (Conjunto_A1, Conjunto_A2, etc.)
+  const folderModularSVG = (wantSVG && state.splitModelEnabled) ? zip.folder('SVG_Conjuntos_Modulares') : null;
+
   targetSlices.forEach((slice) => {
     const idx = slice.index;
     const numStr = String(idx + 1).padStart(3, '0');
@@ -746,6 +855,22 @@ async function executeZipExport() {
     if (folderSVG) folderSVG.file(fname + '.svg', generateSliceSVG(slice, idx));
     if (folderDXF) folderDXF.file(fname + '.dxf', generateSliceDXF(slice, idx));
     if (folderSTL) folderSTL.file(fname + '.stl', generateSliceSTL(slice, idx));
+
+    if (folderModularSVG && slice.splitGrid && slice.splitGrid.totalParts > 1) {
+      const seenSectors = new Map();
+      (slice.loops || []).forEach((l) => {
+        if (!l.isHole && l.sectorCode && !seenSectors.has(l.sectorCode)) {
+          seenSectors.set(l.sectorCode, { code: l.sectorCode, col: l.sectorCol || 0, row: l.sectorRow || 0 });
+        }
+      });
+      seenSectors.forEach((sec) => {
+        const secFolder = folderModularSVG.folder('Conjunto_' + sec.code);
+        const secFname = slice.puzzleCode
+          ? ('costilla_' + slice.puzzleCode + '_' + sec.code + '.svg')
+          : ('lasca_' + numStr + '_' + sec.code + '.svg');
+        secFolder.file(secFname, generateSectorSliceSVG(slice, idx, sec.code, sec.col, sec.row));
+      });
+    }
   });
 
   const resumen = generateFullAssemblyGuideText();
@@ -770,7 +895,7 @@ async function executeZipExport() {
 // =========================================================================
 function exportProjectFile() {
   const payload = {
-    version: '2.5',
+    version: '2.7',
     modelName: state.modelName,
     unit: state.unit,
     constructionMode: state.constructionMode,
@@ -779,6 +904,15 @@ function exportProjectFile() {
     puzzleCountB: state.puzzleCountB,
     puzzleMaterialThicknessMM: state.puzzleMaterialThicknessMM,
     puzzleSlotClearanceMM: state.puzzleSlotClearanceMM,
+    splitModelEnabled: state.splitModelEnabled,
+    splitMode: state.splitMode,
+    splitMaxPartWidthMM: state.splitMaxPartWidthMM,
+    splitMaxPartHeightMM: state.splitMaxPartHeightMM,
+    splitCols: state.splitCols,
+    splitRows: state.splitRows,
+    splitJointType: state.splitJointType,
+    splitJointDepthMM: state.splitJointDepthMM,
+    splitStaggerLayers: state.splitStaggerLayers,
     axis: state.axis,
     mode: state.mode,
     sliceCount: state.sliceCount,
@@ -838,6 +972,18 @@ function importProjectFile(file) {
       if (typeof data.puzzleMaterialThicknessMM === 'number') state.puzzleMaterialThicknessMM = data.puzzleMaterialThicknessMM;
       if (typeof data.puzzleSlotClearanceMM === 'number') state.puzzleSlotClearanceMM = data.puzzleSlotClearanceMM;
       if (typeof syncConstructionModeUI === 'function') syncConstructionModeUI();
+
+      if (typeof data.splitModelEnabled === 'boolean') state.splitModelEnabled = data.splitModelEnabled;
+      if (data.splitMode === 'max_size' || data.splitMode === 'grid') state.splitMode = data.splitMode;
+      if (typeof data.splitMaxPartWidthMM === 'number') state.splitMaxPartWidthMM = data.splitMaxPartWidthMM;
+      if (typeof data.splitMaxPartHeightMM === 'number') state.splitMaxPartHeightMM = data.splitMaxPartHeightMM;
+      if (typeof data.splitCols === 'number') state.splitCols = data.splitCols;
+      if (typeof data.splitRows === 'number') state.splitRows = data.splitRows;
+      if (data.splitJointType) state.splitJointType = data.splitJointType;
+      if (typeof data.splitJointDepthMM === 'number') state.splitJointDepthMM = data.splitJointDepthMM;
+      if (typeof data.splitStaggerLayers === 'boolean') state.splitStaggerLayers = data.splitStaggerLayers;
+      if (typeof syncSplitModelUI === 'function') syncSplitModelUI();
+
       state.axis = data.axis || 'z';
       state.mode = data.mode || 'count';
       state.sliceCount = data.sliceCount || 24;
