@@ -7943,25 +7943,41 @@ function openExportModal() {
     const radios = document.getElementsByName('exportScope');
     radios.forEach((r) => { r.checked = (r.value === 'current'); });
   }
-  document.getElementById('modalNextGuideCheck').checked = state.includeNextSliceGuide;
-  document.getElementById('modalPrevGuideCheck').checked = state.includePrevSliceGuide;
-  document.getElementById('modalIncludeLabelsCheck').checked = state.includeLabels;
-  document.getElementById('modalNestingEnabledCheck').checked = state.nestingEnabled;
-  document.getElementById('modalNestEngraveNumCheck').checked = state.nestEngraveSliceNum;
-  document.getElementById('modalNestEngraveGuideCheck').checked = state.nestEngraveGuideType;
+  const nextChk = document.getElementById('modalNextGuideCheck');
+  if (nextChk) nextChk.checked = state.includeNextSliceGuide;
+  const prevChk = document.getElementById('modalPrevGuideCheck');
+  if (prevChk) prevChk.checked = state.includePrevSliceGuide;
+  const lblChk = document.getElementById('modalIncludeLabelsCheck');
+  if (lblChk) lblChk.checked = state.includeLabels;
+  const nestChk = document.getElementById('modalNestingEnabledCheck');
+  if (nestChk) nestChk.checked = state.nestingEnabled;
+  const numChk = document.getElementById('modalNestEngraveNumCheck');
+  if (numChk) numChk.checked = state.nestEngraveSliceNum;
+  const guideChk = document.getElementById('modalNestEngraveGuideCheck');
+  if (guideChk) guideChk.checked = state.nestEngraveGuideType;
   const modalClipChk = document.getElementById('modalNestClipOversizedCheck');
   if (modalClipChk) modalClipChk.checked = state.nestClipOversized;
+  const stackedGuidesBox = document.getElementById('modalStackedGuidesBox');
+  if (stackedGuidesBox) stackedGuidesBox.classList.toggle('hidden', state.constructionMode === 'puzzle3d');
+
   updateFilteredIslandsUI();
   syncHoldingTabsUI();
-  document.getElementById('modalNestingSubOptions').classList.toggle('hidden', !state.nestingEnabled);
+  const subOpts = document.getElementById('modalNestingSubOptions');
+  if (subOpts) subOpts.classList.toggle('hidden', !state.nestingEnabled);
   syncBoardInputsUI();
-  document.getElementById('exportModal').classList.remove('hidden');
-  document.getElementById('exportModal').classList.add('flex');
+  const modal = document.getElementById('exportModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
 }
 
 function closeExportModal() {
-  document.getElementById('exportModal').classList.add('hidden');
-  document.getElementById('exportModal').classList.remove('flex');
+  const modal = document.getElementById('exportModal');
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
 }
 
 async function executeZipExport() {
