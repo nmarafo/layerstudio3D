@@ -35,17 +35,17 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
 
   <!-- Hoja de estilos principal -->
-  <link rel="stylesheet" href="css/styles.css?v=2.8.3" />
+  <link rel="stylesheet" href="css/styles.css?v=2.8.4" />
 
   <!-- Módulos de la aplicación (cargados en orden de dependencia con defer y cache-busting) -->
-  <script src="js/state.js?v=2.8.3" defer></script>
-  <script src="js/viewer3d.js?v=2.8.3" defer></script>
-  <script src="js/slicer.js?v=2.8.3" defer></script>
-  <script src="js/nesting.js?v=2.8.3" defer></script>
-  <script src="js/modals-guide.js?v=2.8.3" defer></script>
-  <script src="js/viewer2d.js?v=2.8.3" defer></script>
-  <script src="js/exporters.js?v=2.8.3" defer></script>
-  <script src="js/vectorizer2d.js?v=2.8.3" defer></script>
+  <script src="js/state.js?v=2.8.4" defer></script>
+  <script src="js/viewer3d.js?v=2.8.4" defer></script>
+  <script src="js/slicer.js?v=2.8.4" defer></script>
+  <script src="js/nesting.js?v=2.8.4" defer></script>
+  <script src="js/modals-guide.js?v=2.8.4" defer></script>
+  <script src="js/viewer2d.js?v=2.8.4" defer></script>
+  <script src="js/exporters.js?v=2.8.4" defer></script>
+  <script src="js/vectorizer2d.js?v=2.8.4" defer></script>
 </head>
 <body class="h-screen w-screen flex flex-col">
 
@@ -1404,7 +1404,7 @@
         <!-- Panel derecho: Vista previa interactiva y acciones de descarga / envío a 3D -->
         <div class="lg:col-span-7 bg-slate-950 flex flex-col overflow-hidden">
           <!-- Barra de modo de vista previa -->
-          <div class="p-2.5 bg-slate-900/90 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
+          <div class="p-2 bg-slate-900/95 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
             <div class="flex flex-wrap items-center gap-1">
               <button onclick="setVectorizerPreviewMode('combined')" id="vecPreviewBtn_combined" class="px-2.5 py-1 rounded-lg bg-sky-500/25 border border-sky-500 text-sky-300 text-[11px] font-bold transition">
                 🔀 Corte + Grabado
@@ -1419,7 +1419,119 @@
                 🖼️ Imagen Original
               </button>
             </div>
-            <span class="text-[10px] text-slate-400">Arrastra aquí cualquier archivo <strong class="text-slate-200">.PNG / .BMP</strong></span>
+            <div class="flex items-center gap-1">
+              <button onclick="vectorizerEditorUndo()" id="vecUndoBtn" disabled class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-35 border border-slate-700 text-slate-200 text-[10px] font-semibold" title="Deshacer edición vectorial (Ctrl+Z)">↩️ Deshacer</button>
+              <button onclick="vectorizerEditorRedo()" id="vecRedoBtn" disabled class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-35 border border-slate-700 text-slate-200 text-[10px] font-semibold" title="Rehacer edición vectorial (Ctrl+Y)">↪️ Rehacer</button>
+              <button onclick="resetVectorizerEditorViewport()" id="vecZoomResetBtn" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sky-300 text-[10px] font-semibold" title="Restablecer Zoom y Paneo (Rueda del ratón para Zoom)">🔍 100%</button>
+              <button onclick="runImageVectorization()" class="px-2 py-1 rounded bg-slate-800 hover:bg-rose-900/40 border border-slate-700 text-slate-300 hover:text-rose-200 text-[10px] font-semibold" title="Restaurar trazado automático original">🔄 Restaurar</button>
+            </div>
+          </div>
+
+          <!-- Barra de Herramientas del Editor de Vectorizados -->
+          <div class="px-2.5 py-1.5 bg-slate-900/80 border-b border-slate-800 flex flex-wrap items-center justify-between gap-1.5">
+            <div class="flex flex-wrap items-center gap-1">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-amber-400 mr-1">🛠️ Editor:</span>
+              <button onclick="setVectorizerEditorTool('select')" id="vecToolBtn_select" class="px-2 py-1 rounded-lg bg-amber-500/25 border border-amber-400 text-amber-200 text-[11px] font-bold transition" title="Seleccionar y arrastrar cualquier contorno vectorial">
+                🖱️ Seleccionar / Mover
+              </button>
+              <button onclick="setVectorizerEditorTool('nodes')" id="vecToolBtn_nodes" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-[11px] font-medium transition" title="Mover vértices individuales (Doble clic en arista = añadir nodo, Clic derecho en nodo = borrar nodo)">
+                ✒️ Editar Nodos
+              </button>
+              <button onclick="setVectorizerEditorTool('eraser')" id="vecToolBtn_eraser" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-[11px] font-medium transition" title="Pincel borrador para eliminar motas o trazos al pasar sobre ellos">
+                🧹 Borrador
+              </button>
+              <button onclick="setVectorizerEditorTool('draw_freehand')" id="vecToolBtn_draw_freehand" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-[11px] font-medium transition" title="Dibujar una región cerrada a mano alzada">
+                ✏️ Trazo Libre
+              </button>
+              <button onclick="setVectorizerEditorTool('draw_rect')" id="vecToolBtn_draw_rect" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-[11px] font-medium transition" title="Añadir un rectángulo vectorial de corte o grabado">
+                ▭ Rect
+              </button>
+              <button onclick="setVectorizerEditorTool('draw_circle')" id="vecToolBtn_draw_circle" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-[11px] font-medium transition" title="Añadir un círculo o taladro vectorial de corte o grabado">
+                ◯ Círculo
+              </button>
+              <button onclick="setVectorizerEditorTool('add_text')" id="vecToolBtn_add_text" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-[11px] font-medium transition" title="Estampar texto convertido automáticamente en curvas vectoriales de grabado o calado">
+                🔤 Texto
+              </button>
+              <button onclick="setVectorizerEditorTool('pan')" id="vecToolBtn_pan" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-[11px] font-medium transition" title="Desplazar la vista del lienzo (también con Alt+clic)">
+                ✋ Mover Vista
+              </button>
+            </div>
+          </div>
+
+          <!-- Barra contextual dinámica del Editor según la herramienta o selección activa -->
+          <div class="px-2.5 py-1.5 bg-slate-950/95 border-b border-slate-800/80 text-[11px] min-h-[34px] flex items-center">
+            <!-- Ayuda por defecto cuando no hay contorno seleccionado -->
+            <div id="vecEditorHintBox" class="text-[10px] text-slate-400 flex items-center justify-between w-full">
+              <span>💡 Haz clic en cualquier vector del lienzo para <strong>moverlo, cambiarlo de capa láser, editar sus nodos o borrarlo</strong>. Rueda del ratón para Zoom.</span>
+            </div>
+
+            <!-- Opciones cuando hay un contorno seleccionado -->
+            <div id="vecEditorSelectionBox" class="hidden flex flex-wrap items-center justify-between gap-2 w-full">
+              <div class="flex items-center gap-1.5">
+                <span class="text-amber-300 font-bold text-[10px]">Seleccionado:</span>
+                <span id="vecSelectedInfoBadge" class="text-[10px] text-slate-300 bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">0 nodos</span>
+                <select id="vecSelectedLayerSelect" onchange="onVectorizerSelectedLayerChange(this.value)" class="bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] text-emerald-300 font-semibold outline-none" title="Cambiar este vector a otra capa láser">
+                  <option value="engraveLoops">🟢 Capa Grabado (#008800)</option>
+                  <option value="fineEdgeLoops">🟠 Capa Detalle (#ff8800)</option>
+                  <option value="holeCutLoops">🔵 Capa Corte Hueco (#0055ff)</option>
+                  <option value="outerCutLoops">🔴 Capa Corte Exterior (#ff0000)</option>
+                  <option value="frameEngraveLoops">🖼️ Capa Marco Grabado (#008800)</option>
+                </select>
+              </div>
+              <div class="flex flex-wrap items-center gap-1">
+                <button onclick="vectorizerEditorActionOnSelected('smooth')" class="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sky-300 text-[10px]" title="Suavizar curvas de este contorno">〰️ Suavizar</button>
+                <button onclick="vectorizerEditorActionOnSelected('simplify')" class="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-[10px]" title="Reducir número de nodos de este contorno">📐 Simplificar</button>
+                <button onclick="vectorizerEditorActionOnSelected('scale_up')" class="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-[10px]" title="Agrandar contorno +8%">➕</button>
+                <button onclick="vectorizerEditorActionOnSelected('scale_down')" class="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-[10px]" title="Reducir contorno -8%">➖</button>
+                <button onclick="vectorizerEditorActionOnSelected('duplicate')" class="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-indigo-300 text-[10px]" title="Duplicar contorno">📋 Duplicar</button>
+                <button onclick="vectorizerEditorActionOnSelected('delete')" class="px-2 py-0.5 rounded bg-rose-500/20 hover:bg-rose-500/35 border border-rose-500/40 text-rose-300 font-bold text-[10px]" title="Eliminar contorno o nodo seleccionado (Tecla Supr)">🗑️ Borrar</button>
+              </div>
+            </div>
+
+            <!-- Opciones para herramientas de Dibujo (Trazo libre, Rectángulo, Círculo) -->
+            <div id="vecEditorDrawBox" class="hidden flex flex-wrap items-center justify-between gap-2 w-full">
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] text-emerald-300 font-semibold">✏️ Dibujar en capa láser:</span>
+                <select id="vecDrawTargetLayerSelect" onchange="onVectorizerEditorSettingChange()" class="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-[10px] text-emerald-300 font-semibold outline-none">
+                  <option value="engraveLoops" selected>🟢 Grabado Principal (#008800)</option>
+                  <option value="holeCutLoops">🔵 Corte Hueco / Taladro Interior (#0055ff)</option>
+                  <option value="outerCutLoops">🔴 Corte Exterior (#ff0000)</option>
+                  <option value="fineEdgeLoops">🟠 Grabado Detalle Fino (#ff8800)</option>
+                </select>
+              </div>
+              <span class="text-[10px] text-slate-400">Arrastra sobre el lienzo para crear la figura vectorial</span>
+            </div>
+
+            <!-- Opciones para herramienta Goma / Borrador -->
+            <div id="vecEditorEraserBox" class="hidden flex flex-wrap items-center justify-between gap-2 w-full">
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] text-rose-300 font-semibold">🧹 Radio borrador (mm):</span>
+                <input type="number" id="vecEraserRadiusInput" value="3.5" min="0.5" max="30" step="0.5" onchange="onVectorizerEditorSettingChange()" class="w-14 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] text-right text-rose-300 font-bold" />
+                <span class="text-[10px] text-slate-400">Borrar en:</span>
+                <select id="vecEraserFilterSelect" onchange="onVectorizerEditorSettingChange()" class="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-[10px] text-slate-200 outline-none">
+                  <option value="all" selected>Todas las capas</option>
+                  <option value="engrave_only">Solo Grabado (#008800 / #ff8800)</option>
+                  <option value="cut_only">Solo Corte (#ff0000 / #0055ff)</option>
+                </select>
+              </div>
+              <span class="text-[10px] text-slate-400">Haz clic o arrastra sobre los vectores que desees eliminar</span>
+            </div>
+
+            <!-- Opciones para herramienta Texto Vectorial -->
+            <div id="vecEditorTextBox" class="hidden flex flex-wrap items-center justify-between gap-2 w-full">
+              <div class="flex flex-wrap items-center gap-1.5">
+                <span class="text-[10px] text-emerald-300 font-semibold">🔤 Texto:</span>
+                <input type="text" id="vecEditorTextInput" value="TEXTO LÁSER" oninput="onVectorizerEditorSettingChange()" class="w-36 bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-[10px] text-white font-bold" placeholder="Escribe texto..." />
+                <span class="text-[10px] text-slate-400">Alto (mm):</span>
+                <input type="number" id="vecEditorTextSizeInput" value="10" min="3" max="100" step="1" onchange="onVectorizerEditorSettingChange()" class="w-12 bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-[10px] text-right text-amber-300 font-bold" />
+                <select id="vecEditorTextLayerSelect" onchange="onVectorizerEditorSettingChange()" class="bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] text-emerald-300 font-semibold outline-none">
+                  <option value="engraveLoops" selected>🟢 Grabado (#008800)</option>
+                  <option value="holeCutLoops">🔵 Calado Hueco (#0055ff)</option>
+                </select>
+                <button onclick="insertVectorizerEditorTextAt(0, 0)" class="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold transition">➕ Insertar en Centro</button>
+              </div>
+              <span class="text-[10px] text-slate-400">O haz clic en el punto del lienzo donde quieras estamparlo</span>
+            </div>
           </div>
 
           <!-- Lienzo con soporte Drag & Drop -->

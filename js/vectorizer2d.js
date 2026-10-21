@@ -358,6 +358,9 @@ function openImageVectorizerModal(presetIfEmpty) {
   if (!modal) return;
   modal.classList.remove('hidden');
   modal.classList.add('flex');
+  if (typeof bindVectorizerEditorCanvasEvents === 'function') {
+    bindVectorizerEditorCanvasEvents();
+  }
 
   if (!vec2dState.sourceCanvas || presetIfEmpty) {
     loadVectorizerDemoPreset(presetIfEmpty || 'drawing');
@@ -1908,12 +1911,87 @@ function runImageVectorization() {
     }
   };
 
+  if (typeof resetVectorizerEditorSelectionOnRetrace === 'function') {
+    resetVectorizerEditorSelectionOnRetrace();
+  }
   renderImageVectorizerPreview();
   updateVectorizerStatsUI();
+  if (typeof syncVectorizerEditorToolbarUI === 'function') {
+    syncVectorizerEditorToolbarUI();
+  }
 }
 
 // ============================================================================
-// RENDERIZADO DEL LIENZO DE PREVISUALIZACIÓN EN TIEMPO REAL
+// ESTADO Y MOTOR DEL EDITOR VECTORIAL INTERACTIVO (SELECCIÓN, NODOS, BORRADOR, DIBUJO Y TEXTO)
+// ============================================================================
+const vecEditorState = {
+  tool: 'select',              // 'select' | 'nodes' | 'eraser' | 'draw_freehand' | 'draw_rect' | 'draw_circle' | 'add_text' | 'pan'
+  zoom: 1.0,
+  panX: 0.0,
+  panY: 0.0,
+  selectedLayer: null,         // 'outerCutLoops' | 'holeCutLoops' | 'engraveLoops' | 'frameEngraveLoops' | 'fineEdgeLoops'
+  selectedIndex: -1,
+  selectedNodeIndex: -1,
+  hoveredNodeIndex: -1,
+  drawTargetLayer: 'engraveLoops',
+  eraserRadiusMM: 3.5,
+  eraserFilter: 'all',         // 'all' | 'engrave_only' | 'cut_only'
+  textValue: 'TEXTO LÁSER',
+  textHeightMM: 10.0,
+  textLayer: 'engraveLoops',
+  isDragging: false,
+  dragMode: null,              // 'move_loop' | 'move_node' | 'pan' | 'erase' | 'draw_shape'
+  dragUndoPushed: false,
+  dragStartScreen: { x: 0, y: 0 },
+  dragStartMM: { x: 0, y: 0 },
+  dragCurrMM: { x: 0, y: 0 },
+  freehandPtsMM: [],
+  cursorMM: null,
+  undoStack: [],
+  redoStack: [],
+  eventsBound: false
+};
+
+function resetVectorizerEditorSelectionOnRetrace() {
+  vecEditorState.selectedLayer = null;
+  vecEditorState.selectedIndex = -1;
+  vecEditorState.selectedNodeIndex = -1;
+  vecEditorState.hoveredNodeIndex = -1;
+  vecEditorState.undoStack = [];
+  vecEditorState.redoStack = [];
+}
+
+function getVectorizerCanvasTransform(canvas) {
+  const res = vec2dState.result;
+  const imgWMM = Math.max(5, vec2dState.widthMM);
+  const imgHMM = Math.max(5, vec2dState.heightMM);
+  const wMM = Math.max(imgWMM, res.totalWidthMM || imgWMM);
+  const hMM = Math.max(imgHMM, res.totalHeightMM || imgHMM);
+  const pad = 34;
+  const baseScale = Math.min((canvas.width - pad * 2) / wMM, (canvas.height - pad * 2) / hMM);
+  const zoom = Math.max(0.35, Math.min(14.0, Number(vecEditorState.zoom) || 1.0));
+  const scale = baseScale * zoom;
+  const cx = canvas.width * 0.5 + (Number(vecEditorState.panX) || 0);
+  const cy = canvas.height * 0.5 + (Number(vecEditorState.panY) || 0);
+  return {
+    wMM,
+    hMM,
+    imgWMM,
+    imgHMM,
+    baseScale,
+    zoom,
+    scale,
+    cx,
+    cy,
+    toX: (x) => cx + x * scale,
+    toY: (y) => cy - y * scale,
+    toMMX: (sx) => (sx - cx) / scale,
+    toMMY: (sy) => (cy - sy) / scale
+  };
+}
+
+// ============================================================================
+// RENDERIZADO DEL LIENZO DE PREVISUALIZACIÓN Y OVERLAY DEL EDITOR EN TIEMPO REAL
 // ============================================================================
 function renderImageVectorizerPreview() {
   const canvas = document.getElementById('vectorizerPreviewCanvas');
@@ -1926,16 +2004,8 @@ function renderImageVectorizerPreview() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   const res = vec2dState.result;
-  const imgWMM = Math.max(5, vec2dState.widthMM);
-  const imgHMM = Math.max(5, vec2dState.heightMM);
-  const wMM = Math.max(imgWMM, res.totalWidthMM || imgWMM);
-  const hMM = Math.max(imgHMM, res.totalHeightMM || imgHMM);
-  const pad = 34;
-  const scale = Math.min((canvas.width - pad * 2) / wMM, (canvas.height - pad * 2) / hMM);
-  const cx = canvas.width * 0.5;
-  const cy = canvas.height * 0.5;
-  const toX = (x) => cx + x * scale;
-  const toY = (y) => cy - y * scale;
+  const tf = getVectorizerCanvasTransform(canvas);
+  const { wMM, hMM, imgWMM, imgHMM, scale, cx, toX, toY } = tf;
 
   // Fondo cuadriculado técnico
   ctx.save();
@@ -2102,6 +2172,9 @@ function renderImageVectorizerPreview() {
     });
   }
 
+  // 4. OVERLAY DEL EDITOR VECTORIAL INTERACTIVO (Contorno seleccionado, Nodos, Goma de borrar, Dibujo en curso)
+  renderVectorizerEditorOverlay(ctx, tf);
+
   // Cotas físicas en pantalla
   ctx.save();
   ctx.fillStyle = '#94a3b8';
@@ -2110,7 +2183,7 @@ function renderImageVectorizerPreview() {
   const dimText = vec2dState.frameEnabled
     ? (wMM.toFixed(1) + ' × ' + hMM.toFixed(1) + ' mm con marco (Imagen: ' + imgWMM.toFixed(1) + '×' + imgHMM.toFixed(1) + ' mm)')
     : (wMM.toFixed(1) + ' × ' + hMM.toFixed(1) + ' mm (' + vec2dState.imageName + ')');
-  ctx.fillText(dimText, cx, docTop - 10);
+  ctx.fillText(dimText, cx, Math.max(14, docTop - 8));
   ctx.restore();
 }
 
@@ -2661,6 +2734,1019 @@ function setVectorizerPreviewMode(mode) {
   renderImageVectorizerPreview();
 }
 
+// ============================================================================
+// FUNCIONES INTERACTIVAS DEL EDITOR DE VECTORIZADOS (SELECCIÓN, NODOS, BORRADOR, DIBUJO Y TEXTO)
+// ============================================================================
+function cloneLoopsArrayDeep(arr) {
+  if (!arr) return [];
+  return arr.map((l) => ({
+    points: (l.points || []).map((p) => ({ x: Number(p.x), y: Number(p.y) })),
+    areaMM2: l.areaMM2,
+    signedArea: l.signedArea,
+    isHole: Boolean(l.isHole),
+    isFrame: Boolean(l.isFrame),
+    isKeyhole: Boolean(l.isKeyhole)
+  }));
+}
+
+function captureVectorizerResultSnapshot() {
+  const res = vec2dState.result;
+  return {
+    outerCutLoops: cloneLoopsArrayDeep(res.outerCutLoops),
+    holeCutLoops: cloneLoopsArrayDeep(res.holeCutLoops),
+    engraveLoops: cloneLoopsArrayDeep(res.engraveLoops),
+    frameEngraveLoops: cloneLoopsArrayDeep(res.frameEngraveLoops),
+    fineEdgeLoops: cloneLoopsArrayDeep(res.fineEdgeLoops)
+  };
+}
+
+function restoreVectorizerResultSnapshot(snap) {
+  if (!snap) return;
+  const res = vec2dState.result;
+  res.outerCutLoops = cloneLoopsArrayDeep(snap.outerCutLoops);
+  res.holeCutLoops = cloneLoopsArrayDeep(snap.holeCutLoops);
+  res.engraveLoops = cloneLoopsArrayDeep(snap.engraveLoops);
+  res.frameEngraveLoops = cloneLoopsArrayDeep(snap.frameEngraveLoops);
+  res.fineEdgeLoops = cloneLoopsArrayDeep(snap.fineEdgeLoops);
+  vecEditorState.selectedLayer = null;
+  vecEditorState.selectedIndex = -1;
+  vecEditorState.selectedNodeIndex = -1;
+  recomputeVectorizerEditorDerivedStats();
+}
+
+function pushVectorizerEditorUndoSnapshot() {
+  vecEditorState.undoStack.push(captureVectorizerResultSnapshot());
+  if (vecEditorState.undoStack.length > 35) {
+    vecEditorState.undoStack.shift();
+  }
+  vecEditorState.redoStack = [];
+  syncVectorizerEditorToolbarUI();
+}
+
+function vectorizerEditorUndo() {
+  if (vecEditorState.undoStack.length === 0) return;
+  vecEditorState.redoStack.push(captureVectorizerResultSnapshot());
+  const prev = vecEditorState.undoStack.pop();
+  restoreVectorizerResultSnapshot(prev);
+  syncVectorizerEditorToolbarUI();
+}
+
+function vectorizerEditorRedo() {
+  if (vecEditorState.redoStack.length === 0) return;
+  vecEditorState.undoStack.push(captureVectorizerResultSnapshot());
+  const next = vecEditorState.redoStack.pop();
+  restoreVectorizerResultSnapshot(next);
+  syncVectorizerEditorToolbarUI();
+}
+
+function recomputeVectorizerEditorDerivedStats() {
+  const res = vec2dState.result;
+  const updateLoopArea = (l, forceHoleState) => {
+    if (!l || !l.points || l.points.length < 3) return;
+    const sa = computePolygonSignedArea2D(l.points);
+    l.signedArea = sa;
+    l.areaMM2 = Math.abs(sa);
+    if (typeof forceHoleState === 'boolean') {
+      l.isHole = forceHoleState;
+    }
+  };
+
+  (res.outerCutLoops || []).forEach((l) => updateLoopArea(l, false));
+  (res.holeCutLoops || []).forEach((l) => updateLoopArea(l, true));
+  (res.engraveLoops || []).forEach((l) => updateLoopArea(l));
+  (res.frameEngraveLoops || []).forEach((l) => updateLoopArea(l));
+  (res.fineEdgeLoops || []).forEach((l) => updateLoopArea(l, false));
+
+  let maxHalfW = Math.max(5, vec2dState.widthMM) * 0.5;
+  let maxHalfH = Math.max(5, vec2dState.heightMM) * 0.5;
+  const expandFrom = (arr) => {
+    (arr || []).forEach((l) => {
+      (l.points || []).forEach((p) => {
+        if (Math.abs(p.x) > maxHalfW) maxHalfW = Math.abs(p.x);
+        if (Math.abs(p.y) > maxHalfH) maxHalfH = Math.abs(p.y);
+      });
+    });
+  };
+  expandFrom(res.outerCutLoops);
+  expandFrom(res.frameEngraveLoops);
+  expandFrom(res.engraveLoops);
+  res.totalWidthMM = maxHalfW * 2;
+  res.totalHeightMM = maxHalfH * 2;
+
+  if (vec2dState.engraveStyle === 'vector_hatch') {
+    let hatch = [];
+    if (res.engraveLoops.length > 0) {
+      hatch = generateHatchPolylinesForLoops(res.engraveLoops, res.totalWidthMM, res.totalHeightMM, vec2dState.hatchSpacingMM, vec2dState.hatchCross);
+    }
+    if (res.frameEngraveLoops && res.frameEngraveLoops.length > 0) {
+      hatch = hatch.concat(generateHatchPolylinesForLoops(res.frameEngraveLoops, res.totalWidthMM, res.totalHeightMM, vec2dState.hatchSpacingMM, vec2dState.hatchCross));
+    }
+    res.hatchPolylines = hatch;
+  }
+
+  let totalNodes = 0;
+  (res.outerCutLoops || []).forEach((l) => { totalNodes += l.points.length; });
+  (res.holeCutLoops || []).forEach((l) => { totalNodes += l.points.length; });
+  (res.engraveLoops || []).forEach((l) => { totalNodes += l.points.length; });
+  (res.frameEngraveLoops || []).forEach((l) => { totalNodes += l.points.length; });
+  (res.fineEdgeLoops || []).forEach((l) => { totalNodes += l.points.length; });
+
+  res.stats = {
+    cutOuterCount: (res.outerCutLoops || []).length,
+    cutHoleCount: (res.holeCutLoops || []).length,
+    engraveIslandCount: (res.engraveLoops || []).length + (res.frameEngraveLoops || []).length,
+    fineEdgeCount: (res.fineEdgeLoops || []).length,
+    hatchLinesCount: (res.hatchPolylines || []).length,
+    totalNodes
+  };
+
+  renderImageVectorizerPreview();
+  updateVectorizerStatsUI();
+}
+
+function getSelectedVectorizerContourObj() {
+  const layer = vecEditorState.selectedLayer;
+  const idx = vecEditorState.selectedIndex;
+  if (!layer || idx < 0) return null;
+  const arr = vec2dState.result[layer];
+  if (!arr || idx >= arr.length) return null;
+  return arr[idx];
+}
+
+function pointToSegmentDistMM(px, py, ax, ay, bx, by) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const lenSq = dx * dx + dy * dy;
+  let t = 0;
+  if (lenSq > 1e-8) {
+    t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq));
+  }
+  const projX = ax + t * dx;
+  const projY = ay + t * dy;
+  return {
+    dist: Math.hypot(px - projX, py - projY),
+    projX,
+    projY,
+    t
+  };
+}
+
+function getEditableLayerKeysForCurrentView() {
+  const showCut = vec2dState.previewMode === 'combined' || vec2dState.previewMode === 'cut_only';
+  const showEngrave = vec2dState.previewMode === 'combined' || vec2dState.previewMode === 'engrave_only';
+  const keys = [];
+  if (showEngrave) {
+    if (vec2dState.detectFineEdges) keys.push('fineEdgeLoops');
+    keys.push('engraveLoops');
+    keys.push('frameEngraveLoops');
+  }
+  if (showCut) {
+    keys.push('holeCutLoops');
+    keys.push('outerCutLoops');
+  }
+  return keys;
+}
+
+function findVectorizerContourAtMM(mmX, mmY, tolMM) {
+  const res = vec2dState.result;
+  const keys = getEditableLayerKeysForCurrentView();
+
+  // 1. Priorizar impacto cercano a cualquier borde/segmento
+  let bestHit = null;
+  let bestEdgeDist = tolMM;
+
+  keys.forEach((layerKey) => {
+    const arr = res[layerKey] || [];
+    for (let i = 0; i < arr.length; i++) {
+      const pts = arr[i].points;
+      if (!pts || pts.length < 2) continue;
+      for (let j = 0, n = pts.length; j < n; j++) {
+        const a = pts[j];
+        const b = pts[(j + 1) % n];
+        const dObj = pointToSegmentDistMM(mmX, mmY, a.x, a.y, b.x, b.y);
+        if (dObj.dist < bestEdgeDist) {
+          bestEdgeDist = dObj.dist;
+          bestHit = { layer: layerKey, index: i, edgeIndex: j, projX: dObj.projX, projY: dObj.projY };
+        }
+      }
+    }
+  });
+  if (bestHit) return bestHit;
+
+  // 2. Si no tocó directamente un segmento, elegir el contorno de menor área que contenga el punto
+  let smallestArea = Infinity;
+  let insideHit = null;
+  keys.forEach((layerKey) => {
+    const arr = res[layerKey] || [];
+    for (let i = 0; i < arr.length; i++) {
+      const l = arr[i];
+      if (!l.points || l.points.length < 3) continue;
+      if (isPointInPolygon({ x: mmX, y: mmY }, l.points)) {
+        const area = l.areaMM2 || Math.abs(computePolygonSignedArea2D(l.points));
+        if (area < smallestArea) {
+          smallestArea = area;
+          insideHit = { layer: layerKey, index: i, edgeIndex: -1 };
+        }
+      }
+    }
+  });
+  return insideHit;
+}
+
+function eraseVectorizerContoursAtMM(mmX, mmY, radiusMM) {
+  const res = vec2dState.result;
+  const r = Math.max(0.2, Number(radiusMM) || 3.5);
+  const filter = vecEditorState.eraserFilter || 'all';
+  let keys = [];
+  if (filter === 'engrave_only') {
+    keys = ['engraveLoops', 'fineEdgeLoops', 'frameEngraveLoops'];
+  } else if (filter === 'cut_only') {
+    keys = ['holeCutLoops', 'outerCutLoops'];
+  } else {
+    keys = ['engraveLoops', 'fineEdgeLoops', 'frameEngraveLoops', 'holeCutLoops', 'outerCutLoops'];
+  }
+
+  let removedCount = 0;
+  keys.forEach((layerKey) => {
+    const arr = res[layerKey];
+    if (!arr || arr.length === 0) return;
+    res[layerKey] = arr.filter((l) => {
+      const pts = l.points;
+      if (!pts || pts.length === 0) return false;
+      for (let j = 0, n = pts.length; j < n; j++) {
+        const a = pts[j];
+        const b = pts[(j + 1) % n];
+        if (pointToSegmentDistMM(mmX, mmY, a.x, a.y, b.x, b.y).dist <= r) {
+          removedCount++;
+          return false;
+        }
+      }
+      return true;
+    });
+  });
+
+  if (removedCount > 0) {
+    vecEditorState.selectedLayer = null;
+    vecEditorState.selectedIndex = -1;
+    recomputeVectorizerEditorDerivedStats();
+  }
+  return removedCount;
+}
+
+function renderVectorizerEditorOverlay(ctx, tf) {
+  const { scale, toX, toY } = tf;
+  const selLoop = getSelectedVectorizerContourObj();
+
+  // 1. Resaltar contorno seleccionado y sus nodos/caja delimitadora
+  if (selLoop && selLoop.points && selLoop.points.length >= 2) {
+    const pts = selLoop.points;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    pts.forEach((p) => {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    });
+
+    ctx.save();
+    // Caja delimitadora punteada
+    const bx = toX(minX);
+    const by = toY(maxY);
+    const bw = Math.max(2, (maxX - minX) * scale);
+    const bh = Math.max(2, (maxY - minY) * scale);
+    ctx.strokeStyle = 'rgba(250, 204, 21, 0.55)';
+    ctx.lineWidth = 1.1;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeRect(bx - 3, by - 3, bw + 6, bh + 6);
+    ctx.setLineDash([]);
+
+    // Contorno resaltado en amarillo/cian brillante
+    ctx.beginPath();
+    pts.forEach((p, idx) => {
+      if (idx === 0) ctx.moveTo(toX(p.x), toY(p.y));
+      else ctx.lineTo(toX(p.x), toY(p.y));
+    });
+    ctx.closePath();
+    ctx.strokeStyle = '#facc15';
+    ctx.lineWidth = 2.4;
+    ctx.stroke();
+
+    // Etiqueta de dimensiones del contorno seleccionado
+    const dimLabel = (maxX - minX).toFixed(1) + '×' + (maxY - minY).toFixed(1) + ' mm (' + pts.length + ' nodos)';
+    ctx.font = 'bold 10px monospace';
+    ctx.fillStyle = '#facc15';
+    ctx.textAlign = 'left';
+    ctx.fillText(dimLabel, bx, Math.max(12, by - 6));
+
+    // Nodos interactivos (grandes en modo 'nodes', sutiles en modo 'select')
+    const isNodeMode = vecEditorState.tool === 'nodes';
+    const nodeRad = isNodeMode ? 4.3 : 2.3;
+    for (let i = 0; i < pts.length; i++) {
+      const sx = toX(pts[i].x);
+      const sy = toY(pts[i].y);
+      ctx.beginPath();
+      ctx.arc(sx, sy, nodeRad, 0, Math.PI * 2);
+      if (isNodeMode && i === vecEditorState.selectedNodeIndex) {
+        ctx.fillStyle = '#f43f5e';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.6;
+      } else if (isNodeMode && i === vecEditorState.hoveredNodeIndex) {
+        ctx.fillStyle = '#38bdf8';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.4;
+      } else {
+        ctx.fillStyle = isNodeMode ? '#facc15' : 'rgba(250, 204, 21, 0.75)';
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = 1.0;
+      }
+      ctx.fill();
+      if (isNodeMode) ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // 2. Círculo del borrador interactivo cuando la herramienta 'eraser' está activa
+  if (vecEditorState.tool === 'eraser' && vecEditorState.cursorMM) {
+    const rPx = Math.max(4, (Number(vecEditorState.eraserRadiusMM) || 3.5) * scale);
+    const cx = toX(vecEditorState.cursorMM.x);
+    const cy = toY(vecEditorState.cursorMM.y);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, rPx, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(244, 63, 94, 0.22)';
+    ctx.strokeStyle = '#f43f5e';
+    ctx.lineWidth = 1.5;
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // 3. Vista previa en vivo al dibujar nuevas formas vectoriales (trazo libre, rectángulo, círculo)
+  if (vecEditorState.isDragging && vecEditorState.dragMode === 'draw_shape') {
+    ctx.save();
+    const colorMap = {
+      engraveLoops: '#10b981',
+      fineEdgeLoops: '#f59e0b',
+      holeCutLoops: '#38bdf8',
+      outerCutLoops: '#f43f5e'
+    };
+    const strokeCol = colorMap[vecEditorState.drawTargetLayer] || '#10b981';
+    ctx.strokeStyle = strokeCol;
+    ctx.fillStyle = strokeCol + '33';
+    ctx.lineWidth = 2.0;
+    ctx.setLineDash([4, 3]);
+
+    if (vecEditorState.tool === 'draw_freehand' && vecEditorState.freehandPtsMM.length >= 2) {
+      ctx.beginPath();
+      vecEditorState.freehandPtsMM.forEach((p, idx) => {
+        if (idx === 0) ctx.moveTo(toX(p.x), toY(p.y));
+        else ctx.lineTo(toX(p.x), toY(p.y));
+      });
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    } else if (vecEditorState.tool === 'draw_rect') {
+      const x0 = toX(vecEditorState.dragStartMM.x);
+      const y0 = toY(vecEditorState.dragStartMM.y);
+      const x1 = toX(vecEditorState.dragCurrMM.x);
+      const y1 = toY(vecEditorState.dragCurrMM.y);
+      ctx.fillRect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0));
+      ctx.strokeRect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0));
+    } else if (vecEditorState.tool === 'draw_circle') {
+      const cx = toX((vecEditorState.dragStartMM.x + vecEditorState.dragCurrMM.x) * 0.5);
+      const cy = toY((vecEditorState.dragStartMM.y + vecEditorState.dragCurrMM.y) * 0.5);
+      const rx = Math.max(2, Math.abs(vecEditorState.dragCurrMM.x - vecEditorState.dragStartMM.x) * 0.5 * scale);
+      const ry = Math.max(2, Math.abs(vecEditorState.dragCurrMM.y - vecEditorState.dragStartMM.y) * 0.5 * scale);
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // 4. Fantasma de posición cuando está activa la herramienta de estampar Texto Vectorial
+  if (vecEditorState.tool === 'add_text' && vecEditorState.cursorMM) {
+    const txt = (vecEditorState.textValue || 'TEXTO').trim();
+    if (txt.length > 0) {
+      const hPx = Math.max(10, (Number(vecEditorState.textHeightMM) || 10) * scale);
+      ctx.save();
+      ctx.font = '900 ' + hPx.toFixed(1) + 'px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(16, 185, 129, 0.38)';
+      ctx.strokeStyle = '#10b981';
+      ctx.lineWidth = 1.2;
+      const sx = toX(vecEditorState.cursorMM.x);
+      const sy = toY(vecEditorState.cursorMM.y);
+      ctx.fillText(txt, sx, sy);
+      ctx.strokeText(txt, sx, sy);
+      ctx.restore();
+    }
+  }
+}
+
+function setVectorizerEditorTool(toolName) {
+  vecEditorState.tool = toolName || 'select';
+  vecEditorState.selectedNodeIndex = -1;
+  vecEditorState.hoveredNodeIndex = -1;
+  syncVectorizerEditorToolbarUI();
+  renderImageVectorizerPreview();
+}
+
+function resetVectorizerEditorViewport() {
+  vecEditorState.zoom = 1.0;
+  vecEditorState.panX = 0.0;
+  vecEditorState.panY = 0.0;
+  syncVectorizerEditorToolbarUI();
+  renderImageVectorizerPreview();
+}
+
+function vectorizerEditorZoomStep(factor) {
+  vecEditorState.zoom = Math.max(0.4, Math.min(14.0, (vecEditorState.zoom || 1.0) * (Number(factor) || 1.2)));
+  syncVectorizerEditorToolbarUI();
+  renderImageVectorizerPreview();
+}
+
+function onVectorizerSelectedLayerChange(targetLayerKey) {
+  const sel = getSelectedVectorizerContourObj();
+  if (!sel || !targetLayerKey || targetLayerKey === vecEditorState.selectedLayer) return;
+  const res = vec2dState.result;
+  if (!res[targetLayerKey]) return;
+
+  pushVectorizerEditorUndoSnapshot();
+  const srcArr = res[vecEditorState.selectedLayer];
+  const [moved] = srcArr.splice(vecEditorState.selectedIndex, 1);
+  moved.isFrame = false;
+  moved.isHole = targetLayerKey === 'holeCutLoops';
+  res[targetLayerKey].push(moved);
+
+  vecEditorState.selectedLayer = targetLayerKey;
+  vecEditorState.selectedIndex = res[targetLayerKey].length - 1;
+  vecEditorState.selectedNodeIndex = -1;
+  recomputeVectorizerEditorDerivedStats();
+  syncVectorizerEditorToolbarUI();
+}
+
+function vectorizerEditorActionOnSelected(action) {
+  const sel = getSelectedVectorizerContourObj();
+  if (!sel || !sel.points || sel.points.length < 3) return;
+
+  pushVectorizerEditorUndoSnapshot();
+  const res = vec2dState.result;
+  const arr = res[vecEditorState.selectedLayer];
+
+  if (action === 'delete') {
+    if (vecEditorState.tool === 'nodes' && vecEditorState.selectedNodeIndex >= 0 && sel.points.length > 3) {
+      sel.points.splice(vecEditorState.selectedNodeIndex, 1);
+      vecEditorState.selectedNodeIndex = -1;
+    } else {
+      arr.splice(vecEditorState.selectedIndex, 1);
+      vecEditorState.selectedLayer = null;
+      vecEditorState.selectedIndex = -1;
+      vecEditorState.selectedNodeIndex = -1;
+    }
+  } else if (action === 'smooth') {
+    sel.points = smoothClosedPolygonChaikin(sel.points, 1);
+  } else if (action === 'simplify') {
+    sel.points = simplifyClosedPolygonRDP(sel.points, 0.22);
+  } else if (action === 'scale_up' || action === 'scale_down') {
+    const f = action === 'scale_up' ? 1.08 : 0.92;
+    let cx = 0, cy = 0;
+    sel.points.forEach((p) => { cx += p.x; cy += p.y; });
+    cx /= sel.points.length;
+    cy /= sel.points.length;
+    sel.points.forEach((p) => {
+      p.x = cx + (p.x - cx) * f;
+      p.y = cy + (p.y - cy) * f;
+    });
+  } else if (action === 'duplicate') {
+    const copy = {
+      points: sel.points.map((p) => ({ x: p.x + 3.0, y: p.y - 3.0 })),
+      areaMM2: sel.areaMM2,
+      signedArea: sel.signedArea,
+      isHole: sel.isHole,
+      isFrame: false
+    };
+    arr.push(copy);
+    vecEditorState.selectedIndex = arr.length - 1;
+  }
+
+  recomputeVectorizerEditorDerivedStats();
+  syncVectorizerEditorToolbarUI();
+}
+
+function onVectorizerEditorSettingChange() {
+  const getVal = (id, def) => {
+    const el = document.getElementById(id);
+    return el ? el.value : def;
+  };
+  vecEditorState.drawTargetLayer = getVal('vecDrawTargetLayerSelect', vecEditorState.drawTargetLayer);
+  vecEditorState.eraserRadiusMM = Math.max(0.5, Math.min(30, parseFloat(getVal('vecEraserRadiusInput', vecEditorState.eraserRadiusMM)) || 3.5));
+  vecEditorState.eraserFilter = getVal('vecEraserFilterSelect', vecEditorState.eraserFilter);
+  vecEditorState.textValue = getVal('vecEditorTextInput', vecEditorState.textValue);
+  vecEditorState.textHeightMM = Math.max(2.5, Math.min(120, parseFloat(getVal('vecEditorTextSizeInput', vecEditorState.textHeightMM)) || 10.0));
+  vecEditorState.textLayer = getVal('vecEditorTextLayerSelect', vecEditorState.textLayer);
+  syncVectorizerEditorToolbarUI();
+  renderImageVectorizerPreview();
+}
+
+// Convierte un texto en contornos vectoriales cerrados (incluyendo huecos internos de letras como O, A, B, P, R)
+function insertVectorizerEditorTextAt(centerXMM = 0, centerYMM = 0) {
+  onVectorizerEditorSettingChange();
+  const txt = (vecEditorState.textValue || 'TEXTO').trim();
+  if (!txt) return;
+
+  const targetH = Math.max(2.5, Math.min(120, Number(vecEditorState.textHeightMM) || 10.0));
+  const targetLayer = vecEditorState.textLayer || 'engraveLoops';
+  const res = vec2dState.result;
+  if (!res[targetLayer]) return;
+
+  const fontPx = 96;
+  const padPx = 24;
+  const tmpCanvas = document.createElement('canvas');
+  const tmpCtx = tmpCanvas.getContext('2d');
+  tmpCtx.font = '900 ' + fontPx + 'px sans-serif';
+  const estW = Math.max(120, Math.ceil(fontPx * txt.length * 0.78) + padPx * 2);
+  const estH = fontPx + padPx * 2;
+  tmpCanvas.width = estW + 2;
+  tmpCanvas.height = estH + 2;
+
+  const ctx = tmpCanvas.getContext('2d');
+  ctx.clearRect(0, 0, tmpCanvas.width, tmpCanvas.height);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '900 ' + fontPx + 'px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(txt, tmpCanvas.width * 0.5, tmpCanvas.height * 0.5);
+
+  const imgData = ctx.getImageData(0, 0, tmpCanvas.width, tmpCanvas.height).data;
+  const gW = tmpCanvas.width;
+  const gH = tmpCanvas.height;
+  const field = new Float32Array(gW * gH);
+  field.fill(-50);
+
+  let minPxX = gW, maxPxX = 0, minPxY = gH, maxPxY = 0;
+  for (let y = 1; y < gH - 1; y++) {
+    for (let x = 1; x < gW - 1; x++) {
+      const a = imgData[(y * gW + x) * 4 + 3];
+      field[y * gW + x] = a - 120;
+      if (a >= 120) {
+        if (x < minPxX) minPxX = x;
+        if (x > maxPxX) maxPxX = x;
+        if (y < minPxY) minPxY = y;
+        if (y > maxPxY) maxPxY = y;
+      }
+    }
+  }
+  if (maxPxY <= minPxY || maxPxX <= minPxX) return;
+
+  const smoothField = smoothScalarField3x3(field, gW, gH);
+  const rawPxLoops = traceIsoContoursMarchingSquares(smoothField, gW, gH, 0.0, true);
+  if (rawPxLoops.length === 0) return;
+
+  const pxSpanH = Math.max(8, maxPxY - minPxY);
+  const mmPerPx = targetH / pxSpanH;
+  const cxPx = 0.5 * (minPxX + maxPxX);
+  const cyPx = 0.5 * (minPxY + maxPxY);
+
+  pushVectorizerEditorUndoSnapshot();
+
+  const newLoops = [];
+  rawPxLoops.forEach((rawPts) => {
+    const mmPts = rawPts.map((p) => ({
+      x: centerXMM + (p.x - cxPx) * mmPerPx,
+      y: centerYMM + (cyPx - p.y) * mmPerPx
+    }));
+    const clean = simplifyClosedPolygonRDP(mmPts, 0.05);
+    const sa = computePolygonSignedArea2D(clean);
+    if (Math.abs(sa) < 0.06 || clean.length < 3) return;
+    newLoops.push({
+      points: clean,
+      areaMM2: Math.abs(sa),
+      signedArea: sa,
+      isHole: targetLayer === 'holeCutLoops' ? true : (sa < 0),
+      isFrame: false
+    });
+  });
+
+  if (newLoops.length > 0) {
+    res[targetLayer].push(...newLoops);
+    vecEditorState.selectedLayer = targetLayer;
+    vecEditorState.selectedIndex = res[targetLayer].length - 1;
+    recomputeVectorizerEditorDerivedStats();
+    syncVectorizerEditorToolbarUI();
+  }
+}
+
+function syncVectorizerEditorToolbarUI() {
+  const tools = ['select', 'nodes', 'eraser', 'draw_freehand', 'draw_rect', 'draw_circle', 'add_text', 'pan'];
+  tools.forEach((t) => {
+    const btn = document.getElementById('vecToolBtn_' + t);
+    if (!btn) return;
+    if (vecEditorState.tool === t) {
+      btn.className = 'px-2 py-1 rounded-lg bg-amber-500/25 border border-amber-400 text-amber-200 text-[11px] font-bold transition';
+    } else {
+      btn.className = 'px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-[11px] font-medium transition';
+    }
+  });
+
+  const undoBtn = document.getElementById('vecUndoBtn');
+  if (undoBtn) undoBtn.disabled = vecEditorState.undoStack.length === 0;
+  const redoBtn = document.getElementById('vecRedoBtn');
+  if (redoBtn) redoBtn.disabled = vecEditorState.redoStack.length === 0;
+
+  const zoomBtn = document.getElementById('vecZoomResetBtn');
+  if (zoomBtn) zoomBtn.textContent = '🔍 ' + Math.round((vecEditorState.zoom || 1) * 100) + '%';
+
+  const selBox = document.getElementById('vecEditorSelectionBox');
+  const drawBox = document.getElementById('vecEditorDrawBox');
+  const eraserBox = document.getElementById('vecEditorEraserBox');
+  const textBox = document.getElementById('vecEditorTextBox');
+  const hintBox = document.getElementById('vecEditorHintBox');
+
+  const selObj = getSelectedVectorizerContourObj();
+  const isSelectOrNodes = vecEditorState.tool === 'select' || vecEditorState.tool === 'nodes';
+  const isDrawShape = vecEditorState.tool === 'draw_freehand' || vecEditorState.tool === 'draw_rect' || vecEditorState.tool === 'draw_circle';
+  const isEraser = vecEditorState.tool === 'eraser';
+  const isText = vecEditorState.tool === 'add_text';
+
+  if (selBox) selBox.classList.toggle('hidden', !(isSelectOrNodes && selObj));
+  if (drawBox) drawBox.classList.toggle('hidden', !isDrawShape);
+  if (eraserBox) eraserBox.classList.toggle('hidden', !isEraser);
+  if (textBox) textBox.classList.toggle('hidden', !isText);
+  if (hintBox) hintBox.classList.toggle('hidden', (isSelectOrNodes && Boolean(selObj)) || isDrawShape || isEraser || isText);
+
+  if (selObj) {
+    const selLayerEl = document.getElementById('vecSelectedLayerSelect');
+    if (selLayerEl) selLayerEl.value = vecEditorState.selectedLayer;
+    const selInfoEl = document.getElementById('vecSelectedInfoBadge');
+    if (selInfoEl) {
+      selInfoEl.textContent = selObj.points.length + ' nodos · ' + (selObj.areaMM2 || 0).toFixed(1) + ' mm²';
+    }
+  }
+}
+
+function bindVectorizerEditorCanvasEvents() {
+  if (vecEditorState.eventsBound) return;
+  const canvas = document.getElementById('vectorizerPreviewCanvas');
+  if (!canvas || typeof canvas.addEventListener !== 'function') return;
+  vecEditorState.eventsBound = true;
+
+  const getEventCoords = (e) => {
+    const rect = canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : { left: 0, top: 0, width: canvas.width, height: canvas.height };
+    const sx = (e.clientX - rect.left) * (canvas.width / Math.max(1, rect.width));
+    const sy = (e.clientY - rect.top) * (canvas.height / Math.max(1, rect.height));
+    const tf = getVectorizerCanvasTransform(canvas);
+    return {
+      sx,
+      sy,
+      mmX: tf.toMMX(sx),
+      mmY: tf.toMMY(sy),
+      tf
+    };
+  };
+
+  canvas.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+  });
+
+  canvas.addEventListener('mousedown', (e) => {
+    if (vec2dState.previewMode === 'original') return;
+    const { sx, sy, mmX, mmY, tf } = getEventCoords(e);
+    vecEditorState.cursorMM = { x: mmX, y: mmY };
+
+    // Botón derecho en modo Nodos: eliminar el nodo bajo el cursor
+    if (e.button === 2 && vecEditorState.tool === 'nodes') {
+      const sel = getSelectedVectorizerContourObj();
+      if (sel && sel.points && sel.points.length > 3) {
+        const nodeTolMM = 8.0 / Math.max(0.5, tf.scale);
+        let bestIdx = -1;
+        let bestDist = nodeTolMM;
+        sel.points.forEach((p, idx) => {
+          const d = Math.hypot(p.x - mmX, p.y - mmY);
+          if (d < bestDist) {
+            bestDist = d;
+            bestIdx = idx;
+          }
+        });
+        if (bestIdx >= 0) {
+          pushVectorizerEditorUndoSnapshot();
+          sel.points.splice(bestIdx, 1);
+          vecEditorState.selectedNodeIndex = -1;
+          recomputeVectorizerEditorDerivedStats();
+          syncVectorizerEditorToolbarUI();
+        }
+      }
+      return;
+    }
+
+    // Paneo con clic central, Alt+Clic o herramienta 'pan'
+    if (e.button === 1 || e.altKey || vecEditorState.tool === 'pan') {
+      vecEditorState.isDragging = true;
+      vecEditorState.dragMode = 'pan';
+      vecEditorState.dragStartScreen = { x: sx - (vecEditorState.panX || 0), y: sy - (vecEditorState.panY || 0) };
+      return;
+    }
+
+    if (e.button !== 0) return;
+
+    if (vecEditorState.tool === 'add_text') {
+      insertVectorizerEditorTextAt(mmX, mmY);
+      return;
+    }
+
+    if (vecEditorState.tool === 'eraser') {
+      pushVectorizerEditorUndoSnapshot();
+      vecEditorState.isDragging = true;
+      vecEditorState.dragMode = 'erase';
+      eraseVectorizerContoursAtMM(mmX, mmY, vecEditorState.eraserRadiusMM);
+      return;
+    }
+
+    if (vecEditorState.tool === 'draw_freehand' || vecEditorState.tool === 'draw_rect' || vecEditorState.tool === 'draw_circle') {
+      vecEditorState.isDragging = true;
+      vecEditorState.dragMode = 'draw_shape';
+      vecEditorState.dragStartMM = { x: mmX, y: mmY };
+      vecEditorState.dragCurrMM = { x: mmX, y: mmY };
+      vecEditorState.freehandPtsMM = [{ x: mmX, y: mmY }];
+      renderImageVectorizerPreview();
+      return;
+    }
+
+    const tolMM = 7.5 / Math.max(0.5, tf.scale);
+
+    if (vecEditorState.tool === 'nodes') {
+      const sel = getSelectedVectorizerContourObj();
+      if (sel && sel.points) {
+        let bestIdx = -1;
+        let bestDist = tolMM * 1.15;
+        sel.points.forEach((p, idx) => {
+          const d = Math.hypot(p.x - mmX, p.y - mmY);
+          if (d < bestDist) {
+            bestDist = d;
+            bestIdx = idx;
+          }
+        });
+        if (bestIdx >= 0) {
+          vecEditorState.selectedNodeIndex = bestIdx;
+          vecEditorState.isDragging = true;
+          vecEditorState.dragMode = 'move_node';
+          vecEditorState.dragUndoPushed = false;
+          renderImageVectorizerPreview();
+          return;
+        }
+      }
+    }
+
+    const hit = findVectorizerContourAtMM(mmX, mmY, tolMM);
+    if (hit) {
+      vecEditorState.selectedLayer = hit.layer;
+      vecEditorState.selectedIndex = hit.index;
+      vecEditorState.selectedNodeIndex = -1;
+      if (vecEditorState.tool === 'select') {
+        vecEditorState.isDragging = true;
+        vecEditorState.dragMode = 'move_loop';
+        vecEditorState.dragUndoPushed = false;
+        vecEditorState.dragStartMM = { x: mmX, y: mmY };
+      }
+    } else {
+      vecEditorState.selectedLayer = null;
+      vecEditorState.selectedIndex = -1;
+      vecEditorState.selectedNodeIndex = -1;
+    }
+    syncVectorizerEditorToolbarUI();
+    renderImageVectorizerPreview();
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    if (vec2dState.previewMode === 'original') return;
+    const { sx, sy, mmX, mmY, tf } = getEventCoords(e);
+    vecEditorState.cursorMM = { x: mmX, y: mmY };
+
+    if (!vecEditorState.isDragging) {
+      if (vecEditorState.tool === 'nodes') {
+        const sel = getSelectedVectorizerContourObj();
+        let hov = -1;
+        if (sel && sel.points) {
+          const tolMM = 7.5 / Math.max(0.5, tf.scale);
+          sel.points.forEach((p, idx) => {
+            if (Math.hypot(p.x - mmX, p.y - mmY) < tolMM) hov = idx;
+          });
+        }
+        if (hov !== vecEditorState.hoveredNodeIndex) {
+          vecEditorState.hoveredNodeIndex = hov;
+          renderImageVectorizerPreview();
+        }
+      } else if (vecEditorState.tool === 'eraser' || vecEditorState.tool === 'add_text') {
+        renderImageVectorizerPreview();
+      }
+      return;
+    }
+
+    if (vecEditorState.dragMode === 'pan') {
+      vecEditorState.panX = sx - vecEditorState.dragStartScreen.x;
+      vecEditorState.panY = sy - vecEditorState.dragStartScreen.y;
+      renderImageVectorizerPreview();
+      return;
+    }
+
+    if (vecEditorState.dragMode === 'erase') {
+      eraseVectorizerContoursAtMM(mmX, mmY, vecEditorState.eraserRadiusMM);
+      renderImageVectorizerPreview();
+      return;
+    }
+
+    if (vecEditorState.dragMode === 'move_node') {
+      const sel = getSelectedVectorizerContourObj();
+      if (sel && sel.points && vecEditorState.selectedNodeIndex >= 0) {
+        if (!vecEditorState.dragUndoPushed) {
+          pushVectorizerEditorUndoSnapshot();
+          vecEditorState.dragUndoPushed = true;
+        }
+        sel.points[vecEditorState.selectedNodeIndex] = { x: mmX, y: mmY };
+        renderImageVectorizerPreview();
+      }
+      return;
+    }
+
+    if (vecEditorState.dragMode === 'move_loop') {
+      const sel = getSelectedVectorizerContourObj();
+      const dx = mmX - vecEditorState.dragStartMM.x;
+      const dy = mmY - vecEditorState.dragStartMM.y;
+      if (sel && sel.points && (Math.abs(dx) > 0.02 || Math.abs(dy) > 0.02)) {
+        if (!vecEditorState.dragUndoPushed) {
+          pushVectorizerEditorUndoSnapshot();
+          vecEditorState.dragUndoPushed = true;
+        }
+        sel.points.forEach((p) => {
+          p.x += dx;
+          p.y += dy;
+        });
+        vecEditorState.dragStartMM = { x: mmX, y: mmY };
+        renderImageVectorizerPreview();
+      }
+      return;
+    }
+
+    if (vecEditorState.dragMode === 'draw_shape') {
+      vecEditorState.dragCurrMM = { x: mmX, y: mmY };
+      if (vecEditorState.tool === 'draw_freehand') {
+        const last = vecEditorState.freehandPtsMM[vecEditorState.freehandPtsMM.length - 1];
+        if (!last || Math.hypot(mmX - last.x, mmY - last.y) > 0.45) {
+          vecEditorState.freehandPtsMM.push({ x: mmX, y: mmY });
+        }
+      }
+      renderImageVectorizerPreview();
+    }
+  });
+
+  const finishDrag = () => {
+    if (!vecEditorState.isDragging) return;
+    const mode = vecEditorState.dragMode;
+    vecEditorState.isDragging = false;
+    vecEditorState.dragMode = null;
+
+    if (mode === 'move_loop' || mode === 'move_node') {
+      recomputeVectorizerEditorDerivedStats();
+      syncVectorizerEditorToolbarUI();
+    } else if (mode === 'draw_shape') {
+      const targetLayer = vecEditorState.drawTargetLayer || 'engraveLoops';
+      const res = vec2dState.result;
+      let newPts = [];
+
+      if (vecEditorState.tool === 'draw_freehand' && vecEditorState.freehandPtsMM.length >= 3) {
+        newPts = simplifyClosedPolygonRDP(vecEditorState.freehandPtsMM, 0.08);
+      } else if (vecEditorState.tool === 'draw_rect') {
+        const x0 = Math.min(vecEditorState.dragStartMM.x, vecEditorState.dragCurrMM.x);
+        const x1 = Math.max(vecEditorState.dragStartMM.x, vecEditorState.dragCurrMM.x);
+        const y0 = Math.min(vecEditorState.dragStartMM.y, vecEditorState.dragCurrMM.y);
+        const y1 = Math.max(vecEditorState.dragStartMM.y, vecEditorState.dragCurrMM.y);
+        if (x1 - x0 > 0.6 && y1 - y0 > 0.6) {
+          newPts = [
+            { x: x1, y: y1 },
+            { x: x0, y: y1 },
+            { x: x0, y: y0 },
+            { x: x1, y: y0 }
+          ];
+        }
+      } else if (vecEditorState.tool === 'draw_circle') {
+        const cx = (vecEditorState.dragStartMM.x + vecEditorState.dragCurrMM.x) * 0.5;
+        const cy = (vecEditorState.dragStartMM.y + vecEditorState.dragCurrMM.y) * 0.5;
+        const rx = Math.abs(vecEditorState.dragCurrMM.x - vecEditorState.dragStartMM.x) * 0.5;
+        const ry = Math.abs(vecEditorState.dragCurrMM.y - vecEditorState.dragStartMM.y) * 0.5;
+        if (rx > 0.4 && ry > 0.4) {
+          for (let i = 0; i < 40; i++) {
+            const ang = (i * Math.PI * 2) / 40;
+            newPts.push({ x: cx + Math.cos(ang) * rx, y: cy + Math.sin(ang) * ry });
+          }
+        }
+      }
+
+      if (newPts.length >= 3 && res[targetLayer]) {
+        const sa = computePolygonSignedArea2D(newPts);
+        if (Math.abs(sa) > 0.15) {
+          pushVectorizerEditorUndoSnapshot();
+          if (sa < 0) newPts.reverse();
+          res[targetLayer].push({
+            points: newPts,
+            areaMM2: Math.abs(sa),
+            signedArea: Math.abs(sa),
+            isHole: targetLayer === 'holeCutLoops',
+            isFrame: false
+          });
+          vecEditorState.selectedLayer = targetLayer;
+          vecEditorState.selectedIndex = res[targetLayer].length - 1;
+          recomputeVectorizerEditorDerivedStats();
+          syncVectorizerEditorToolbarUI();
+        }
+      }
+      vecEditorState.freehandPtsMM = [];
+      renderImageVectorizerPreview();
+    }
+  };
+
+  canvas.addEventListener('mouseup', finishDrag);
+  canvas.addEventListener('mouseleave', () => {
+    vecEditorState.cursorMM = null;
+    if (vecEditorState.isDragging) finishDrag();
+    else renderImageVectorizerPreview();
+  });
+
+  // Doble clic sobre una arista del contorno seleccionado para insertar un nuevo nodo en ese punto
+  canvas.addEventListener('dblclick', (e) => {
+    if (vec2dState.previewMode === 'original') return;
+    const { mmX, mmY, tf } = getEventCoords(e);
+    const sel = getSelectedVectorizerContourObj();
+    if (!sel || !sel.points || sel.points.length < 3) return;
+
+    const tolMM = 8.5 / Math.max(0.5, tf.scale);
+    let bestEdge = -1;
+    let bestDist = tolMM;
+    let insertPt = null;
+
+    for (let i = 0, n = sel.points.length; i < n; i++) {
+      const a = sel.points[i];
+      const b = sel.points[(i + 1) % n];
+      const dObj = pointToSegmentDistMM(mmX, mmY, a.x, a.y, b.x, b.y);
+      if (dObj.dist < bestDist) {
+        bestDist = dObj.dist;
+        bestEdge = i;
+        insertPt = { x: dObj.projX, y: dObj.projY };
+      }
+    }
+
+    if (bestEdge >= 0 && insertPt) {
+      pushVectorizerEditorUndoSnapshot();
+      sel.points.splice(bestEdge + 1, 0, insertPt);
+      vecEditorState.tool = 'nodes';
+      vecEditorState.selectedNodeIndex = bestEdge + 1;
+      recomputeVectorizerEditorDerivedStats();
+      syncVectorizerEditorToolbarUI();
+    }
+  });
+
+  // Zoom con la rueda del ratón centrado en el cursor
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const { sx, sy } = getEventCoords(e);
+    const oldZoom = vecEditorState.zoom || 1.0;
+    const factor = e.deltaY < 0 ? 1.16 : 0.86;
+    const newZoom = Math.max(0.4, Math.min(14.0, oldZoom * factor));
+    const ratio = newZoom / oldZoom;
+
+    const cx = canvas.width * 0.5 + (vecEditorState.panX || 0);
+    const cy = canvas.height * 0.5 + (vecEditorState.panY || 0);
+    vecEditorState.panX = (vecEditorState.panX || 0) - (sx - cx) * (ratio - 1);
+    vecEditorState.panY = (vecEditorState.panY || 0) - (sy - cy) * (ratio - 1);
+    vecEditorState.zoom = newZoom;
+
+    syncVectorizerEditorToolbarUI();
+    renderImageVectorizerPreview();
+  }, { passive: false });
+
+  // Atajos de teclado (Supr/Backspace para eliminar, Ctrl+Z / Ctrl+Y para Deshacer/Rehacer)
+  window.addEventListener('keydown', (e) => {
+    const modal = document.getElementById('imageVectorizerModal');
+    if (!modal || modal.classList.contains('hidden')) return;
+    const tag = (e.target && e.target.tagName) ? e.target.tagName.toUpperCase() : '';
+    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+      e.preventDefault();
+      vectorizerEditorUndo();
+    } else if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) {
+      e.preventDefault();
+      vectorizerEditorRedo();
+    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (getSelectedVectorizerContourObj()) {
+        e.preventDefault();
+        vectorizerEditorActionOnSelected('delete');
+      }
+    }
+  });
+}
+
 if (typeof window !== 'undefined') {
   window.openImageVectorizerModal = openImageVectorizerModal;
   window.closeImageVectorizerModal = closeImageVectorizerModal;
@@ -2675,6 +3761,15 @@ if (typeof window !== 'undefined') {
   window.applyVectorizedImageToLayerStudio = applyVectorizedImageToLayerStudio;
   window.generateVectorizedImageSVG = generateVectorizedImageSVG;
   window.generateVectorizedImageDXF = generateVectorizedImageDXF;
+  window.setVectorizerEditorTool = setVectorizerEditorTool;
+  window.vectorizerEditorUndo = vectorizerEditorUndo;
+  window.vectorizerEditorRedo = vectorizerEditorRedo;
+  window.resetVectorizerEditorViewport = resetVectorizerEditorViewport;
+  window.vectorizerEditorZoomStep = vectorizerEditorZoomStep;
+  window.onVectorizerSelectedLayerChange = onVectorizerSelectedLayerChange;
+  window.vectorizerEditorActionOnSelected = vectorizerEditorActionOnSelected;
+  window.onVectorizerEditorSettingChange = onVectorizerEditorSettingChange;
+  window.insertVectorizerEditorTextAt = insertVectorizerEditorTextAt;
 
   window.addEventListener('DOMContentLoaded', () => {
     const fileInputImg = document.getElementById('fileInputImage2D');
@@ -2685,5 +3780,6 @@ if (typeof window !== 'undefined') {
         e.target.value = '';
       });
     }
+    bindVectorizerEditorCanvasEvents();
   });
 }
