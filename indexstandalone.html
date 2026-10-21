@@ -9495,7 +9495,58 @@ function generateParametricFramePolygon2D(shape, halfW, halfH, cornerRadiusMM) {
   return pts;
 }
 
-function buildConfigurableFrameLoops(widthMM, heightMM, sdfOuter, gridW, gridH, mmPerPx) {
+// Traza un contorno paralelo a la silueta exterior añadiendo el margen de celdas necesario para offsets positivos
+function traceOuterSilhouetteAtOffsetMM(filledOuterMask, gridW, gridH, widthMM, heightMM, offsetMM, minAreaMM2, simplifyTolMM, smoothIters) {
+  const innerW = Math.max(1, gridW - 2);
+  const innerH = Math.max(1, gridH - 2);
+  const mmPerPx = Math.max(widthMM / innerW, heightMM / innerH);
+  const offsetPx = (Number(offsetMM) || 0) / mmPerPx;
+  const pad = Math.max(2, Math.ceil(Math.max(0, offsetPx)) + 4);
+  const padW = innerW + pad * 2;
+  const padH = innerH + pad * 2;
+  const paddedMask = new Uint8Array(padW * padH);
+
+  for (let y = 0; y < innerH; y++) {
+    const srcRow = (y + 1) * gridW + 1;
+    const dstRow = (y + pad) * padW + pad;
+    for (let x = 0; x < innerW; x++) {
+      paddedMask[dstRow + x] = filledOuterMask[srcRow + x];
+    }
+  }
+
+  const sdfPadded = computeSignedDistanceField2D(paddedMask, padW, padH);
+  const rawPx = traceIsoContoursMarchingSquares(sdfPadded, padW, padH, -offsetPx, true);
+  const out = [];
+
+  rawPx.forEach((rawPts) => {
+    const mmPts = rawPts.map((p) => ({
+      x: ((p.x - pad) / innerW - 0.5) * widthMM,
+      y: (0.5 - (p.y - pad) / innerH) * heightMM
+    }));
+    const rawArea = Math.abs(computePolygonSignedArea2D(mmPts));
+    if (rawArea < minAreaMM2) return;
+
+    let cleanPts = simplifyClosedPolygonRDP(mmPts, simplifyTolMM);
+    if (smoothIters > 0) {
+      cleanPts = smoothClosedPolygonChaikin(cleanPts, smoothIters);
+    }
+    const signedA = computePolygonSignedArea2D(cleanPts);
+    const finalArea = Math.abs(signedA);
+    if (finalArea < minAreaMM2 || cleanPts.length < 3) return;
+    if (signedA < 0) cleanPts.reverse();
+
+    out.push({
+      points: cleanPts,
+      areaMM2: finalArea,
+      signedArea: finalArea,
+      isHole: false
+    });
+  });
+
+  return out;
+}
+
+function buildConfigurableFrameLoops(widthMM, heightMM, filledOuterMask, sdfOuter, gridW, gridH, mmPerPx) {
   const out = {
     outerCutLoops: [],
     holeCutLoops: [],
@@ -9514,20 +9565,17 @@ function buildConfigurableFrameLoops(widthMM, heightMM, sdfOuter, gridW, gridH, 
   const cutRim = Math.max(0, Number(vec2dState.cutOffsetMM) || 0);
 
   if (shape === 'silhouette') {
-    const traceOffsetLoops = (offsetMM) => {
-      const iso = -offsetMM / mmPerPx;
-      const rawPx = traceIsoContoursMarchingSquares(sdfOuter, gridW, gridH, iso, true);
-      return convertPixelLoopsToMM(
-        rawPx,
-        gridW,
-        gridH,
-        widthMM,
-        heightMM,
-        Math.max(0.8, vec2dState.minSpeckleMM2 * 3),
-        vec2dState.simplifyTolMM * 1.15,
-        vec2dState.smoothIterations
-      ).filter((l) => !l.isHole);
-    };
+    const traceOffsetLoops = (offsetMM) => traceOuterSilhouetteAtOffsetMM(
+      filledOuterMask,
+      gridW,
+      gridH,
+      widthMM,
+      heightMM,
+      offsetMM,
+      Math.max(0.8, vec2dState.minSpeckleMM2 * 3),
+      vec2dState.simplifyTolMM * 1.15,
+      vec2dState.smoothIterations
+    );
 
     const innerLoops = traceOffsetLoops(margin);
     const outerLoops = traceOffsetLoops(margin + thick);
@@ -9841,19 +9889,17 @@ function runImageVectorization() {
   const sdfOuter = computeSignedDistanceField2D(filledOuterMask, gridW, gridH);
 
   if (vec2dState.cutMode === 'silhouette') {
-    const offsetPx = (Number(vec2dState.cutOffsetMM) || 0) / mmPerPx;
-    const rawOuterPx = traceIsoContoursMarchingSquares(sdfOuter, gridW, gridH, -offsetPx, true);
-    const convOuter = convertPixelLoopsToMM(
-      rawOuterPx,
+    outerCutLoops = traceOuterSilhouetteAtOffsetMM(
+      filledOuterMask,
       gridW,
       gridH,
       widthMM,
       heightMM,
+      Number(vec2dState.cutOffsetMM) || 0,
       Math.max(0.8, vec2dState.minSpeckleMM2 * 3),
       vec2dState.simplifyTolMM * 1.2,
       vec2dState.smoothIterations
     );
-    outerCutLoops = convOuter.filter((l) => !l.isHole);
 
     if (vec2dState.cutInternalHoles) {
       const sdfHoles = computeSignedDistanceField2D(internalHolesMask, gridW, gridH);
@@ -9905,7 +9951,7 @@ function runImageVectorization() {
   }
 
   // Generar MARCO CONFIGURABLE si está activo (puede reemplazar el corte exterior y/o añadir orla grabada #008800)
-  const frameData = buildConfigurableFrameLoops(widthMM, heightMM, sdfOuter, gridW, gridH, mmPerPx);
+  const frameData = buildConfigurableFrameLoops(widthMM, heightMM, filledOuterMask, sdfOuter, gridW, gridH, mmPerPx);
   const frameEngraveLoops = frameData.frameEngraveLoops || [];
   if (vec2dState.frameEnabled) {
     if (frameData.outerCutLoops && frameData.outerCutLoops.length > 0 && vec2dState.frameLaserMode !== 'engrave_only') {
