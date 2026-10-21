@@ -45,17 +45,17 @@ const state = {
   guideClipToSlice: true,      // true = recorta las guías que sobresalgan fuera del contorno de la lasca actual
   rodCount: 0,
   rodDiameter: 4,
-  // Marco / Placa Exterior Configurable en el Laminador 3D
-  slicerFrameEnabled: false,          // true = añade un marco o placa base configurable a las capas del modelo 3D
+  // Marco Configurable 2D para Corte/Grabado alrededor del Tablero o Vectorizado 2D (sin modificar el modelo 3D)
+  slicerFrameEnabled: false,          // true = añade un marco 2D de corte y/o grabado alrededor del tablero o lienzo 2D
+  slicerFrameFit: 'board',            // 'board' (Alrededor del borde del Tablero / Lienzo 2D) | 'pieces' (Ajustado alrededor de las piezas)
   slicerFrameShape: 'rounded_rect',   // 'rounded_rect' | 'circle' | 'octagon' | 'arch' | 'hexagon'
-  slicerFrameMode: 'base_and_ring',   // 'base_and_ring' | 'all_layers_ring' | 'base_plate_only' | 'negative_mold' | 'engrave_on_base'
-  slicerFrameStyle: 'none',           // 'none' | 'double_line' | 'ornate_corners' | 'solid_band'
-  slicerFrameThicknessMM: 8.0,        // Grosor del anillo del marco en mm
-  slicerFrameMarginMM: 5.0,           // Margen libre entre el modelo 3D y la ventana interior del marco en mm
-  slicerFrameRadiusMM: 8.0,           // Radio de esquina o chaflán en mm (0 = esquina recta)
-  slicerFrameBaseLayers: 1,           // Nº de capas inferiores con placa base maciza (en modos con base)
-  slicerFrameKeyhole: false,          // true = añade agujero pasante superior para colgar el cuadro/marco 3D
-  slicerFrameKeyholeDiamMM: 5.0,      // Diámetro del agujero de colgado en mm
+  slicerFrameLaserMode: 'cut_outer',  // 'cut_outer' (Corte Ext. #ff0000) | 'cut_and_engrave' (Corte Ext. #ff0000 + Orla #008800) | 'cut_window' (Marco Calado: Ext. #ff0000 + Ventana #0055ff) | 'engrave_only' (Solo Orla Grabada #008800)
+  slicerFrameStyle: 'double_line',    // 'double_line' | 'ornate_corners' | 'solid_band'
+  slicerFrameThicknessMM: 8.0,        // Grosor de la banda/orla del marco en mm
+  slicerFrameMarginMM: 2.0,           // Margen / separación respecto al borde del tablero o piezas en mm
+  slicerFrameRadiusMM: 6.0,           // Radio de esquina o chaflán en mm (0 = esquina recta)
+  slicerFrameKeyhole: false,          // true = añade taladro superior para colgar (#0055ff)
+  slicerFrameKeyholeDiamMM: 5.0,      // Diámetro del taladro de colgado en mm
   // Sistema de Micro-uniones / Pestañas de sujeción por presión (Holding Tabs / Bridges)
   tabsEnabled: false,          // true = deja puntos sin cortar para desprender la pieza haciendo presión
   tabMode: 'count',            // 'count' (nº fijo de puntos por pieza) | 'spacing' (cada X mm de perímetro)

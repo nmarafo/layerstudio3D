@@ -35,17 +35,17 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
 
   <!-- Hoja de estilos principal -->
-  <link rel="stylesheet" href="css/styles.css?v=2.8.5" />
+  <link rel="stylesheet" href="css/styles.css?v=2.8.6" />
 
   <!-- Módulos de la aplicación (cargados en orden de dependencia con defer y cache-busting) -->
-  <script src="js/state.js?v=2.8.5" defer></script>
-  <script src="js/viewer3d.js?v=2.8.5" defer></script>
-  <script src="js/slicer.js?v=2.8.5" defer></script>
-  <script src="js/nesting.js?v=2.8.5" defer></script>
-  <script src="js/modals-guide.js?v=2.8.5" defer></script>
-  <script src="js/viewer2d.js?v=2.8.5" defer></script>
-  <script src="js/exporters.js?v=2.8.5" defer></script>
-  <script src="js/vectorizer2d.js?v=2.8.5" defer></script>
+  <script src="js/state.js?v=2.8.6" defer></script>
+  <script src="js/viewer3d.js?v=2.8.6" defer></script>
+  <script src="js/slicer.js?v=2.8.6" defer></script>
+  <script src="js/nesting.js?v=2.8.6" defer></script>
+  <script src="js/modals-guide.js?v=2.8.6" defer></script>
+  <script src="js/viewer2d.js?v=2.8.6" defer></script>
+  <script src="js/exporters.js?v=2.8.6" defer></script>
+  <script src="js/vectorizer2d.js?v=2.8.6" defer></script>
 </head>
 <body class="h-screen w-screen flex flex-col">
 
@@ -482,14 +482,22 @@
           </div>
         </div>
 
-        <!-- Marco / Placa Exterior Configurable en el Laminador 3D -->
+        <!-- Marco Configurable 2D para Corte / Grabado alrededor del Tablero o Vectorizado 2D -->
         <div class="pt-2 border-t border-slate-700/60 space-y-2">
-          <label class="flex items-center justify-between text-xs font-semibold text-indigo-300 cursor-pointer" title="Añade un marco exterior 3D, placa base o molde negativo alrededor de las lascas del modelo 3D">
-            <span>🖼️ Añadir marco configurable 3D</span>
+          <label class="flex items-center justify-between text-xs font-semibold text-indigo-300 cursor-pointer" title="Añade un marco configurable en el vectorizado 2D (.SVG / .DXF) para que la máquina láser corte y/o grabe alrededor del tablero, sin alterar el modelo 3D">
+            <span>🖼️ Marco configurable en Tablero / 2D</span>
             <input type="checkbox" id="slicerFrameEnabledCheck" onchange="setSlicerFrameEnabled(this.checked)" class="accent-indigo-500 w-3.5 h-3.5" />
           </label>
 
           <div id="slicerFrameConfigPanel" class="hidden space-y-2 bg-slate-900/85 border border-indigo-500/35 rounded-lg p-2.5">
+            <div class="flex items-center justify-between gap-2 text-[11px]">
+              <span class="text-slate-400 shrink-0">Ajuste:</span>
+              <select id="slicerFrameFitSelect" onchange="onSlicerFrameSettingsChange()" class="w-full bg-slate-950 border border-slate-700 rounded px-1.5 py-1 text-[10px] text-emerald-300 font-semibold outline-none">
+                <option value="board" selected>📐 Alrededor del borde del Tablero / Lienzo 2D</option>
+                <option value="pieces">🧩 Ajustado alrededor de las piezas</option>
+              </select>
+            </div>
+
             <div class="flex items-center justify-between gap-2 text-[11px]">
               <span class="text-slate-400 shrink-0">Forma:</span>
               <select id="slicerFrameShapeSelect" onchange="onSlicerFrameSettingsChange()" class="w-full bg-slate-950 border border-slate-700 rounded px-1.5 py-1 text-[10px] text-indigo-200 font-semibold outline-none">
@@ -502,63 +510,56 @@
             </div>
 
             <div class="flex items-center justify-between gap-2 text-[11px]">
-              <span class="text-slate-400 shrink-0">Modo 3D:</span>
-              <select id="slicerFrameModeSelect" onchange="onSlicerFrameSettingsChange()" class="w-full bg-slate-950 border border-slate-700 rounded px-1.5 py-1 text-[10px] text-sky-300 font-semibold outline-none">
-                <option value="base_and_ring" selected>🖼️ Base Sólida (#1..N) + Marco Hueco Superior</option>
-                <option value="all_layers_ring">🔲 Marco Hueco en Todas las Capas</option>
-                <option value="base_plate_only">🪨 Solo Placa Base / Peana en Primeras Capas</option>
-                <option value="negative_mold">🔄 Molde Negativo / Vaciado 3D en Placa</option>
-                <option value="engrave_on_base">🟢 Placa Base + Orla Decorativa Grabada</option>
+              <span class="text-slate-400 shrink-0">Láser:</span>
+              <select id="slicerFrameLaserModeSelect" onchange="onSlicerFrameSettingsChange()" class="w-full bg-slate-950 border border-slate-700 rounded px-1.5 py-1 text-[10px] text-rose-300 font-semibold outline-none">
+                <option value="cut_outer" selected>🔴 Solo Corte Exterior del Tablero (#ff0000)</option>
+                <option value="cut_and_engrave">✂️+⚡ Corte Exterior (#ff0000) + Orla (#008800)</option>
+                <option value="cut_window">🔲 Marco Calado (Ext. #ff0000 + Ventana #0055ff)</option>
+                <option value="engrave_only">🟢 Solo Orla Grabada en Tablero (#008800)</option>
               </select>
             </div>
 
-            <div class="flex items-center justify-between gap-2 text-[11px]">
+            <div id="slicerFrameStyleRow" class="hidden flex items-center justify-between gap-2 text-[11px]">
               <span class="text-slate-400 shrink-0">Orla (#008800):</span>
               <select id="slicerFrameStyleSelect" onchange="onSlicerFrameSettingsChange()" class="w-full bg-slate-950 border border-slate-700 rounded px-1.5 py-1 text-[10px] text-emerald-300 outline-none">
-                <option value="none" selected>🚫 Sin grabado de orla (Solo corte)</option>
-                <option value="double_line">═ Doble Filete Clásico (#008800)</option>
+                <option value="double_line" selected>═ Doble Filete Clásico (#008800)</option>
                 <option value="ornate_corners">❖ Doble Filete + Esquinas Decorativas</option>
                 <option value="solid_band">▬ Banda Sólida Grabada (#008800)</option>
               </select>
             </div>
 
             <div class="grid grid-cols-3 gap-1.5 text-[10px]">
-              <div class="bg-slate-950 border border-slate-800 rounded px-1.5 py-1" title="Ancho de la banda del marco en mm">
+              <div id="slicerFrameThicknessBox" class="bg-slate-950 border border-slate-800 rounded px-1.5 py-1 transition" title="Ancho de la banda u orla del marco en mm">
                 <span class="text-slate-400 block text-[9px]">Grosor (mm)</span>
-                <input type="number" id="slicerFrameThicknessInput" value="8.0" min="1" max="150" step="0.5" onchange="onSlicerFrameSettingsChange()" class="w-full bg-transparent text-indigo-300 font-bold text-right outline-none" />
+                <input type="number" id="slicerFrameThicknessInput" value="8.0" min="0.5" max="150" step="0.5" onchange="onSlicerFrameSettingsChange()" class="w-full bg-transparent text-indigo-300 font-bold text-right outline-none" />
               </div>
-              <div class="bg-slate-950 border border-slate-800 rounded px-1.5 py-1" title="Separación interior entre el modelo 3D y la ventana del marco en mm">
+              <div class="bg-slate-950 border border-slate-800 rounded px-1.5 py-1" title="Separación respecto al borde del tablero o respecto a las piezas en mm">
                 <span class="text-slate-400 block text-[9px]">Margen (mm)</span>
-                <input type="number" id="slicerFrameMarginInput" value="5.0" min="-30" max="150" step="0.5" onchange="onSlicerFrameSettingsChange()" class="w-full bg-transparent text-sky-300 font-bold text-right outline-none" />
+                <input type="number" id="slicerFrameMarginInput" value="2.0" min="0" max="150" step="0.5" onchange="onSlicerFrameSettingsChange()" class="w-full bg-transparent text-sky-300 font-bold text-right outline-none" />
               </div>
               <div class="bg-slate-950 border border-slate-800 rounded px-1.5 py-1" title="Radio de esquina redondeada o chaflán (0 = esquina recta)">
                 <span class="text-slate-400 block text-[9px]">Radio (mm)</span>
-                <input type="number" id="slicerFrameRadiusInput" value="8.0" min="0" max="150" step="1" onchange="onSlicerFrameSettingsChange()" class="w-full bg-transparent text-amber-300 font-bold text-right outline-none" />
+                <input type="number" id="slicerFrameRadiusInput" value="6.0" min="0" max="150" step="1" onchange="onSlicerFrameSettingsChange()" class="w-full bg-transparent text-amber-300 font-bold text-right outline-none" />
               </div>
             </div>
 
-            <div id="slicerFrameBaseLayersRow" class="flex items-center justify-between text-[11px] pt-0.5" title="Número de capas inferiores que actúan como placa de fondo maciza">
-              <span class="text-slate-300">Capas de placa base maciza (#1..N):</span>
-              <input type="number" id="slicerFrameBaseLayersInput" value="1" min="1" max="20" step="1" onchange="onSlicerFrameSettingsChange()" class="w-14 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-indigo-300 font-bold" />
-            </div>
-
             <div class="flex items-center justify-between text-[11px] pt-0.5 border-t border-slate-800/80">
-              <label class="flex items-center gap-1.5 text-amber-300 cursor-pointer" title="Añade un taladro circular en el borde superior del marco para colgar en pared">
+              <label class="flex items-center gap-1.5 text-amber-300 cursor-pointer" title="Añade un taladro circular en el borde superior del tablero/marco para colgar">
                 <input type="checkbox" id="slicerFrameKeyholeCheck" onchange="onSlicerFrameSettingsChange()" class="accent-amber-500" />
                 <span>🔑 Agujero colgar Ø (mm):</span>
               </label>
               <input type="number" id="slicerFrameKeyholeDiamInput" value="5.0" min="1.5" max="30" step="0.5" onchange="onSlicerFrameSettingsChange()" class="w-14 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-amber-300 font-bold" />
             </div>
 
-            <!-- Presets rápidos de Marco 3D -->
+            <!-- Presets rápidos de Marco 2D para el Tablero -->
             <div class="grid grid-cols-3 gap-1 pt-0.5">
-              <button onclick="setSlicerFramePreset('rounded_rect', 'base_and_ring', 8, 5, 8)" class="py-1 bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/40 rounded text-[9px] text-indigo-200 font-semibold" title="Cuadro 3D con Base Sólida #1 + Marco Redondeado">🖼️ Cuadro 3D</button>
-              <button onclick="setSlicerFramePreset('circle', 'base_plate_only', 8, 6, 0)" class="py-1 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300" title="Peana Circular en la Base #1">🪨 Peana Circular</button>
-              <button onclick="setSlicerFramePreset('rounded_rect', 'negative_mold', 10, 6, 6)" class="py-1 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300" title="Molde Negativo Vaciado en Placa">🔄 Molde Negativo</button>
+              <button onclick="setSlicerFramePreset('rounded_rect', 'cut_outer', 8, 2, 0, 'board')" class="py-1 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 rounded text-[9px] text-rose-200 font-semibold" title="Corte recto alrededor del borde del tablero (#ff0000)">✂️ Borde Tablero</button>
+              <button onclick="setSlicerFramePreset('rounded_rect', 'cut_and_engrave', 8, 3, 8, 'board')" class="py-1 bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/40 rounded text-[9px] text-indigo-200 font-semibold" title="Corte exterior redondeado + Orla grabada alrededor del tablero">🖼️ Corte + Orla</button>
+              <button onclick="setSlicerFramePreset('rounded_rect', 'cut_outer', 8, 4, 6, 'pieces')" class="py-1 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300" title="Corte ajustado alrededor del conjunto de piezas">🧩 Ajustar Piezas</button>
             </div>
 
             <div id="slicerFrameSummaryBadge" class="text-[10px] text-indigo-200 bg-indigo-950/40 border border-indigo-500/30 rounded p-1.5 text-center font-medium">
-              Sin marco exterior (silueta directa del modelo 3D)
+              Sin marco de corte en el tablero / vectorizado 2D
             </div>
           </div>
         </div>
@@ -722,6 +723,10 @@
             <label class="flex items-center justify-between text-[11px] text-amber-300 font-medium cursor-pointer" title="Si una pieza es más grande que el área útil del tablero, la incluye recortando la parte que sobresale">
               <span>✂️ Recortar piezas mayores al tablero</span>
               <input type="checkbox" id="nestClipOversizedCheck" onchange="setNestClipOversized(this.checked)" class="accent-amber-500" />
+            </label>
+            <label class="flex items-center justify-between text-[11px] text-indigo-300 font-semibold cursor-pointer" title="Añade un marco configurable en el vectorizado 2D (.SVG / .DXF) para que la máquina láser corte alrededor del tablero">
+              <span>🖼️ Cortar marco alrededor del tablero</span>
+              <input type="checkbox" id="boardFrameEnabledCheck" onchange="setSlicerFrameEnabled(this.checked)" class="accent-indigo-500" />
             </label>
           </div>
 
@@ -955,7 +960,7 @@
             <input type="checkbox" id="modalIncludeLabelsCheck" checked onchange="setIncludeLabels(this.checked)" class="accent-sky-500" />
           </label>
           <label class="flex items-center justify-between p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/30 text-xs cursor-pointer">
-            <span class="font-semibold text-indigo-300">🖼️ Incluir Marco / Placa Configurable 3D</span>
+            <span class="font-semibold text-indigo-300">🖼️ Cortar Marco Configurable alrededor del Tablero / 2D</span>
             <input type="checkbox" id="modalSlicerFrameCheck" onchange="setSlicerFrameEnabled(this.checked)" class="accent-indigo-500" />
           </label>
           <div class="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-xs">

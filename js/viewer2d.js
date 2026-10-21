@@ -355,6 +355,40 @@ function drawContourWithTabsOnCanvas(ctx, pts, isHole, strokeColor, lineWidth, t
   ctx.restore();
 }
 
+// Dibuja el Marco Configurable 2D alrededor del tablero o lienzo 2D en el Inspector 2D
+function draw2DBoardFrameOnCanvas(ctx, frameGeom, toScreenX, toScreenY) {
+  if (!frameGeom) return;
+
+  if (frameGeom.engraveLoops && frameGeom.engraveLoops.length > 0) {
+    ctx.save();
+    ctx.beginPath();
+    frameGeom.engraveLoops.forEach((el) => {
+      if (!el.points || el.points.length < 3) return;
+      el.points.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+        else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+      });
+      ctx.closePath();
+    });
+    ctx.fillStyle = 'rgba(16, 185, 129, 0.28)';
+    ctx.fill('evenodd');
+    ctx.strokeStyle = '#10b981';
+    ctx.lineWidth = 1.25;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  if (frameGeom.outerCutPts && frameGeom.outerCutPts.length >= 3) {
+    drawContourWithTabsOnCanvas(ctx, frameGeom.outerCutPts, false, '#f43f5e', 2.2, toScreenX, toScreenY);
+  }
+  if (frameGeom.innerCutPts && frameGeom.innerCutPts.length >= 3) {
+    drawContourWithTabsOnCanvas(ctx, frameGeom.innerCutPts, true, '#38bdf8', 1.7, toScreenX, toScreenY);
+  }
+  if (frameGeom.keyholePts && frameGeom.keyholePts.length >= 3) {
+    drawContourWithTabsOnCanvas(ctx, frameGeom.keyholePts, true, '#38bdf8', 1.5, toScreenX, toScreenY);
+  }
+}
+
 function render2DBoard(ctx, canvas) {
   const board = state.nestedBoards[state.activeBoardIndex];
   if (!board || board.placements.length === 0) {
@@ -401,6 +435,12 @@ function render2DBoard(ctx, canvas) {
     ctx.strokeRect(mx, my, mw, mh);
   }
   ctx.restore();
+
+  // Marco configurable 2D de corte/grabado alrededor del tablero
+  if (state.slicerFrameEnabled && typeof get2DBoardFrameGeometry === 'function') {
+    const frameGeom = get2DBoardFrameGeometry(0, 0, board.width, board.height, board.placements, true);
+    draw2DBoardFrameOnCanvas(ctx, frameGeom, toScreenX, toScreenY);
+  }
 
   // Dibujar cada isla anidada en el tablero
   board.placements.forEach((pl) => {
@@ -556,6 +596,12 @@ function render2DSlice() {
   const docY = toScreenY(docB.maxY);
   ctx.strokeRect(docX, docY, docB.width * scale, docB.height * scale);
   ctx.restore();
+
+  // Marco configurable 2D de corte/grabado alrededor del lienzo 2D
+  if (state.slicerFrameEnabled && typeof get2DBoardFrameGeometry === 'function') {
+    const frameGeom = get2DBoardFrameGeometry(docB.minX, docB.minY, docB.maxX, docB.maxY, slice.loops, false);
+    draw2DBoardFrameOnCanvas(ctx, frameGeom, toScreenX, toScreenY);
+  }
 
   // Cuadrícula de Subdivisión Modular 3D (A1, A2, B1, B2...) si está activa
   const isSplitMulti = Boolean(state.splitModelEnabled && slice.splitGrid && slice.splitGrid.totalParts > 1);

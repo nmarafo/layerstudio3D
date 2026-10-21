@@ -134,6 +134,32 @@ function generateSliceSVG(slice, idx) {
     }
   });
 
+  // Marco configurable 2D de corte/grabado alrededor del lienzo 2D
+  let sliceFrameEngravePath = '';
+  if (state.slicerFrameEnabled && typeof get2DBoardFrameGeometry === 'function') {
+    const fGeom = get2DBoardFrameGeometry(docBounds.minX, docBounds.minY, docBounds.maxX, docBounds.maxY, slice.loops, false);
+    if (fGeom) {
+      if (fGeom.outerCutPts && fGeom.outerCutPts.length >= 3) {
+        const dOutFrame = buildSvgCutPathD(fGeom.outerCutPts, false, toX, toY);
+        if (dOutFrame) outerPaths.push(dOutFrame);
+      }
+      if (fGeom.innerCutPts && fGeom.innerCutPts.length >= 3) {
+        const dInFrame = buildSvgCutPathD(fGeom.innerCutPts, true, toX, toY);
+        if (dInFrame) holePaths.push(dInFrame);
+      }
+      if (fGeom.keyholePts && fGeom.keyholePts.length >= 3) {
+        const dKh = buildSvgCutPathD(fGeom.keyholePts, true, toX, toY);
+        if (dKh) holePaths.push(dKh);
+      }
+      if (fGeom.engraveLoops && fGeom.engraveLoops.length > 0) {
+        fGeom.engraveLoops.forEach((el) => {
+          if (!el.points || el.points.length < 3) return;
+          sliceFrameEngravePath += 'M ' + el.points.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z ';
+        });
+      }
+    }
+  }
+
   // Construir polilíneas continuas de la guía donde va pegada la lámina superior (#N+1)
   let upperGuidePath = '';
   if (upperSlice && upperSlice.loops) {
@@ -234,6 +260,12 @@ function generateSliceSVG(slice, idx) {
       lines.push('    <path id="grabado_bordes" d="' + dFine.trim() + '" vector-effect="non-scaling-stroke" />');
       lines.push('  </g>');
     }
+  }
+
+  if (sliceFrameEngravePath.trim().length > 0) {
+    lines.push('  <g id="GRABADO_MARCO_CONFIGURABLE" fill="#008800" fill-opacity="0.22" fill-rule="evenodd" stroke="#008800" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    lines.push('    <path id="orla_marco_2d" d="' + sliceFrameEngravePath.trim() + '" vector-effect="non-scaling-stroke" />');
+    lines.push('  </g>');
   }
 
   // Capa SVG opcional 1: Guía de pegado de la lámina INFERIOR (#N-1) en color violeta (#9900ff) y motivo punteado/raya-punto
@@ -385,6 +417,31 @@ function generateBoardSVG(board) {
     }
   });
 
+  // Marco configurable 2D de corte/grabado alrededor del tablero
+  if (state.slicerFrameEnabled && typeof get2DBoardFrameGeometry === 'function') {
+    const fGeom = get2DBoardFrameGeometry(0, 0, board.width, board.height, board.placements, true);
+    if (fGeom) {
+      if (fGeom.outerCutPts && fGeom.outerCutPts.length >= 3) {
+        const dOutFrame = buildSvgCutPathD(fGeom.outerCutPts, false, toX, toY);
+        if (dOutFrame) outerPaths.push({ id: 'marco_corte_exterior_tablero', d: dOutFrame });
+      }
+      if (fGeom.innerCutPts && fGeom.innerCutPts.length >= 3) {
+        const dInFrame = buildSvgCutPathD(fGeom.innerCutPts, true, toX, toY);
+        if (dInFrame) holePaths.push(dInFrame);
+      }
+      if (fGeom.keyholePts && fGeom.keyholePts.length >= 3) {
+        const dKh = buildSvgCutPathD(fGeom.keyholePts, true, toX, toY);
+        if (dKh) holePaths.push(dKh);
+      }
+      if (fGeom.engraveLoops && fGeom.engraveLoops.length > 0) {
+        fGeom.engraveLoops.forEach((el) => {
+          if (!el.points || el.points.length < 3) return;
+          boardEngravePath += 'M ' + el.points.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z ';
+        });
+      }
+    }
+  }
+
   const xmlHeader = '<' + '?xml version="1.0" encoding="UTF-8" standalone="no"?' + '>';
   const lines = [
     xmlHeader,
@@ -401,7 +458,7 @@ function generateBoardSVG(board) {
 
   lines.push('  <g id="CORTE_EXTERIOR" fill="none" stroke="#ff0000" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
   outerPaths.forEach((item, i) => {
-    lines.push('    <path id="isla_ext_' + (i + 1) + '" d="' + item.d + '" vector-effect="non-scaling-stroke" />');
+    lines.push('    <path id="' + escapeXmlAttr(item.id || ('isla_ext_' + (i + 1))) + '" d="' + item.d + '" vector-effect="non-scaling-stroke" />');
   });
   lines.push('  </g>');
 
@@ -550,6 +607,42 @@ function generateBoardDXF(board) {
     }
   });
 
+  // Marco configurable 2D de corte/grabado alrededor del tablero en DXF
+  if (state.slicerFrameEnabled && typeof get2DBoardFrameGeometry === 'function') {
+    const fGeom = get2DBoardFrameGeometry(0, 0, board.width, board.height, board.placements, true);
+    if (fGeom) {
+      if (fGeom.outerCutPts && fGeom.outerCutPts.length >= 3) {
+        pushLoopLinesWithTabsDXF(dxf, fGeom.outerCutPts, false, 'CORTE_EXTERIOR', '1', 0, 0);
+      }
+      if (fGeom.innerCutPts && fGeom.innerCutPts.length >= 3) {
+        pushLoopLinesWithTabsDXF(dxf, fGeom.innerCutPts, true, 'CORTE_INTERIOR', '5', 0, 0);
+      }
+      if (fGeom.keyholePts && fGeom.keyholePts.length >= 3) {
+        pushLoopLinesWithTabsDXF(dxf, fGeom.keyholePts, true, 'CORTE_INTERIOR', '5', 0, 0);
+      }
+      if (fGeom.engraveLoops && fGeom.engraveLoops.length > 0) {
+        fGeom.engraveLoops.forEach((el) => {
+          if (!el.points || el.points.length < 3) return;
+          for (let i = 0, n = el.points.length; i < n; i++) {
+            const p1 = el.points[i];
+            const p2 = el.points[(i + 1) % n];
+            dxf.push(
+              '0', 'LINE',
+              '8', 'GRABADO_VECTORIAL',
+              '62', '3',
+              '10', p1.x.toFixed(4),
+              '20', p1.y.toFixed(4),
+              '30', '0.0',
+              '11', p2.x.toFixed(4),
+              '21', p2.y.toFixed(4),
+              '31', '0.0'
+            );
+          }
+        });
+      }
+    }
+  }
+
   dxf.push('0', 'ENDSEC', '0', 'EOF');
   return dxf.join('\n');
 }
@@ -569,6 +662,41 @@ function generateSliceDXF(slice, idx) {
     const color = loop.isHole ? '5' : '1';
     pushLoopLinesWithTabsDXF(dxf, loop.points, loop.isHole, layer, color, ox, oy);
   });
+
+  if (state.slicerFrameEnabled && typeof get2DBoardFrameGeometry === 'function') {
+    const fGeom = get2DBoardFrameGeometry(b.minX, b.minY, b.maxX, b.maxY, slice.loops, false);
+    if (fGeom) {
+      if (fGeom.outerCutPts && fGeom.outerCutPts.length >= 3) {
+        pushLoopLinesWithTabsDXF(dxf, fGeom.outerCutPts, false, 'CORTE_EXTERIOR', '1', ox, oy);
+      }
+      if (fGeom.innerCutPts && fGeom.innerCutPts.length >= 3) {
+        pushLoopLinesWithTabsDXF(dxf, fGeom.innerCutPts, true, 'CORTE_INTERIOR', '5', ox, oy);
+      }
+      if (fGeom.keyholePts && fGeom.keyholePts.length >= 3) {
+        pushLoopLinesWithTabsDXF(dxf, fGeom.keyholePts, true, 'CORTE_INTERIOR', '5', ox, oy);
+      }
+      if (fGeom.engraveLoops && fGeom.engraveLoops.length > 0) {
+        fGeom.engraveLoops.forEach((el) => {
+          if (!el.points || el.points.length < 3) return;
+          for (let i = 0, n = el.points.length; i < n; i++) {
+            const p1 = el.points[i];
+            const p2 = el.points[(i + 1) % n];
+            dxf.push(
+              '0', 'LINE',
+              '8', 'GRABADO_VECTORIAL',
+              '62', '3',
+              '10', (p1.x - ox).toFixed(4),
+              '20', (p1.y - oy).toFixed(4),
+              '30', '0.0',
+              '11', (p2.x - ox).toFixed(4),
+              '21', (p2.y - oy).toFixed(4),
+              '31', '0.0'
+            );
+          }
+        });
+      }
+    }
+  }
 
   if (slice.engraveLoops && slice.engraveLoops.length > 0) {
     slice.engraveLoops.forEach((el) => {
@@ -917,11 +1045,14 @@ async function executeZipExport() {
   // Si la distribución en tablero está activa, generamos los tableros anidados para las lascas objetivo
   if (state.nestingEnabled && (wantSVG || wantDXF)) {
     const islands = extractIslandsFromSlices(targetSlices);
+    const effectiveMargin = typeof getEffectiveBoardNestMargin === 'function'
+      ? getEffectiveBoardNestMargin()
+      : state.nestMarginMM;
     const packRes = packIslandsIntoBoards(
       islands,
       state.boardWidthMM,
       state.boardHeightMM,
-      state.nestMarginMM,
+      effectiveMargin,
       state.nestSpacingMM,
       state.nestAllowRotate,
       state.nestUseInnerHoles
@@ -1038,13 +1169,13 @@ function exportProjectFile() {
     rodCount: state.rodCount,
     rodDiameter: state.rodDiameter,
     slicerFrameEnabled: state.slicerFrameEnabled,
+    slicerFrameFit: state.slicerFrameFit,
     slicerFrameShape: state.slicerFrameShape,
-    slicerFrameMode: state.slicerFrameMode,
+    slicerFrameLaserMode: state.slicerFrameLaserMode,
     slicerFrameStyle: state.slicerFrameStyle,
     slicerFrameThicknessMM: state.slicerFrameThicknessMM,
     slicerFrameMarginMM: state.slicerFrameMarginMM,
     slicerFrameRadiusMM: state.slicerFrameRadiusMM,
-    slicerFrameBaseLayers: state.slicerFrameBaseLayers,
     slicerFrameKeyhole: state.slicerFrameKeyhole,
     slicerFrameKeyholeDiamMM: state.slicerFrameKeyholeDiamMM,
     tabsEnabled: state.tabsEnabled,
@@ -1099,13 +1230,13 @@ function importProjectFile(file) {
       state.rodCount = data.rodCount || 0;
       state.rodDiameter = data.rodDiameter || 4;
       if (typeof data.slicerFrameEnabled === 'boolean') state.slicerFrameEnabled = data.slicerFrameEnabled;
+      if (data.slicerFrameFit) state.slicerFrameFit = data.slicerFrameFit;
       if (data.slicerFrameShape) state.slicerFrameShape = data.slicerFrameShape;
-      if (data.slicerFrameMode) state.slicerFrameMode = data.slicerFrameMode;
+      if (data.slicerFrameLaserMode) state.slicerFrameLaserMode = data.slicerFrameLaserMode;
       if (data.slicerFrameStyle) state.slicerFrameStyle = data.slicerFrameStyle;
       if (typeof data.slicerFrameThicknessMM === 'number') state.slicerFrameThicknessMM = data.slicerFrameThicknessMM;
       if (typeof data.slicerFrameMarginMM === 'number') state.slicerFrameMarginMM = data.slicerFrameMarginMM;
       if (typeof data.slicerFrameRadiusMM === 'number') state.slicerFrameRadiusMM = data.slicerFrameRadiusMM;
-      if (typeof data.slicerFrameBaseLayers === 'number') state.slicerFrameBaseLayers = data.slicerFrameBaseLayers;
       if (typeof data.slicerFrameKeyhole === 'boolean') state.slicerFrameKeyhole = data.slicerFrameKeyhole;
       if (typeof data.slicerFrameKeyholeDiamMM === 'number') state.slicerFrameKeyholeDiamMM = data.slicerFrameKeyholeDiamMM;
       if (typeof syncSlicerFrameUI === 'function') syncSlicerFrameUI();

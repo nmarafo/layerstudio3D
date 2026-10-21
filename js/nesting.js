@@ -203,7 +203,7 @@ function isPointInIslandMaterial(pt, outerPts, holeLoops) {
 }
 
 // Recorta las polilíneas de una lasca adyacente (superior o inferior) exclusivamente dentro de una isla
-function getGuidePolylinesForIsland(outerPts, holeLoops, guideSlice, isFrameRingIsland = false) {
+function getGuidePolylinesForIsland(outerPts, holeLoops, guideSlice) {
   const guideLoops = guideSlice ? (guideSlice.unsplitLoops || guideSlice.loops) : null;
   if (!guideLoops) return [];
   const allPolylines = [];
@@ -217,8 +217,6 @@ function getGuidePolylinesForIsland(outerPts, holeLoops, guideSlice, isFrameRing
   };
 
   guideLoops.forEach((loop) => {
-    if (loop.isFrameOuter) return;
-    if (loop.isFrameInner && isFrameRingIsland) return;
     if (state.guideOnlyOuter && loop.isHole) return;
     const pts = loop.points;
     if (!pts || pts.length < 3) return;
@@ -646,9 +644,8 @@ function extractIslandsFromSlices(targetSlices) {
       );
 
       // Polilíneas de guía superior (#N+1) e inferior (#N-1) recortadas a esta isla
-      const isFrameRingIsl = Boolean(outer.isFrameLoop && slice.hasFrameWindow);
-      const upperPolys = nextSlice ? getGuidePolylinesForIsland(outer.points, islandHoles, nextSlice, isFrameRingIsl) : [];
-      const lowerPolys = prevSlice ? getGuidePolylinesForIsland(outer.points, islandHoles, prevSlice, isFrameRingIsl) : [];
+      const upperPolys = nextSlice ? getGuidePolylinesForIsland(outer.points, islandHoles, nextSlice) : [];
+      const lowerPolys = prevSlice ? getGuidePolylinesForIsland(outer.points, islandHoles, prevSlice) : [];
 
       let customCode = null;
       if (isSplitMulti && outer.sectorCode) {
@@ -1203,14 +1200,28 @@ function packIslandsIntoBoards(islands, boardW, boardH, margin, spacing, allowRo
   return { boards, unfitCount, clippedCount };
 }
 
+function getEffectiveBoardNestMargin() {
+  let effectiveMargin = Number(state.nestMarginMM) || 0;
+  if (state.slicerFrameEnabled && state.slicerFrameFit === 'board') {
+    const laserMode = state.slicerFrameLaserMode || 'cut_outer';
+    const frameBand = laserMode === 'cut_outer'
+      ? 1.5
+      : (Math.max(0.5, Number(state.slicerFrameThicknessMM) || 8.0) + 1.5);
+    const neededMargin = Math.max(0, Number(state.slicerFrameMarginMM) || 0) + frameBand;
+    effectiveMargin = Math.max(effectiveMargin, neededMargin);
+  }
+  return effectiveMargin;
+}
+
 function recomputeBoardNesting() {
   const selectedSlices = state.slices.filter((s) => s.selected);
   const islands = extractIslandsFromSlices(selectedSlices);
+  const effectiveMargin = getEffectiveBoardNestMargin();
   const result = packIslandsIntoBoards(
     islands,
     state.boardWidthMM,
     state.boardHeightMM,
-    state.nestMarginMM,
+    effectiveMargin,
     state.nestSpacingMM,
     state.nestAllowRotate,
     state.nestUseInnerHoles
