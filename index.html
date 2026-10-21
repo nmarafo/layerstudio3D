@@ -35,17 +35,17 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
 
   <!-- Hoja de estilos principal -->
-  <link rel="stylesheet" href="css/styles.css?v=2.8.2" />
+  <link rel="stylesheet" href="css/styles.css?v=2.8.3" />
 
   <!-- Módulos de la aplicación (cargados en orden de dependencia con defer y cache-busting) -->
-  <script src="js/state.js?v=2.8.2" defer></script>
-  <script src="js/viewer3d.js?v=2.8.2" defer></script>
-  <script src="js/slicer.js?v=2.8.2" defer></script>
-  <script src="js/nesting.js?v=2.8.2" defer></script>
-  <script src="js/modals-guide.js?v=2.8.2" defer></script>
-  <script src="js/viewer2d.js?v=2.8.2" defer></script>
-  <script src="js/exporters.js?v=2.8.2" defer></script>
-  <script src="js/vectorizer2d.js?v=2.8.2" defer></script>
+  <script src="js/state.js?v=2.8.3" defer></script>
+  <script src="js/viewer3d.js?v=2.8.3" defer></script>
+  <script src="js/slicer.js?v=2.8.3" defer></script>
+  <script src="js/nesting.js?v=2.8.3" defer></script>
+  <script src="js/modals-guide.js?v=2.8.3" defer></script>
+  <script src="js/viewer2d.js?v=2.8.3" defer></script>
+  <script src="js/exporters.js?v=2.8.3" defer></script>
+  <script src="js/vectorizer2d.js?v=2.8.3" defer></script>
 </head>
 <body class="h-screen w-screen flex flex-col">
 
@@ -1228,6 +1228,61 @@
                   <option value="top_left">Esquina Sup. Izq.</option>
                   <option value="left_center">Izquierda Centro</option>
                 </select>
+              </div>
+            </div>
+
+            <!-- Marco Configurable (Orla Grabada y/o Borde de Corte) -->
+            <div class="pt-1.5 border-t border-slate-700/60 space-y-2">
+              <label class="flex items-center justify-between text-[11px] text-fuchsia-300 font-semibold cursor-pointer" title="Añade un marco configurable alrededor del vectorizado (con corte exterior y/o cenefa grabada)">
+                <span>🖼️ Añadir marco configurable al diseño</span>
+                <input type="checkbox" id="vecFrameEnabledCheck" onchange="onVectorizerParamsChange()" class="accent-fuchsia-500" />
+              </label>
+              <div id="vecFrameOptionsBox" class="hidden bg-slate-950/85 border border-fuchsia-500/35 rounded-lg p-2 space-y-1.5">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-[10px] text-slate-400 shrink-0">Forma:</span>
+                  <select id="vecFrameShapeSelect" onchange="onVectorizerParamsChange()" class="w-full bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-[10px] text-fuchsia-200 font-semibold outline-none">
+                    <option value="rounded_rect" selected>▭ Rectangular Redondeado / Recto</option>
+                    <option value="circle">◯ Circular / Óvalo</option>
+                    <option value="octagon">⯃ Octogonal / Chaflán Clásico</option>
+                    <option value="arch">🏛️ Arco Superior (Escudo / Placa)</option>
+                    <option value="hexagon">⬡ Hexagonal</option>
+                    <option value="silhouette">✨ Siguiendo la Silueta de la Imagen</option>
+                  </select>
+                </div>
+
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-[10px] text-slate-400 shrink-0">Función láser:</span>
+                  <select id="vecFrameLaserModeSelect" onchange="onVectorizerParamsChange()" class="w-full bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-[10px] text-slate-200 outline-none">
+                    <option value="cut_and_engrave" selected>✂️+⚡ Corte Exterior (#ff0000) + Orla Grabada (#008800)</option>
+                    <option value="engrave_only">🟢 Solo Orla Grabada (#008800)</option>
+                    <option value="cut_window">🔲 Marco Calado (Corte Ext. #ff0000 + Ventana #0055ff)</option>
+                    <option value="cut_outer">🔴 Solo Corte Exterior con Forma de Marco (#ff0000)</option>
+                  </select>
+                </div>
+
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-[10px] text-slate-400 shrink-0">Estilo orla:</span>
+                  <select id="vecFrameStyleSelect" onchange="onVectorizerParamsChange()" class="w-full bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-[10px] text-emerald-300 outline-none">
+                    <option value="solid_band" selected>▬ Banda Sólida Simple</option>
+                    <option value="double_line">═ Doble Filete Clásico</option>
+                    <option value="ornate_corners">❖ Doble Filete + Esquinas Decorativas</option>
+                  </select>
+                </div>
+
+                <div class="grid grid-cols-3 gap-1.5 pt-0.5 text-[10px]">
+                  <div class="bg-slate-900 border border-slate-800 rounded px-1.5 py-1">
+                    <span class="text-slate-400 block text-[9px]">Grosor (mm)</span>
+                    <input type="number" id="vecFrameThicknessInput" value="3.5" min="0.5" max="45" step="0.5" onchange="onVectorizerParamsChange()" class="w-full bg-transparent text-fuchsia-300 font-bold text-right outline-none" />
+                  </div>
+                  <div class="bg-slate-900 border border-slate-800 rounded px-1.5 py-1" title="Separación entre el dibujo y el interior del marco (puede ser negativa para recortar bordes de la imagen)">
+                    <span class="text-slate-400 block text-[9px]">Margen (mm)</span>
+                    <input type="number" id="vecFrameMarginInput" value="2.5" min="-25" max="60" step="0.5" onchange="onVectorizerParamsChange()" class="w-full bg-transparent text-sky-300 font-bold text-right outline-none" />
+                  </div>
+                  <div class="bg-slate-900 border border-slate-800 rounded px-1.5 py-1" title="Radio de esquina redondeada o tamaño de chaflán (0 = esquina recta)">
+                    <span class="text-slate-400 block text-[9px]">Radio (mm)</span>
+                    <input type="number" id="vecFrameRadiusInput" value="8.0" min="0" max="90" step="1" onchange="onVectorizerParamsChange()" class="w-full bg-transparent text-amber-300 font-bold text-right outline-none" />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
