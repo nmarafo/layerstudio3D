@@ -199,6 +199,43 @@ function generateSliceSVG(slice, idx) {
     lines.push('  </g>');
   }
 
+  // Capa SVG de Grabado Vectorial procedente de imagen PNG/BMP si la lasca lo incluye
+  if (slice.hatchPolylines && slice.hatchPolylines.length > 0 && slice.engraveStyle === 'vector_hatch') {
+    let dHatch = '';
+    slice.hatchPolylines.forEach((seg) => {
+      dHatch += 'M ' + toX(seg[0].x) + ' ' + toY(seg[0].y) + ' L ' + toX(seg[1].x) + ' ' + toY(seg[1].y) + ' ';
+    });
+    lines.push('  <g id="GRABADO_TRAMA_BARRIDO" fill="none" stroke="#008800" stroke-width="' + strokeMm + '" stroke-linecap="round">');
+    lines.push('    <path id="trama_grabado" d="' + dHatch.trim() + '" vector-effect="non-scaling-stroke" />');
+    lines.push('  </g>');
+  } else if (slice.engraveLoops && slice.engraveLoops.length > 0) {
+    let dEng = '';
+    slice.engraveLoops.forEach((el) => {
+      if (!el.points || el.points.length < 3) return;
+      dEng += 'M ' + el.points.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z ';
+    });
+    if (dEng.trim().length > 0) {
+      const fillAttr = slice.engraveStyle === 'vector_outline'
+        ? 'fill="none"'
+        : 'fill="#008800" fill-opacity="0.28" fill-rule="evenodd"';
+      lines.push('  <g id="GRABADO_VECTORIAL_IMAGEN" ' + fillAttr + ' stroke="#008800" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+      lines.push('    <path id="grabado_imagen" d="' + dEng.trim() + '" vector-effect="non-scaling-stroke" />');
+      lines.push('  </g>');
+    }
+  }
+  if (slice.fineEdgeLoops && slice.fineEdgeLoops.length > 0) {
+    let dFine = '';
+    slice.fineEdgeLoops.forEach((fl) => {
+      if (!fl.points || fl.points.length < 3) return;
+      dFine += 'M ' + fl.points.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z ';
+    });
+    if (dFine.trim().length > 0) {
+      lines.push('  <g id="GRABADO_DETALLE_FINO" fill="none" stroke="#ff8800" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+      lines.push('    <path id="grabado_bordes" d="' + dFine.trim() + '" vector-effect="non-scaling-stroke" />');
+      lines.push('  </g>');
+    }
+  }
+
   // Capa SVG opcional 1: Guía de pegado de la lámina INFERIOR (#N-1) en color violeta (#9900ff) y motivo punteado/raya-punto
   if (lowerGuidePath.trim().length > 0 && lowerSlice) {
     const lowerDashAttr = getSvgDashAttr(state.lowerGuideStyle);

@@ -145,6 +145,7 @@ function setupCanvas2DInteraction() {
 }
 
 function resetCamera3D() {
+  if (!camera || !controls) return;
   const maxDim = Math.max(state.dimsMM.x, state.dimsMM.y, state.dimsMM.z, 50);
   const dist = maxDim * 1.75;
   camera.near = Math.max(0.1, maxDim * 0.002);
@@ -589,6 +590,56 @@ function render2DSlice() {
   ctx.fillStyle = 'rgba(14, 165, 233, 0.16)';
   ctx.fill('evenodd');
   ctx.restore();
+
+  // Grabado vectorial procedente de imagen PNG/BMP si la lasca lo incluye
+  if (slice.hatchPolylines && slice.hatchPolylines.length > 0 && slice.engraveStyle === 'vector_hatch') {
+    ctx.save();
+    ctx.strokeStyle = '#10b981';
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    slice.hatchPolylines.forEach((seg) => {
+      ctx.moveTo(toScreenX(seg[0].x), toScreenY(seg[0].y));
+      ctx.lineTo(toScreenX(seg[1].x), toScreenY(seg[1].y));
+    });
+    ctx.stroke();
+    ctx.restore();
+  } else if (slice.engraveLoops && slice.engraveLoops.length > 0) {
+    ctx.save();
+    ctx.beginPath();
+    slice.engraveLoops.forEach((el) => {
+      if (!el.points || el.points.length < 3) return;
+      el.points.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+        else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+      });
+      ctx.closePath();
+    });
+    if (slice.engraveStyle !== 'vector_outline') {
+      ctx.fillStyle = 'rgba(16, 185, 129, 0.38)';
+      ctx.fill('evenodd');
+    }
+    ctx.strokeStyle = '#10b981';
+    ctx.lineWidth = 1.25;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  if (slice.fineEdgeLoops && slice.fineEdgeLoops.length > 0) {
+    ctx.save();
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 1.0;
+    ctx.beginPath();
+    slice.fineEdgeLoops.forEach((fl) => {
+      if (!fl.points || fl.points.length < 3) return;
+      fl.points.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+        else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+      });
+      ctx.closePath();
+    });
+    ctx.stroke();
+    ctx.restore();
+  }
 
   // Contornos exteriores (rojo) e interiores (azul) de la lasca actual con soporte de micro-uniones
   slice.loops.forEach((loop) => {

@@ -35,16 +35,17 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
 
   <!-- Hoja de estilos principal -->
-  <link rel="stylesheet" href="css/styles.css?v=2.7.0" />
+  <link rel="stylesheet" href="css/styles.css?v=2.8.0" />
 
   <!-- Módulos de la aplicación (cargados en orden de dependencia con defer y cache-busting) -->
-  <script src="js/state.js?v=2.7.0" defer></script>
-  <script src="js/viewer3d.js?v=2.7.0" defer></script>
-  <script src="js/slicer.js?v=2.7.0" defer></script>
-  <script src="js/nesting.js?v=2.7.0" defer></script>
-  <script src="js/modals-guide.js?v=2.7.0" defer></script>
-  <script src="js/viewer2d.js?v=2.7.0" defer></script>
-  <script src="js/exporters.js?v=2.7.0" defer></script>
+  <script src="js/state.js?v=2.8.0" defer></script>
+  <script src="js/viewer3d.js?v=2.8.0" defer></script>
+  <script src="js/slicer.js?v=2.8.0" defer></script>
+  <script src="js/nesting.js?v=2.8.0" defer></script>
+  <script src="js/modals-guide.js?v=2.8.0" defer></script>
+  <script src="js/viewer2d.js?v=2.8.0" defer></script>
+  <script src="js/exporters.js?v=2.8.0" defer></script>
+  <script src="js/vectorizer2d.js?v=2.8.0" defer></script>
 </head>
 <body class="h-screen w-screen flex flex-col">
 
@@ -56,7 +57,7 @@
       </div>
       <div class="min-w-0">
         <h1 class="font-bold text-sm tracking-wide text-white truncate">LayerStudio 3D</h1>
-        <p class="text-[11px] text-slate-400 truncate">Laminador multicapa y Puzzle 3D encajable para Corte Láser (SVG/DXF) e Impresión 3D (STL)</p>
+        <p class="text-[11px] text-slate-400 truncate">Laminador multicapa, Puzzle 3D y Vectorizador PNG/BMP para Corte y Grabado Láser (SVG/DXF/STL)</p>
       </div>
     </div>
 
@@ -76,6 +77,12 @@
           <option value="crystal" class="bg-slate-900">Ejemplo: Cristal Facetado</option>
         </select>
       </div>
+
+      <!-- Vectorizador 2D de Imágenes (PNG / BMP -> SVG Corte y Grabado) -->
+      <input type="file" id="fileInputImage2D" accept=".png,.bmp,.jpg,.jpeg,.webp" class="hidden" />
+      <button onclick="openImageVectorizerModal()" class="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-xs font-semibold text-emerald-300 transition flex items-center gap-1.5" title="Convertir automáticamente una imagen .PNG o .BMP en un archivo .SVG / .DXF de Corte y Grabado Láser o Relieve 3D">
+        <span>🖼️ PNG/BMP → SVG</span>
+      </button>
 
       <!-- Grupo Proyecto (.lasca) -->
       <div class="flex items-center bg-slate-800/90 border border-slate-700 rounded-lg p-0.5">
@@ -1103,6 +1110,274 @@
       <div class="p-3 bg-slate-950/90 border-t border-slate-800 flex items-center justify-between gap-2">
         <span class="text-[11px] text-slate-400">© 2026 Norberto Martín Afonso · Todos los derechos de atribución reservados</span>
         <button onclick="closeCreditsModal()" class="px-4 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-xs font-bold text-white transition">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL VECTORIZADOR AUTOMÁTICO DE IMÁGENES (PNG / BMP -> SVG / DXF DE CORTE Y GRABADO LÁSER + RELIEVE 3D) -->
+  <div id="imageVectorizerModal" onclick="if(event.target===this) closeImageVectorizerModal()" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-6xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+      <!-- Cabecera -->
+      <div class="p-3.5 bg-slate-950/95 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-300 font-bold text-base">
+            🖼️
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-white">Vectorizador Automático PNG / BMP → SVG de Corte y Grabado Láser</h3>
+            <p class="text-[11px] text-slate-400">Separa automáticamente la silueta de corte exterior/huecos (<code class="text-rose-400">#ff0000</code> / <code class="text-sky-400">#0055ff</code>) y los vectores de grabado (<code class="text-emerald-400">#008800</code> / <code class="text-amber-400">#ff8800</code>)</p>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-1.5">
+          <button onclick="document.getElementById('fileInputImage2D').click()" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold transition flex items-center gap-1.5 shadow">
+            <span>📂 Cargar PNG / BMP / JPG</span>
+          </button>
+          <div class="flex items-center bg-slate-800 border border-slate-700 rounded-lg p-0.5 text-[11px]">
+            <span class="px-2 text-slate-400">Ejemplos:</span>
+            <button onclick="loadVectorizerDemoPreset('badge')" class="px-2 py-0.5 rounded hover:bg-slate-700 text-emerald-300 font-semibold">Insignia</button>
+            <button onclick="loadVectorizerDemoPreset('crest')" class="px-2 py-0.5 rounded hover:bg-slate-700 text-sky-300 font-semibold">Escudo</button>
+            <button onclick="loadVectorizerDemoPreset('medallion')" class="px-2 py-0.5 rounded hover:bg-slate-700 text-amber-300 font-semibold">Mandala</button>
+          </div>
+          <button onclick="closeImageVectorizerModal()" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white text-xs flex items-center justify-center">✕</button>
+        </div>
+      </div>
+
+      <!-- Cuerpo principal: Controles a la izquierda + Lienzo de vista previa vectorial a la derecha -->
+      <div class="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
+
+        <!-- Panel izquierdo de parámetros de vectorización -->
+        <div class="lg:col-span-5 bg-slate-900/95 border-r border-slate-800 p-3.5 overflow-y-auto space-y-3 text-xs">
+
+          <!-- 1. Tamaño físico de salida (mm) -->
+          <div class="bg-slate-800/50 border border-slate-700/70 rounded-xl p-2.5 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-bold uppercase tracking-wider text-sky-400">1. Medida Real de Salida (mm)</span>
+              <label class="flex items-center gap-1 text-[11px] text-slate-300 cursor-pointer">
+                <input type="checkbox" id="vecLockAspectCheck" checked class="accent-sky-500" />
+                <span>🔒 Proporcional</span>
+              </label>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <span class="text-[10px] text-slate-400 block mb-0.5">Ancho (mm)</span>
+                <input type="number" id="vecWidthMMInput" value="100" min="5" max="3000" step="1" onchange="onVectorizerDimChange('w', this.value)" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white font-semibold" />
+              </div>
+              <div>
+                <span class="text-[10px] text-slate-400 block mb-0.5">Alto (mm)</span>
+                <input type="number" id="vecHeightMMInput" value="100" min="5" max="3000" step="1" onchange="onVectorizerDimChange('h', this.value)" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white font-semibold" />
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Configuración de Silueta de CORTE (#ff0000 / #0055ff) -->
+          <div class="bg-slate-800/50 border border-rose-500/35 rounded-xl p-2.5 space-y-2">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-rose-400 block">2. Contorno de Corte Exterior y Huecos</span>
+
+            <div class="flex items-center justify-between">
+              <span class="text-slate-300 text-[11px]">Tipo de borde de corte:</span>
+              <select id="vecCutModeSelect" onchange="onVectorizerParamsChange()" class="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-[11px] text-rose-300 font-semibold outline-none">
+                <option value="silhouette" selected>✂️ Silueta Automática de la Imagen</option>
+                <option value="rounded_rect">▭ Placa Rectangular Redondeada</option>
+                <option value="circle">◯ Medallón Circular / Óvalo</option>
+                <option value="none">🚫 Sin Corte (Solo Grabado)</option>
+              </select>
+            </div>
+
+            <div class="flex items-center justify-between">
+              <span class="text-slate-300 text-[11px]">Detección de fondo:</span>
+              <select id="vecBgDetectSelect" onchange="onVectorizerParamsChange()" class="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-[11px] text-slate-200 outline-none">
+                <option value="auto" selected>Automática (Transparencia o Esquinas)</option>
+                <option value="alpha">Canal Alfa (PNG transparente)</option>
+                <option value="luma_light">Fondo Claro / Blanco (BMP / PNG)</option>
+                <option value="luma_dark">Fondo Oscuro / Negro</option>
+              </select>
+            </div>
+
+            <div>
+              <div class="flex justify-between text-[11px] mb-0.5">
+                <span class="text-slate-400">Tolerancia separación fondo:</span>
+                <span id="vecBgToleranceLabel" class="text-rose-300 font-semibold">38</span>
+              </div>
+              <input type="range" id="vecBgToleranceSlider" min="5" max="120" value="38" oninput="onVectorizerParamsChange()" class="w-full accent-rose-500" />
+            </div>
+
+            <div class="flex items-center justify-between text-[11px]" title="Añade un margen exterior alrededor de la silueta (estilo troquel o pegatina) para no quemar el grabado del borde">
+              <span class="text-slate-300">Margen / Offset silueta exterior (mm):</span>
+              <input type="number" id="vecCutOffsetInput" value="1.8" min="-5" max="25" step="0.2" onchange="onVectorizerParamsChange()" class="w-16 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-rose-300 font-bold" />
+            </div>
+
+            <label class="flex items-center justify-between text-[11px] text-sky-300 cursor-pointer">
+              <span>🔵 Cortar huecos internos pasantes (<code class="text-sky-400">#0055ff</code>)</span>
+              <input type="checkbox" id="vecCutHolesCheck" checked onchange="onVectorizerParamsChange()" class="accent-sky-500" />
+            </label>
+
+            <div class="pt-1 border-t border-slate-700/60 space-y-1.5">
+              <label class="flex items-center justify-between text-[11px] text-amber-300 font-medium cursor-pointer">
+                <span>🔑 Añadir agujero para llavero / colgante</span>
+                <input type="checkbox" id="vecKeyholeCheck" onchange="onVectorizerParamsChange()" class="accent-amber-500" />
+              </label>
+              <div id="vecKeyholeOptionsBox" class="hidden grid grid-cols-2 gap-1.5 pt-0.5">
+                <div class="flex items-center justify-between bg-slate-950 px-2 py-1 rounded border border-slate-800 text-[10px]">
+                  <span class="text-slate-400">Ø (mm):</span>
+                  <input type="number" id="vecKeyholeDiamInput" value="4.5" min="1.5" max="30" step="0.5" onchange="onVectorizerParamsChange()" class="w-12 bg-transparent text-right text-amber-300 font-bold outline-none" />
+                </div>
+                <select id="vecKeyholePosSelect" onchange="onVectorizerParamsChange()" class="bg-slate-950 border border-slate-800 rounded px-1.5 py-1 text-[10px] text-slate-200 outline-none">
+                  <option value="top_center" selected>Arriba Centro</option>
+                  <option value="top_left">Esquina Sup. Izq.</option>
+                  <option value="left_center">Izquierda Centro</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Configuración de GRABADO LÁSER (#008800 / #ff8800) -->
+          <div class="bg-slate-800/50 border border-emerald-500/35 rounded-xl p-2.5 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-400">3. Grabado Láser Interior</span>
+              <button onclick="autoAdjustVectorizerThreshold()" class="px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-[10px] text-emerald-300 font-semibold transition" title="Calcular umbral óptimo automáticamente mediante algoritmo de Otsu">
+                ✨ Auto-Umbral Otsu
+              </button>
+            </div>
+
+            <div class="flex items-center justify-between">
+              <span class="text-slate-300 text-[11px]">Modo de salida grabado:</span>
+              <select id="vecEngraveStyleSelect" onchange="onVectorizerParamsChange()" class="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-[11px] text-emerald-300 font-semibold outline-none">
+                <option value="vector_fill" selected>🟢 Vectores Relleno + Contorno (#008800)</option>
+                <option value="vector_outline">🟢 Solo Trazos de Contorno (#008800)</option>
+                <option value="vector_hatch">▨ Trama de Barrido Vectorial (Hatching)</option>
+                <option value="hybrid_raster">🖼️ Híbrido: Imagen Raster + Corte Vectorial</option>
+              </select>
+            </div>
+
+            <div>
+              <div class="flex justify-between text-[11px] mb-0.5">
+                <span class="text-slate-300">Umbral oscuridad grabado (0-255):</span>
+                <span id="vecEngraveThresholdLabel" class="text-emerald-300 font-bold">145</span>
+              </div>
+              <input type="range" id="vecEngraveThresholdSlider" min="15" max="245" value="145" oninput="onVectorizerParamsChange()" class="w-full accent-emerald-500" />
+            </div>
+
+            <label class="flex items-center justify-between text-[11px] text-slate-300 cursor-pointer">
+              <span>Invertir zonas de grabado (Negativo)</span>
+              <input type="checkbox" id="vecInvertEngraveCheck" onchange="onVectorizerParamsChange()" class="accent-emerald-500" />
+            </label>
+
+            <div id="vecHatchOptionsBox" class="hidden grid grid-cols-2 gap-1.5 bg-slate-950/90 p-2 rounded-lg border border-slate-800 text-[11px]">
+              <div class="flex items-center justify-between">
+                <span class="text-slate-400">Paso línea (mm):</span>
+                <input type="number" id="vecHatchSpacingInput" value="0.8" min="0.25" max="5" step="0.1" onchange="onVectorizerParamsChange()" class="w-12 bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-right text-emerald-300 font-bold" />
+              </div>
+              <label class="flex items-center justify-end gap-1.5 text-slate-300 cursor-pointer">
+                <input type="checkbox" id="vecHatchCrossCheck" onchange="onVectorizerParamsChange()" class="accent-emerald-500" />
+                <span>Trama cruzada</span>
+              </label>
+            </div>
+
+            <div class="pt-1 border-t border-slate-700/60 space-y-1.5">
+              <label class="flex items-center justify-between text-[11px] text-amber-300 cursor-pointer" title="Extrae líneas de detalle interno por cambio de contraste (operador Sobel) en la capa naranja #ff8800">
+                <span>🟠 Trazar bordes finos internos (<code class="text-amber-400">#ff8800</code>)</span>
+                <input type="checkbox" id="vecDetectEdgesCheck" checked onchange="onVectorizerParamsChange()" class="accent-amber-500" />
+              </label>
+              <div>
+                <div class="flex justify-between text-[10px] text-slate-400 mb-0.5">
+                  <span>Sensibilidad de bordes finos:</span>
+                  <span id="vecEdgeSensLabel" class="text-amber-300 font-semibold">55%</span>
+                </div>
+                <input type="range" id="vecEdgeSensSlider" min="15" max="95" value="55" oninput="onVectorizerParamsChange()" class="w-full accent-amber-500" />
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. Suavizado de curvas y limpieza de motas -->
+          <div class="bg-slate-800/50 border border-slate-700/70 rounded-xl p-2.5 space-y-1.5">
+            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">4. Suavizado Vectorial y Filtro de Ruido</span>
+            <div class="grid grid-cols-2 gap-2 items-center text-[11px]">
+              <div>
+                <div class="flex justify-between mb-0.5">
+                  <span class="text-slate-300">Suavizado curvas:</span>
+                  <span id="vecSmoothLabel" class="text-sky-300 font-bold">2</span>
+                </div>
+                <input type="range" id="vecSmoothSlider" min="0" max="4" value="2" oninput="onVectorizerParamsChange()" class="w-full accent-sky-500" />
+              </div>
+              <div class="flex items-center justify-between">
+                <span class="text-slate-300">Filtro motas (mm²):</span>
+                <input type="number" id="vecMinSpeckleInput" value="0.45" min="0.05" max="20" step="0.1" onchange="onVectorizerParamsChange()" class="w-14 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-right text-white" />
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Panel derecho: Vista previa interactiva y acciones de descarga / envío a 3D -->
+        <div class="lg:col-span-7 bg-slate-950 flex flex-col overflow-hidden">
+          <!-- Barra de modo de vista previa -->
+          <div class="p-2.5 bg-slate-900/90 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
+            <div class="flex flex-wrap items-center gap-1">
+              <button onclick="setVectorizerPreviewMode('combined')" id="vecPreviewBtn_combined" class="px-2.5 py-1 rounded-lg bg-sky-500/25 border border-sky-500 text-sky-300 text-[11px] font-bold transition">
+                🔀 Corte + Grabado
+              </button>
+              <button onclick="setVectorizerPreviewMode('cut_only')" id="vecPreviewBtn_cut_only" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-[11px] font-medium transition">
+                ✂️ Solo Corte
+              </button>
+              <button onclick="setVectorizerPreviewMode('engrave_only')" id="vecPreviewBtn_engrave_only" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-[11px] font-medium transition">
+                ⚡ Solo Grabado
+              </button>
+              <button onclick="setVectorizerPreviewMode('original')" id="vecPreviewBtn_original" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-[11px] font-medium transition">
+                🖼️ Imagen Original
+              </button>
+            </div>
+            <span class="text-[10px] text-slate-400">Arrastra aquí cualquier archivo <strong class="text-slate-200">.PNG / .BMP</strong></span>
+          </div>
+
+          <!-- Lienzo con soporte Drag & Drop -->
+          <div
+            class="flex-1 relative flex items-center justify-center overflow-hidden p-2"
+            ondragover="event.preventDefault()"
+            ondrop="event.preventDefault(); if(event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0]) handleImageVectorizerFile(event.dataTransfer.files[0]);"
+          >
+            <canvas id="vectorizerPreviewCanvas" class="w-full h-full"></canvas>
+
+            <!-- Leyenda de capas láser -->
+            <div class="absolute bottom-3 left-3 flex flex-wrap items-center gap-3 text-[10px] bg-slate-900/90 px-3 py-1.5 rounded-lg border border-slate-800 pointer-events-none">
+              <span class="flex items-center gap-1 text-rose-400"><span class="w-2.5 h-0.5 bg-rose-500 inline-block"></span> Corte Exterior (#ff0000)</span>
+              <span class="flex items-center gap-1 text-sky-400"><span class="w-2.5 h-0.5 bg-sky-400 inline-block"></span> Corte Huecos (#0055ff)</span>
+              <span class="flex items-center gap-1 text-emerald-400"><span class="w-2.5 h-2 rounded-xs bg-emerald-500/40 border border-emerald-400 inline-block"></span> Grabado Vectorial (#008800)</span>
+              <span class="flex items-center gap-1 text-amber-400"><span class="w-2.5 h-0.5 bg-amber-400 inline-block"></span> Detalle Bordes (#ff8800)</span>
+            </div>
+          </div>
+
+          <!-- Resumen estadístico -->
+          <div id="vecStatsSummaryBadge" class="px-3.5 py-2 bg-slate-900/95 border-t border-slate-800 text-[11px] text-slate-300 text-center">
+            Listo para exportar a escala 1:1 en milímetros
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Pie del modal con botones directos de descarga SVG/DXF y envío a LayerStudio 3D -->
+      <div class="p-3 bg-slate-950 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex flex-wrap items-center gap-2">
+          <button onclick="applyVectorizedImageToLayerStudio(false)" class="px-3 py-1.5 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/35 border border-indigo-500/40 text-indigo-300 text-xs font-semibold transition flex items-center gap-1.5" title="Envía esta pieza (corte + grabado) al visor 3D/2D principal para usar Nesting en tablero, micro-uniones o subdivisión modular">
+            <span>🧱 Enviar a Tablero / Visor 3D (1 Capa)</span>
+          </button>
+          <div class="flex items-center gap-1 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1">
+            <button onclick="applyVectorizedImageToLayerStudio(true)" class="text-xs font-semibold text-fuchsia-300 hover:text-fuchsia-200 transition flex items-center gap-1" title="Genera automáticamente múltiples capas 3D apilables por niveles de brillo a partir de la imagen">
+              <span>🏔️ Crear Relieve 3D Apilable:</span>
+            </button>
+            <input type="number" id="vecReliefLayersInput" value="4" min="2" max="10" step="1" onchange="onVectorizerParamsChange()" class="w-10 bg-slate-950 border border-slate-700 rounded px-1 py-0.5 text-[11px] text-center text-fuchsia-300 font-bold" title="Número de capas de relieve 3D" />
+            <span class="text-[10px] text-slate-400">capas</span>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <button onclick="downloadVectorizedDXF()" class="px-3.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/35 border border-amber-500/40 text-amber-300 text-xs font-bold transition flex items-center gap-1.5">
+            <span>⬇ Descargar .DXF</span>
+          </button>
+          <button onclick="downloadVectorizedSVG()" class="px-4 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white text-xs font-bold shadow-lg shadow-emerald-500/20 transition flex items-center gap-1.5">
+            <span>⬇ Descargar .SVG (Corte y Grabado)</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>

@@ -52,7 +52,13 @@
   3. **Alzado Vertical de Apilado / Planta de Retícula Ortogonal**: Muestra el progreso vertical capa a capa (modo Apilado) o la planta de cruces `Serie A × Serie B` con los nudos de encaje sin pegamento (modo Puzzle 3D).
 - **Exportación de la guía**: Impresión directa a **PDF**, descarga como documento autocontenido **`GUIA_ILUSTRADA_MONTAJE.html`** (incluido automáticamente dentro del `.ZIP`) y resumen en texto plano **`.TXT`**.
 
-### 6. Exportación Directa y por Lotes (`.ZIP`)
+### 6. Vectorizador Automático 2D (`.PNG` / `.BMP` / `.JPG` → `.SVG` y `.DXF` de Corte y Grabado Láser + Relieve 3D)
+- **Separación automática de Corte y Grabado**:
+  - **Silueta de Corte Exterior (`#ff0000` Rojo — `CORTE_EXTERIOR`)** y **Huecos Pasantes (`#0055ff` Azul — `CORTE_INTERIOR_HUECOS`)** mediante detección automática de transparencia (canal alfa) o color de fondo en las esquinas, con **desplazamiento morfológico (*offset* en `mm`)** basado en campo de distancia 2D (*Chamfer Distance Transform*) para crear bordes tipo *sticker*/insignia y perforación opcional para llavero/colgante.
+  - **Grabado Láser Interior (`#008800` Verde — `GRABADO_VECTORIAL` y `#ff8800` Naranja — `GRABADO_DETALLE_FINO`)**: Trazado sub-píxel mediante *Marching Squares*, umbral automático de **Otsu**, simplificación **Ramer-Douglas-Peucker**, suavizado de curvas **Chaikin**, detección de bordes internos **Sobel** y generador opcional de **trama de barrido vectorial (*Hatching*)**.
+- **Descarga directa `.SVG` / `.DXF` o envío al espacio 3D**: Permite descargar al instante el `.SVG` o `.DXF` de corte y grabado a escala `1:1` en milímetros, enviarlo como pieza de 1 capa al visor 3D/Tablero, o **generar automáticamente un Relieve 3D Apilable Multicapa** por niveles de brillo.
+
+### 7. Exportación Directa y por Lotes (`.ZIP`)
 - **`.SVG` (Corte Láser)**: Escala `1:1` en milímetros, validado XML y organizado por capas semánticas.
 - **`.DXF` (AutoCAD / CNC / Láser)**: Polilíneas, círculos y textos separados por capas y colores estándar CAD.
 - **`.STL` (Impresión 3D)**: Mallas 3D extruidas individualmente por cada lasca o costilla.
@@ -63,7 +69,7 @@
 ## 🚀 Uso Rápido
 
 1. Abran la aplicación directamente en **[https://nmarafo.github.io/layerstudio3D/](https://nmarafo.github.io/layerstudio3D/)** (servida desde la arquitectura modular optimizada) o la edición monolítica de archivo único en **[https://nmarafo.github.io/layerstudio3D/indexstandalone.html](https://nmarafo.github.io/layerstudio3D/indexstandalone.html)**.
-2. Carguen un modelo `.STL` / `.GLB` o seleccionen uno de los modelos de demostración en la barra superior.
+2. Carguen un modelo `.STL` / `.GLB`, seleccionen uno de los modelos de demostración en la barra superior, o pulsen **🖼️ PNG/BMP → SVG** para convertir cualquier imagen 2D en vectores de corte y grabado láser.
 3. Ajusten las dimensiones de la pieza, el sistema constructivo (**Apilado 1 Eje** o **Puzzle 3D Encajable**) y el grosor del material o número de capas.
 4. *(Opcional)* Activen **5. Distribución en Tablero** para empaquetar todas las islas en tableros de corte y consulten la **🛠️ Guía Ilustrada**.
 5. Descarguen la lasca/tablero actual en `.SVG`, `.DXF` o `.STL`, o pulsen **Exportar .ZIP** para descargar el paquete completo de fabricación junto con la guía ilustrada `.HTML` y `.TXT`.
@@ -89,7 +95,8 @@ layerstudio3D/
 │   ├── nesting.js              # Empaquetado 2D MaxRects multi-tablero, anidado en huecos y ajuste de texto
 │   ├── modals-guide.js         # Modal de tablero individual y guía interactiva de corte y montaje (#1 -> #N)
 │   ├── viewer2d.js             # Inspector 2D interactivo en Canvas, zoom/pan, selección de islas y galería
-│   └── exporters.js            # Exportadores 1:1 (.SVG, .DXF, .STL, .ZIP) y gestión de proyectos (.lasca/.json)
+│   ├── exporters.js            # Exportadores 1:1 (.SVG, .DXF, .STL, .ZIP) y gestión de proyectos (.lasca/.json)
+│   └── vectorizer2d.js         # Vectorizador automático PNG/BMP a SVG/DXF de corte y grabado láser + relieve 3D
 ├── LICENSE                     # Licencia GNU AGPL-3.0 con cláusula de atribución (Sección 7b)
 ├── README.md                   # Documentación técnica y guía de uso
 ├── .nojekyll                   # Configuración de servicio directo en GitHub Pages
