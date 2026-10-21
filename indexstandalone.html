@@ -1450,7 +1450,8 @@ function applyModelSplitToExistingSlices(triggerRender = true) {
         points: l.points,
         absArea: l.absArea,
         signedArea: l.signedArea,
-        isHole: l.isHole
+        isHole: l.isHole,
+        isFrame: Boolean(l.isFrame)
       }));
       slice.splitGrid = null;
       slice.splitCutSeams = [];
@@ -1467,6 +1468,7 @@ function applyModelSplitToExistingSlices(triggerRender = true) {
         absArea: l.absArea,
         signedArea: l.signedArea,
         isHole: l.isHole,
+        isFrame: Boolean(l.isFrame),
         sectorCol: 0,
         sectorRow: 0,
         sectorCode: 'A1'
@@ -2551,11 +2553,12 @@ function onRodSettingsChange() {
  * Divide un contorno cerrado 2D (pts) dejando sin cortar N puntos (puentes/pestañas
  * de sujeción de p. ej. 1.0 mm) para poder desprender la pieza del tablero haciendo presión.
  */
-function computeLoopWithHoldingTabs(pts, isHole = false) {
+function computeLoopWithHoldingTabs(pts, isHole = false, skipTabs = false) {
   if (!pts || pts.length < 3) {
     return { isClosed: true, subpaths: [], tabBridges: [] };
   }
-  if (!state.tabsEnabled || (isHole && !state.tabApplyToHoles)) {
+  // No aplicar nunca sujeción por presión (micro-uniones) al marco configurable
+  if (skipTabs || pts.isFrame || !state.tabsEnabled || (isHole && !state.tabApplyToHoles)) {
     return { isClosed: true, subpaths: [pts], tabBridges: [] };
   }
 
@@ -3131,6 +3134,7 @@ function generate2DFramePolygon(cx, cy, w, h, shape, cornerRadiusMM, wantClockwi
   if ((!wantClockwise && signed < 0) || (wantClockwise && signed > 0)) {
     pts.reverse();
   }
+  pts.isFrame = true;
   return pts;
 }
 
@@ -3279,6 +3283,7 @@ function get2DBoardFrameGeometry(minX, minY, maxX, maxY, placementsOrLoops = nul
       const a = -((i / segs) * Math.PI * 2);
       keyholePts.push({ x: cx + Math.cos(a) * khRad, y: khY + Math.sin(a) * khRad });
     }
+    keyholePts.isFrame = true;
   }
 
   return {
@@ -4112,6 +4117,7 @@ function extractIslandsFromSlices(targetSlices) {
         customCode: customCode,
         islandIdxInSlice: oIdx,
         totalIslandsInSlice: outers.length,
+        isFrame: Boolean(outer.isFrame),
         outerPoints: outer.points,
         outerArea: outer.absArea,
         holes: islandHoles,
@@ -4593,7 +4599,12 @@ function packIslandsIntoBoards(islands, boardW, boardH, margin, spacing, allowRo
     };
 
     const placedOuter = island.outerPoints.map(transformPt);
-    const placedHoles = island.holes.map((h) => ({ points: h.points.map(transformPt), absArea: h.absArea }));
+    if (island.isFrame) placedOuter.isFrame = true;
+    const placedHoles = island.holes.map((h) => {
+      const hPts = h.points.map(transformPt);
+      if (h.isFrame) hPts.isFrame = true;
+      return { points: hPts, absArea: h.absArea, isFrame: Boolean(h.isFrame) };
+    });
     const placedRods = island.rods.map(transformPt);
     const placedEngraves = (island.engraveLoops || []).map((el) => ({
       points: el.points.map(transformPt),
@@ -4605,6 +4616,7 @@ function packIslandsIntoBoards(islands, boardW, boardH, margin, spacing, allowRo
 
     const placedPlacement = {
       island: island,
+      isFrame: Boolean(island.isFrame),
       x: bestX,
       y: bestY,
       w: placedW,
@@ -7121,10 +7133,10 @@ function drawAdaptiveIslandTextOnCanvas(ctx, tLayout, toScreenX, toScreenY, scal
   ctx.restore();
 }
 
-// Dibuja un contorno 2D en el Canvas respetando las micro-uniones (holding tabs) si están activas
-function drawContourWithTabsOnCanvas(ctx, pts, isHole, strokeColor, lineWidth, toScreenX, toScreenY) {
+// Dibuja un contorno 2D en el Canvas respetando las micro-uniones (holding tabs) si están activas (salvo en el marco configurable)
+function drawContourWithTabsOnCanvas(ctx, pts, isHole, strokeColor, lineWidth, toScreenX, toScreenY, skipTabs = false) {
   if (!pts || pts.length < 3) return;
-  const tabRes = computeLoopWithHoldingTabs(pts, isHole);
+  const tabRes = computeLoopWithHoldingTabs(pts, isHole, Boolean(skipTabs || pts.isFrame));
 
   ctx.save();
   ctx.strokeStyle = strokeColor;
@@ -7192,13 +7204,13 @@ function draw2DBoardFrameOnCanvas(ctx, frameGeom, toScreenX, toScreenY) {
   }
 
   if (frameGeom.outerCutPts && frameGeom.outerCutPts.length >= 3) {
-    drawContourWithTabsOnCanvas(ctx, frameGeom.outerCutPts, false, '#f43f5e', 2.2, toScreenX, toScreenY);
+    drawContourWithTabsOnCanvas(ctx, frameGeom.outerCutPts, false, '#f43f5e', 2.2, toScreenX, toScreenY, true);
   }
   if (frameGeom.innerCutPts && frameGeom.innerCutPts.length >= 3) {
-    drawContourWithTabsOnCanvas(ctx, frameGeom.innerCutPts, true, '#38bdf8', 1.7, toScreenX, toScreenY);
+    drawContourWithTabsOnCanvas(ctx, frameGeom.innerCutPts, true, '#38bdf8', 1.7, toScreenX, toScreenY, true);
   }
   if (frameGeom.keyholePts && frameGeom.keyholePts.length >= 3) {
-    drawContourWithTabsOnCanvas(ctx, frameGeom.keyholePts, true, '#38bdf8', 1.5, toScreenX, toScreenY);
+    drawContourWithTabsOnCanvas(ctx, frameGeom.keyholePts, true, '#38bdf8', 1.5, toScreenX, toScreenY, true);
   }
 }
 
@@ -7278,7 +7290,7 @@ function render2DBoard(ctx, canvas) {
     ctx.fill('evenodd');
     ctx.restore();
 
-    // Contorno exterior (rojo) con soporte de micro-uniones
+    // Contorno exterior (rojo) con soporte de micro-uniones (excepto si es marco configurable)
     drawContourWithTabsOnCanvas(
       ctx,
       pl.outerPoints,
@@ -7286,12 +7298,13 @@ function render2DBoard(ctx, canvas) {
       isCurrentSlice ? '#fb7185' : '#f43f5e',
       isCurrentSlice ? 2.4 : 1.7,
       toScreenX,
-      toScreenY
+      toScreenY,
+      Boolean(pl.isFrame || (pl.island && pl.island.isFrame))
     );
 
-    // Contornos de huecos interiores (azul) con soporte opcional de micro-uniones
+    // Contornos de huecos interiores (azul) con soporte opcional de micro-uniones (excepto si es marco configurable)
     pl.holes.forEach((h) => {
-      drawContourWithTabsOnCanvas(ctx, h.points, true, '#38bdf8', 1.4, toScreenX, toScreenY);
+      drawContourWithTabsOnCanvas(ctx, h.points, true, '#38bdf8', 1.4, toScreenX, toScreenY, Boolean(h.isFrame));
     });
 
     // Grabado vectorial u orla de marco 3D perteneciente a esta isla
@@ -7525,7 +7538,7 @@ function render2DSlice() {
     ctx.restore();
   }
 
-  // Contornos exteriores (rojo) e interiores (azul) de la lasca actual con soporte de micro-uniones
+  // Contornos exteriores (rojo) e interiores (azul) de la lasca actual con soporte de micro-uniones (salvo en marco configurable)
   slice.loops.forEach((loop) => {
     drawContourWithTabsOnCanvas(
       ctx,
@@ -7534,7 +7547,8 @@ function render2DSlice() {
       loop.isHole ? '#38bdf8' : '#f43f5e',
       loop.isHole ? 1.6 : 2.2,
       toScreenX,
-      toScreenY
+      toScreenY,
+      Boolean(loop.isFrame)
     );
   });
 
@@ -7849,10 +7863,10 @@ function escapeXmlAttr(val) {
     .replace(/>/g, '&gt;');
 }
 
-// Construye el atributo d="..." para corte láser SVG aplicando micro-uniones (holding tabs) si están activas
-function buildSvgCutPathD(pts, isHole, toX, toY) {
+// Construye el atributo d="..." para corte láser SVG aplicando micro-uniones (holding tabs) si están activas (salvo en el marco configurable)
+function buildSvgCutPathD(pts, isHole, toX, toY, skipTabs = false) {
   if (!pts || pts.length < 3) return '';
-  const tabRes = computeLoopWithHoldingTabs(pts, isHole);
+  const tabRes = computeLoopWithHoldingTabs(pts, isHole, Boolean(skipTabs || pts.isFrame));
   if (tabRes.isClosed) {
     let d = 'M ' + toX(pts[0].x) + ' ' + toY(pts[0].y);
     for (let i = 1; i < pts.length; i++) {
@@ -7872,10 +7886,10 @@ function buildSvgCutPathD(pts, isHole, toX, toY) {
   return parts.join(' ');
 }
 
-// Añade entidades LINE a un documento DXF aplicando micro-uniones (holding tabs) si están activas
-function pushLoopLinesWithTabsDXF(dxf, pts, isHole, layer, color, ox = 0, oy = 0) {
+// Añade entidades LINE a un documento DXF aplicando micro-uniones (holding tabs) si están activas (salvo en el marco configurable)
+function pushLoopLinesWithTabsDXF(dxf, pts, isHole, layer, color, ox = 0, oy = 0, skipTabs = false) {
   if (!pts || pts.length < 3) return;
-  const tabRes = computeLoopWithHoldingTabs(pts, isHole);
+  const tabRes = computeLoopWithHoldingTabs(pts, isHole, Boolean(skipTabs || pts.isFrame));
   if (tabRes.isClosed) {
     for (let i = 0, n = pts.length; i < n; i++) {
       const p1 = pts[i];
@@ -7947,7 +7961,7 @@ function generateSliceSVG(slice, idx) {
     dClosed += ' Z';
     compoundPath += dClosed + ' ';
 
-    const cutD = buildSvgCutPathD(pts, loop.isHole, toX, toY);
+    const cutD = buildSvgCutPathD(pts, loop.isHole, toX, toY, Boolean(loop.isFrame));
     if (!cutD) return;
     if (loop.isHole) {
       holePaths.push(cutD);
@@ -7956,21 +7970,21 @@ function generateSliceSVG(slice, idx) {
     }
   });
 
-  // Marco configurable 2D de corte/grabado alrededor del lienzo 2D
+  // Marco configurable 2D de corte/grabado alrededor del lienzo 2D (sin micro-uniones de sujeción por presión)
   let sliceFrameEngravePath = '';
   if (state.slicerFrameEnabled && typeof get2DBoardFrameGeometry === 'function') {
     const fGeom = get2DBoardFrameGeometry(docBounds.minX, docBounds.minY, docBounds.maxX, docBounds.maxY, slice.loops, false);
     if (fGeom) {
       if (fGeom.outerCutPts && fGeom.outerCutPts.length >= 3) {
-        const dOutFrame = buildSvgCutPathD(fGeom.outerCutPts, false, toX, toY);
+        const dOutFrame = buildSvgCutPathD(fGeom.outerCutPts, false, toX, toY, true);
         if (dOutFrame) outerPaths.push(dOutFrame);
       }
       if (fGeom.innerCutPts && fGeom.innerCutPts.length >= 3) {
-        const dInFrame = buildSvgCutPathD(fGeom.innerCutPts, true, toX, toY);
+        const dInFrame = buildSvgCutPathD(fGeom.innerCutPts, true, toX, toY, true);
         if (dInFrame) holePaths.push(dInFrame);
       }
       if (fGeom.keyholePts && fGeom.keyholePts.length >= 3) {
-        const dKh = buildSvgCutPathD(fGeom.keyholePts, true, toX, toY);
+        const dKh = buildSvgCutPathD(fGeom.keyholePts, true, toX, toY, true);
         if (dKh) holePaths.push(dKh);
       }
       if (fGeom.engraveLoops && fGeom.engraveLoops.length > 0) {
@@ -8171,7 +8185,7 @@ function generateBoardSVG(board) {
     dOutClosed += ' Z';
     compoundPath += dOutClosed + ' ';
 
-    const dOutCut = buildSvgCutPathD(pts, false, toX, toY);
+    const dOutCut = buildSvgCutPathD(pts, false, toX, toY, Boolean(pl.isFrame || (pl.island && pl.island.isFrame)));
     if (dOutCut) {
       outerPaths.push({ id: 'isla_' + (pIdx + 1) + '_lasca_' + (pl.island.sliceIndex + 1), d: dOutCut });
     }
@@ -8185,7 +8199,7 @@ function generateBoardSVG(board) {
       dHoleClosed += ' Z';
       compoundPath += dHoleClosed + ' ';
 
-      const dHoleCut = buildSvgCutPathD(h.points, true, toX, toY);
+      const dHoleCut = buildSvgCutPathD(h.points, true, toX, toY, Boolean(h.isFrame));
       if (dHoleCut) holePaths.push(dHoleCut);
     });
 
@@ -8239,20 +8253,20 @@ function generateBoardSVG(board) {
     }
   });
 
-  // Marco configurable 2D de corte/grabado alrededor del tablero
+  // Marco configurable 2D de corte/grabado alrededor del tablero (sin micro-uniones de sujeción por presión)
   if (state.slicerFrameEnabled && typeof get2DBoardFrameGeometry === 'function') {
     const fGeom = get2DBoardFrameGeometry(0, 0, board.width, board.height, board.placements, true);
     if (fGeom) {
       if (fGeom.outerCutPts && fGeom.outerCutPts.length >= 3) {
-        const dOutFrame = buildSvgCutPathD(fGeom.outerCutPts, false, toX, toY);
+        const dOutFrame = buildSvgCutPathD(fGeom.outerCutPts, false, toX, toY, true);
         if (dOutFrame) outerPaths.push({ id: 'marco_corte_exterior_tablero', d: dOutFrame });
       }
       if (fGeom.innerCutPts && fGeom.innerCutPts.length >= 3) {
-        const dInFrame = buildSvgCutPathD(fGeom.innerCutPts, true, toX, toY);
+        const dInFrame = buildSvgCutPathD(fGeom.innerCutPts, true, toX, toY, true);
         if (dInFrame) holePaths.push(dInFrame);
       }
       if (fGeom.keyholePts && fGeom.keyholePts.length >= 3) {
-        const dKh = buildSvgCutPathD(fGeom.keyholePts, true, toX, toY);
+        const dKh = buildSvgCutPathD(fGeom.keyholePts, true, toX, toY, true);
         if (dKh) holePaths.push(dKh);
       }
       if (fGeom.engraveLoops && fGeom.engraveLoops.length > 0) {
@@ -8336,8 +8350,8 @@ function generateBoardDXF(board) {
   const dxf = ['0', 'SECTION', '2', 'ENTITIES'];
 
   board.placements.forEach((pl) => {
-    pushLoopLinesWithTabsDXF(dxf, pl.outerPoints, false, 'CORTE_EXTERIOR', '1', 0, 0);
-    pl.holes.forEach((h) => pushLoopLinesWithTabsDXF(dxf, h.points, true, 'CORTE_INTERIOR', '5', 0, 0));
+    pushLoopLinesWithTabsDXF(dxf, pl.outerPoints, false, 'CORTE_EXTERIOR', '1', 0, 0, Boolean(pl.isFrame || (pl.island && pl.island.isFrame)));
+    pl.holes.forEach((h) => pushLoopLinesWithTabsDXF(dxf, h.points, true, 'CORTE_INTERIOR', '5', 0, 0, Boolean(h.isFrame)));
     if (pl.engraveLoops && pl.engraveLoops.length > 0) {
       pl.engraveLoops.forEach((el) => {
         if (!el.points || el.points.length < 3) return;
@@ -8429,18 +8443,18 @@ function generateBoardDXF(board) {
     }
   });
 
-  // Marco configurable 2D de corte/grabado alrededor del tablero en DXF
+  // Marco configurable 2D de corte/grabado alrededor del tablero en DXF (sin micro-uniones de sujeción por presión)
   if (state.slicerFrameEnabled && typeof get2DBoardFrameGeometry === 'function') {
     const fGeom = get2DBoardFrameGeometry(0, 0, board.width, board.height, board.placements, true);
     if (fGeom) {
       if (fGeom.outerCutPts && fGeom.outerCutPts.length >= 3) {
-        pushLoopLinesWithTabsDXF(dxf, fGeom.outerCutPts, false, 'CORTE_EXTERIOR', '1', 0, 0);
+        pushLoopLinesWithTabsDXF(dxf, fGeom.outerCutPts, false, 'CORTE_EXTERIOR', '1', 0, 0, true);
       }
       if (fGeom.innerCutPts && fGeom.innerCutPts.length >= 3) {
-        pushLoopLinesWithTabsDXF(dxf, fGeom.innerCutPts, true, 'CORTE_INTERIOR', '5', 0, 0);
+        pushLoopLinesWithTabsDXF(dxf, fGeom.innerCutPts, true, 'CORTE_INTERIOR', '5', 0, 0, true);
       }
       if (fGeom.keyholePts && fGeom.keyholePts.length >= 3) {
-        pushLoopLinesWithTabsDXF(dxf, fGeom.keyholePts, true, 'CORTE_INTERIOR', '5', 0, 0);
+        pushLoopLinesWithTabsDXF(dxf, fGeom.keyholePts, true, 'CORTE_INTERIOR', '5', 0, 0, true);
       }
       if (fGeom.engraveLoops && fGeom.engraveLoops.length > 0) {
         fGeom.engraveLoops.forEach((el) => {
@@ -8482,20 +8496,20 @@ function generateSliceDXF(slice, idx) {
     if (!loop.points || loop.points.length < 3) return;
     const layer = loop.isHole ? 'CORTE_INTERIOR' : 'CORTE_EXTERIOR';
     const color = loop.isHole ? '5' : '1';
-    pushLoopLinesWithTabsDXF(dxf, loop.points, loop.isHole, layer, color, ox, oy);
+    pushLoopLinesWithTabsDXF(dxf, loop.points, loop.isHole, layer, color, ox, oy, Boolean(loop.isFrame));
   });
 
   if (state.slicerFrameEnabled && typeof get2DBoardFrameGeometry === 'function') {
     const fGeom = get2DBoardFrameGeometry(b.minX, b.minY, b.maxX, b.maxY, slice.loops, false);
     if (fGeom) {
       if (fGeom.outerCutPts && fGeom.outerCutPts.length >= 3) {
-        pushLoopLinesWithTabsDXF(dxf, fGeom.outerCutPts, false, 'CORTE_EXTERIOR', '1', ox, oy);
+        pushLoopLinesWithTabsDXF(dxf, fGeom.outerCutPts, false, 'CORTE_EXTERIOR', '1', ox, oy, true);
       }
       if (fGeom.innerCutPts && fGeom.innerCutPts.length >= 3) {
-        pushLoopLinesWithTabsDXF(dxf, fGeom.innerCutPts, true, 'CORTE_INTERIOR', '5', ox, oy);
+        pushLoopLinesWithTabsDXF(dxf, fGeom.innerCutPts, true, 'CORTE_INTERIOR', '5', ox, oy, true);
       }
       if (fGeom.keyholePts && fGeom.keyholePts.length >= 3) {
-        pushLoopLinesWithTabsDXF(dxf, fGeom.keyholePts, true, 'CORTE_INTERIOR', '5', ox, oy);
+        pushLoopLinesWithTabsDXF(dxf, fGeom.keyholePts, true, 'CORTE_INTERIOR', '5', ox, oy, true);
       }
       if (fGeom.engraveLoops && fGeom.engraveLoops.length > 0) {
         fGeom.engraveLoops.forEach((el) => {
@@ -11576,19 +11590,25 @@ function applyVectorizedImageToLayerStudio(asReliefMultilayer = false) {
 
   const baseCutLoops = [];
   baseOuterLoops.forEach((l) => {
+    const pts = l.points.map((p) => ({ x: p.x, y: p.y }));
+    if (l.isFrame) pts.isFrame = true;
     baseCutLoops.push({
-      points: l.points.map((p) => ({ x: p.x, y: p.y })),
+      points: pts,
       absArea: l.areaMM2,
       signedArea: l.areaMM2,
-      isHole: false
+      isHole: false,
+      isFrame: Boolean(l.isFrame)
     });
   });
   res.holeCutLoops.forEach((l) => {
+    const pts = l.points.map((p) => ({ x: p.x, y: p.y }));
+    if (l.isFrame) pts.isFrame = true;
     baseCutLoops.push({
-      points: l.points.map((p) => ({ x: p.x, y: p.y })),
+      points: pts,
       absArea: l.areaMM2,
       signedArea: -l.areaMM2,
-      isHole: true
+      isHole: true,
+      isFrame: Boolean(l.isFrame)
     });
   });
 

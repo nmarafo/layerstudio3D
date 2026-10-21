@@ -885,7 +885,8 @@ function applyModelSplitToExistingSlices(triggerRender = true) {
         points: l.points,
         absArea: l.absArea,
         signedArea: l.signedArea,
-        isHole: l.isHole
+        isHole: l.isHole,
+        isFrame: Boolean(l.isFrame)
       }));
       slice.splitGrid = null;
       slice.splitCutSeams = [];
@@ -902,6 +903,7 @@ function applyModelSplitToExistingSlices(triggerRender = true) {
         absArea: l.absArea,
         signedArea: l.signedArea,
         isHole: l.isHole,
+        isFrame: Boolean(l.isFrame),
         sectorCol: 0,
         sectorRow: 0,
         sectorCode: 'A1'
@@ -1986,11 +1988,12 @@ function onRodSettingsChange() {
  * Divide un contorno cerrado 2D (pts) dejando sin cortar N puntos (puentes/pestañas
  * de sujeción de p. ej. 1.0 mm) para poder desprender la pieza del tablero haciendo presión.
  */
-function computeLoopWithHoldingTabs(pts, isHole = false) {
+function computeLoopWithHoldingTabs(pts, isHole = false, skipTabs = false) {
   if (!pts || pts.length < 3) {
     return { isClosed: true, subpaths: [], tabBridges: [] };
   }
-  if (!state.tabsEnabled || (isHole && !state.tabApplyToHoles)) {
+  // No aplicar nunca sujeción por presión (micro-uniones) al marco configurable
+  if (skipTabs || pts.isFrame || !state.tabsEnabled || (isHole && !state.tabApplyToHoles)) {
     return { isClosed: true, subpaths: [pts], tabBridges: [] };
   }
 
@@ -2566,6 +2569,7 @@ function generate2DFramePolygon(cx, cy, w, h, shape, cornerRadiusMM, wantClockwi
   if ((!wantClockwise && signed < 0) || (wantClockwise && signed > 0)) {
     pts.reverse();
   }
+  pts.isFrame = true;
   return pts;
 }
 
@@ -2714,6 +2718,7 @@ function get2DBoardFrameGeometry(minX, minY, maxX, maxY, placementsOrLoops = nul
       const a = -((i / segs) * Math.PI * 2);
       keyholePts.push({ x: cx + Math.cos(a) * khRad, y: khY + Math.sin(a) * khRad });
     }
+    keyholePts.isFrame = true;
   }
 
   return {

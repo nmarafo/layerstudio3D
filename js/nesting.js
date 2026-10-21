@@ -668,6 +668,7 @@ function extractIslandsFromSlices(targetSlices) {
         customCode: customCode,
         islandIdxInSlice: oIdx,
         totalIslandsInSlice: outers.length,
+        isFrame: Boolean(outer.isFrame),
         outerPoints: outer.points,
         outerArea: outer.absArea,
         holes: islandHoles,
@@ -1149,7 +1150,12 @@ function packIslandsIntoBoards(islands, boardW, boardH, margin, spacing, allowRo
     };
 
     const placedOuter = island.outerPoints.map(transformPt);
-    const placedHoles = island.holes.map((h) => ({ points: h.points.map(transformPt), absArea: h.absArea }));
+    if (island.isFrame) placedOuter.isFrame = true;
+    const placedHoles = island.holes.map((h) => {
+      const hPts = h.points.map(transformPt);
+      if (h.isFrame) hPts.isFrame = true;
+      return { points: hPts, absArea: h.absArea, isFrame: Boolean(h.isFrame) };
+    });
     const placedRods = island.rods.map(transformPt);
     const placedEngraves = (island.engraveLoops || []).map((el) => ({
       points: el.points.map(transformPt),
@@ -1161,6 +1167,7 @@ function packIslandsIntoBoards(islands, boardW, boardH, margin, spacing, allowRo
 
     const placedPlacement = {
       island: island,
+      isFrame: Boolean(island.isFrame),
       x: bestX,
       y: bestY,
       w: placedW,

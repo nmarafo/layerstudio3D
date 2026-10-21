@@ -2423,19 +2423,25 @@ function applyVectorizedImageToLayerStudio(asReliefMultilayer = false) {
 
   const baseCutLoops = [];
   baseOuterLoops.forEach((l) => {
+    const pts = l.points.map((p) => ({ x: p.x, y: p.y }));
+    if (l.isFrame) pts.isFrame = true;
     baseCutLoops.push({
-      points: l.points.map((p) => ({ x: p.x, y: p.y })),
+      points: pts,
       absArea: l.areaMM2,
       signedArea: l.areaMM2,
-      isHole: false
+      isHole: false,
+      isFrame: Boolean(l.isFrame)
     });
   });
   res.holeCutLoops.forEach((l) => {
+    const pts = l.points.map((p) => ({ x: p.x, y: p.y }));
+    if (l.isFrame) pts.isFrame = true;
     baseCutLoops.push({
-      points: l.points.map((p) => ({ x: p.x, y: p.y })),
+      points: pts,
       absArea: l.areaMM2,
       signedArea: -l.areaMM2,
-      isHole: true
+      isHole: true,
+      isFrame: Boolean(l.isFrame)
     });
   });
 

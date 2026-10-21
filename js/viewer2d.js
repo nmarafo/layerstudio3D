@@ -308,10 +308,10 @@ function drawAdaptiveIslandTextOnCanvas(ctx, tLayout, toScreenX, toScreenY, scal
   ctx.restore();
 }
 
-// Dibuja un contorno 2D en el Canvas respetando las micro-uniones (holding tabs) si están activas
-function drawContourWithTabsOnCanvas(ctx, pts, isHole, strokeColor, lineWidth, toScreenX, toScreenY) {
+// Dibuja un contorno 2D en el Canvas respetando las micro-uniones (holding tabs) si están activas (salvo en el marco configurable)
+function drawContourWithTabsOnCanvas(ctx, pts, isHole, strokeColor, lineWidth, toScreenX, toScreenY, skipTabs = false) {
   if (!pts || pts.length < 3) return;
-  const tabRes = computeLoopWithHoldingTabs(pts, isHole);
+  const tabRes = computeLoopWithHoldingTabs(pts, isHole, Boolean(skipTabs || pts.isFrame));
 
   ctx.save();
   ctx.strokeStyle = strokeColor;
@@ -379,13 +379,13 @@ function draw2DBoardFrameOnCanvas(ctx, frameGeom, toScreenX, toScreenY) {
   }
 
   if (frameGeom.outerCutPts && frameGeom.outerCutPts.length >= 3) {
-    drawContourWithTabsOnCanvas(ctx, frameGeom.outerCutPts, false, '#f43f5e', 2.2, toScreenX, toScreenY);
+    drawContourWithTabsOnCanvas(ctx, frameGeom.outerCutPts, false, '#f43f5e', 2.2, toScreenX, toScreenY, true);
   }
   if (frameGeom.innerCutPts && frameGeom.innerCutPts.length >= 3) {
-    drawContourWithTabsOnCanvas(ctx, frameGeom.innerCutPts, true, '#38bdf8', 1.7, toScreenX, toScreenY);
+    drawContourWithTabsOnCanvas(ctx, frameGeom.innerCutPts, true, '#38bdf8', 1.7, toScreenX, toScreenY, true);
   }
   if (frameGeom.keyholePts && frameGeom.keyholePts.length >= 3) {
-    drawContourWithTabsOnCanvas(ctx, frameGeom.keyholePts, true, '#38bdf8', 1.5, toScreenX, toScreenY);
+    drawContourWithTabsOnCanvas(ctx, frameGeom.keyholePts, true, '#38bdf8', 1.5, toScreenX, toScreenY, true);
   }
 }
 
@@ -465,7 +465,7 @@ function render2DBoard(ctx, canvas) {
     ctx.fill('evenodd');
     ctx.restore();
 
-    // Contorno exterior (rojo) con soporte de micro-uniones
+    // Contorno exterior (rojo) con soporte de micro-uniones (excepto si es marco configurable)
     drawContourWithTabsOnCanvas(
       ctx,
       pl.outerPoints,
@@ -473,12 +473,13 @@ function render2DBoard(ctx, canvas) {
       isCurrentSlice ? '#fb7185' : '#f43f5e',
       isCurrentSlice ? 2.4 : 1.7,
       toScreenX,
-      toScreenY
+      toScreenY,
+      Boolean(pl.isFrame || (pl.island && pl.island.isFrame))
     );
 
-    // Contornos de huecos interiores (azul) con soporte opcional de micro-uniones
+    // Contornos de huecos interiores (azul) con soporte opcional de micro-uniones (excepto si es marco configurable)
     pl.holes.forEach((h) => {
-      drawContourWithTabsOnCanvas(ctx, h.points, true, '#38bdf8', 1.4, toScreenX, toScreenY);
+      drawContourWithTabsOnCanvas(ctx, h.points, true, '#38bdf8', 1.4, toScreenX, toScreenY, Boolean(h.isFrame));
     });
 
     // Grabado vectorial u orla de marco 3D perteneciente a esta isla
@@ -712,7 +713,7 @@ function render2DSlice() {
     ctx.restore();
   }
 
-  // Contornos exteriores (rojo) e interiores (azul) de la lasca actual con soporte de micro-uniones
+  // Contornos exteriores (rojo) e interiores (azul) de la lasca actual con soporte de micro-uniones (salvo en marco configurable)
   slice.loops.forEach((loop) => {
     drawContourWithTabsOnCanvas(
       ctx,
@@ -721,7 +722,8 @@ function render2DSlice() {
       loop.isHole ? '#38bdf8' : '#f43f5e',
       loop.isHole ? 1.6 : 2.2,
       toScreenX,
-      toScreenY
+      toScreenY,
+      Boolean(loop.isFrame)
     );
   });
 

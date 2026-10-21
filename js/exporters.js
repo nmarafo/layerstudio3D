@@ -27,10 +27,10 @@ function escapeXmlAttr(val) {
     .replace(/>/g, '&gt;');
 }
 
-// Construye el atributo d="..." para corte láser SVG aplicando micro-uniones (holding tabs) si están activas
-function buildSvgCutPathD(pts, isHole, toX, toY) {
+// Construye el atributo d="..." para corte láser SVG aplicando micro-uniones (holding tabs) si están activas (salvo en el marco configurable)
+function buildSvgCutPathD(pts, isHole, toX, toY, skipTabs = false) {
   if (!pts || pts.length < 3) return '';
-  const tabRes = computeLoopWithHoldingTabs(pts, isHole);
+  const tabRes = computeLoopWithHoldingTabs(pts, isHole, Boolean(skipTabs || pts.isFrame));
   if (tabRes.isClosed) {
     let d = 'M ' + toX(pts[0].x) + ' ' + toY(pts[0].y);
     for (let i = 1; i < pts.length; i++) {
@@ -50,10 +50,10 @@ function buildSvgCutPathD(pts, isHole, toX, toY) {
   return parts.join(' ');
 }
 
-// Añade entidades LINE a un documento DXF aplicando micro-uniones (holding tabs) si están activas
-function pushLoopLinesWithTabsDXF(dxf, pts, isHole, layer, color, ox = 0, oy = 0) {
+// Añade entidades LINE a un documento DXF aplicando micro-uniones (holding tabs) si están activas (salvo en el marco configurable)
+function pushLoopLinesWithTabsDXF(dxf, pts, isHole, layer, color, ox = 0, oy = 0, skipTabs = false) {
   if (!pts || pts.length < 3) return;
-  const tabRes = computeLoopWithHoldingTabs(pts, isHole);
+  const tabRes = computeLoopWithHoldingTabs(pts, isHole, Boolean(skipTabs || pts.isFrame));
   if (tabRes.isClosed) {
     for (let i = 0, n = pts.length; i < n; i++) {
       const p1 = pts[i];
@@ -125,7 +125,7 @@ function generateSliceSVG(slice, idx) {
     dClosed += ' Z';
     compoundPath += dClosed + ' ';
 
-    const cutD = buildSvgCutPathD(pts, loop.isHole, toX, toY);
+    const cutD = buildSvgCutPathD(pts, loop.isHole, toX, toY, Boolean(loop.isFrame));
     if (!cutD) return;
     if (loop.isHole) {
       holePaths.push(cutD);
@@ -134,21 +134,21 @@ function generateSliceSVG(slice, idx) {
     }
   });
 
-  // Marco configurable 2D de corte/grabado alrededor del lienzo 2D
+  // Marco configurable 2D de corte/grabado alrededor del lienzo 2D (sin micro-uniones de sujeción por presión)
   let sliceFrameEngravePath = '';
   if (state.slicerFrameEnabled && typeof get2DBoardFrameGeometry === 'function') {
     const fGeom = get2DBoardFrameGeometry(docBounds.minX, docBounds.minY, docBounds.maxX, docBounds.maxY, slice.loops, false);
     if (fGeom) {
       if (fGeom.outerCutPts && fGeom.outerCutPts.length >= 3) {
-        const dOutFrame = buildSvgCutPathD(fGeom.outerCutPts, false, toX, toY);
+        const dOutFrame = buildSvgCutPathD(fGeom.outerCutPts, false, toX, toY, true);
         if (dOutFrame) outerPaths.push(dOutFrame);
       }
       if (fGeom.innerCutPts && fGeom.innerCutPts.length >= 3) {
-        const dInFrame = buildSvgCutPathD(fGeom.innerCutPts, true, toX, toY);
+        const dInFrame = buildSvgCutPathD(fGeom.innerCutPts, true, toX, toY, true);
         if (dInFrame) holePaths.push(dInFrame);
       }
       if (fGeom.keyholePts && fGeom.keyholePts.length >= 3) {
-        const dKh = buildSvgCutPathD(fGeom.keyholePts, true, toX, toY);
+        const dKh = buildSvgCutPathD(fGeom.keyholePts, true, toX, toY, true);
         if (dKh) holePaths.push(dKh);
       }
       if (fGeom.engraveLoops && fGeom.engraveLoops.length > 0) {
@@ -349,7 +349,7 @@ function generateBoardSVG(board) {
     dOutClosed += ' Z';
     compoundPath += dOutClosed + ' ';
 
-    const dOutCut = buildSvgCutPathD(pts, false, toX, toY);
+    const dOutCut = buildSvgCutPathD(pts, false, toX, toY, Boolean(pl.isFrame || (pl.island && pl.island.isFrame)));
     if (dOutCut) {
       outerPaths.push({ id: 'isla_' + (pIdx + 1) + '_lasca_' + (pl.island.sliceIndex + 1), d: dOutCut });
     }
@@ -363,7 +363,7 @@ function generateBoardSVG(board) {
       dHoleClosed += ' Z';
       compoundPath += dHoleClosed + ' ';
 
-      const dHoleCut = buildSvgCutPathD(h.points, true, toX, toY);
+      const dHoleCut = buildSvgCutPathD(h.points, true, toX, toY, Boolean(h.isFrame));
       if (dHoleCut) holePaths.push(dHoleCut);
     });
 
@@ -417,20 +417,20 @@ function generateBoardSVG(board) {
     }
   });
 
-  // Marco configurable 2D de corte/grabado alrededor del tablero
+  // Marco configurable 2D de corte/grabado alrededor del tablero (sin micro-uniones de sujeción por presión)
   if (state.slicerFrameEnabled && typeof get2DBoardFrameGeometry === 'function') {
     const fGeom = get2DBoardFrameGeometry(0, 0, board.width, board.height, board.placements, true);
     if (fGeom) {
       if (fGeom.outerCutPts && fGeom.outerCutPts.length >= 3) {
-        const dOutFrame = buildSvgCutPathD(fGeom.outerCutPts, false, toX, toY);
+        const dOutFrame = buildSvgCutPathD(fGeom.outerCutPts, false, toX, toY, true);
         if (dOutFrame) outerPaths.push({ id: 'marco_corte_exterior_tablero', d: dOutFrame });
       }
       if (fGeom.innerCutPts && fGeom.innerCutPts.length >= 3) {
-        const dInFrame = buildSvgCutPathD(fGeom.innerCutPts, true, toX, toY);
+        const dInFrame = buildSvgCutPathD(fGeom.innerCutPts, true, toX, toY, true);
         if (dInFrame) holePaths.push(dInFrame);
       }
       if (fGeom.keyholePts && fGeom.keyholePts.length >= 3) {
-        const dKh = buildSvgCutPathD(fGeom.keyholePts, true, toX, toY);
+        const dKh = buildSvgCutPathD(fGeom.keyholePts, true, toX, toY, true);
         if (dKh) holePaths.push(dKh);
       }
       if (fGeom.engraveLoops && fGeom.engraveLoops.length > 0) {
@@ -514,8 +514,8 @@ function generateBoardDXF(board) {
   const dxf = ['0', 'SECTION', '2', 'ENTITIES'];
 
   board.placements.forEach((pl) => {
-    pushLoopLinesWithTabsDXF(dxf, pl.outerPoints, false, 'CORTE_EXTERIOR', '1', 0, 0);
-    pl.holes.forEach((h) => pushLoopLinesWithTabsDXF(dxf, h.points, true, 'CORTE_INTERIOR', '5', 0, 0));
+    pushLoopLinesWithTabsDXF(dxf, pl.outerPoints, false, 'CORTE_EXTERIOR', '1', 0, 0, Boolean(pl.isFrame || (pl.island && pl.island.isFrame)));
+    pl.holes.forEach((h) => pushLoopLinesWithTabsDXF(dxf, h.points, true, 'CORTE_INTERIOR', '5', 0, 0, Boolean(h.isFrame)));
     if (pl.engraveLoops && pl.engraveLoops.length > 0) {
       pl.engraveLoops.forEach((el) => {
         if (!el.points || el.points.length < 3) return;
@@ -607,18 +607,18 @@ function generateBoardDXF(board) {
     }
   });
 
-  // Marco configurable 2D de corte/grabado alrededor del tablero en DXF
+  // Marco configurable 2D de corte/grabado alrededor del tablero en DXF (sin micro-uniones de sujeción por presión)
   if (state.slicerFrameEnabled && typeof get2DBoardFrameGeometry === 'function') {
     const fGeom = get2DBoardFrameGeometry(0, 0, board.width, board.height, board.placements, true);
     if (fGeom) {
       if (fGeom.outerCutPts && fGeom.outerCutPts.length >= 3) {
-        pushLoopLinesWithTabsDXF(dxf, fGeom.outerCutPts, false, 'CORTE_EXTERIOR', '1', 0, 0);
+        pushLoopLinesWithTabsDXF(dxf, fGeom.outerCutPts, false, 'CORTE_EXTERIOR', '1', 0, 0, true);
       }
       if (fGeom.innerCutPts && fGeom.innerCutPts.length >= 3) {
-        pushLoopLinesWithTabsDXF(dxf, fGeom.innerCutPts, true, 'CORTE_INTERIOR', '5', 0, 0);
+        pushLoopLinesWithTabsDXF(dxf, fGeom.innerCutPts, true, 'CORTE_INTERIOR', '5', 0, 0, true);
       }
       if (fGeom.keyholePts && fGeom.keyholePts.length >= 3) {
-        pushLoopLinesWithTabsDXF(dxf, fGeom.keyholePts, true, 'CORTE_INTERIOR', '5', 0, 0);
+        pushLoopLinesWithTabsDXF(dxf, fGeom.keyholePts, true, 'CORTE_INTERIOR', '5', 0, 0, true);
       }
       if (fGeom.engraveLoops && fGeom.engraveLoops.length > 0) {
         fGeom.engraveLoops.forEach((el) => {
@@ -660,20 +660,20 @@ function generateSliceDXF(slice, idx) {
     if (!loop.points || loop.points.length < 3) return;
     const layer = loop.isHole ? 'CORTE_INTERIOR' : 'CORTE_EXTERIOR';
     const color = loop.isHole ? '5' : '1';
-    pushLoopLinesWithTabsDXF(dxf, loop.points, loop.isHole, layer, color, ox, oy);
+    pushLoopLinesWithTabsDXF(dxf, loop.points, loop.isHole, layer, color, ox, oy, Boolean(loop.isFrame));
   });
 
   if (state.slicerFrameEnabled && typeof get2DBoardFrameGeometry === 'function') {
     const fGeom = get2DBoardFrameGeometry(b.minX, b.minY, b.maxX, b.maxY, slice.loops, false);
     if (fGeom) {
       if (fGeom.outerCutPts && fGeom.outerCutPts.length >= 3) {
-        pushLoopLinesWithTabsDXF(dxf, fGeom.outerCutPts, false, 'CORTE_EXTERIOR', '1', ox, oy);
+        pushLoopLinesWithTabsDXF(dxf, fGeom.outerCutPts, false, 'CORTE_EXTERIOR', '1', ox, oy, true);
       }
       if (fGeom.innerCutPts && fGeom.innerCutPts.length >= 3) {
-        pushLoopLinesWithTabsDXF(dxf, fGeom.innerCutPts, true, 'CORTE_INTERIOR', '5', ox, oy);
+        pushLoopLinesWithTabsDXF(dxf, fGeom.innerCutPts, true, 'CORTE_INTERIOR', '5', ox, oy, true);
       }
       if (fGeom.keyholePts && fGeom.keyholePts.length >= 3) {
-        pushLoopLinesWithTabsDXF(dxf, fGeom.keyholePts, true, 'CORTE_INTERIOR', '5', ox, oy);
+        pushLoopLinesWithTabsDXF(dxf, fGeom.keyholePts, true, 'CORTE_INTERIOR', '5', ox, oy, true);
       }
       if (fGeom.engraveLoops && fGeom.engraveLoops.length > 0) {
         fGeom.engraveLoops.forEach((el) => {
