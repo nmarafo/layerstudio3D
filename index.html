@@ -35,17 +35,17 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
 
   <!-- Hoja de estilos principal -->
-  <link rel="stylesheet" href="css/styles.css?v=2.8.0" />
+  <link rel="stylesheet" href="css/styles.css?v=2.8.1" />
 
   <!-- Módulos de la aplicación (cargados en orden de dependencia con defer y cache-busting) -->
-  <script src="js/state.js?v=2.8.0" defer></script>
-  <script src="js/viewer3d.js?v=2.8.0" defer></script>
-  <script src="js/slicer.js?v=2.8.0" defer></script>
-  <script src="js/nesting.js?v=2.8.0" defer></script>
-  <script src="js/modals-guide.js?v=2.8.0" defer></script>
-  <script src="js/viewer2d.js?v=2.8.0" defer></script>
-  <script src="js/exporters.js?v=2.8.0" defer></script>
-  <script src="js/vectorizer2d.js?v=2.8.0" defer></script>
+  <script src="js/state.js?v=2.8.1" defer></script>
+  <script src="js/viewer3d.js?v=2.8.1" defer></script>
+  <script src="js/slicer.js?v=2.8.1" defer></script>
+  <script src="js/nesting.js?v=2.8.1" defer></script>
+  <script src="js/modals-guide.js?v=2.8.1" defer></script>
+  <script src="js/viewer2d.js?v=2.8.1" defer></script>
+  <script src="js/exporters.js?v=2.8.1" defer></script>
+  <script src="js/vectorizer2d.js?v=2.8.1" defer></script>
 </head>
 <body class="h-screen w-screen flex flex-col">
 
@@ -1135,6 +1135,7 @@
           </button>
           <div class="flex items-center bg-slate-800 border border-slate-700 rounded-lg p-0.5 text-[11px]">
             <span class="px-2 text-slate-400">Ejemplos:</span>
+            <button onclick="loadVectorizerDemoPreset('drawing')" class="px-2 py-0.5 rounded hover:bg-slate-700 text-fuchsia-300 font-semibold" title="Ilustración con líneas de dibujo finas, plumas y rellenos de color">🦉 Dibujo</button>
             <button onclick="loadVectorizerDemoPreset('badge')" class="px-2 py-0.5 rounded hover:bg-slate-700 text-emerald-300 font-semibold">Insignia</button>
             <button onclick="loadVectorizerDemoPreset('crest')" class="px-2 py-0.5 rounded hover:bg-slate-700 text-sky-300 font-semibold">Escudo</button>
             <button onclick="loadVectorizerDemoPreset('medallion')" class="px-2 py-0.5 rounded hover:bg-slate-700 text-amber-300 font-semibold">Mandala</button>
@@ -1234,15 +1235,25 @@
           <!-- 3. Configuración de GRABADO LÁSER (#008800 / #ff8800) -->
           <div class="bg-slate-800/50 border border-emerald-500/35 rounded-xl p-2.5 space-y-2">
             <div class="flex items-center justify-between">
-              <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-400">3. Grabado Láser Interior</span>
-              <button onclick="autoAdjustVectorizerThreshold()" class="px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-[10px] text-emerald-300 font-semibold transition" title="Calcular umbral óptimo automáticamente mediante algoritmo de Otsu">
-                ✨ Auto-Umbral Otsu
+              <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-400">3. Detección de Dibujo y Grabado Láser</span>
+              <button onclick="autoAdjustVectorizerThreshold()" class="px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-[10px] text-emerald-300 font-semibold transition" title="Ajusta automáticamente los umbrales y el detector según el tipo de imagen o ilustración">
+                ✨ Auto-Ajuste Dibujo
               </button>
             </div>
 
-            <div class="flex items-center justify-between">
-              <span class="text-slate-300 text-[11px]">Modo de salida grabado:</span>
-              <select id="vecEngraveStyleSelect" onchange="onVectorizerParamsChange()" class="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-[11px] text-emerald-300 font-semibold outline-none">
+            <div class="flex items-center justify-between gap-2" title="Elige cómo extraer los trazos de la ilustración: adaptativo para dibujos con líneas y colores, solo líneas de entintado, 2 capas de sombreado o umbral plano">
+              <span class="text-slate-300 text-[11px] shrink-0">Algoritmo de dibujo:</span>
+              <select id="vecEngraveDetectModeSelect" onchange="onVectorizerParamsChange()" class="w-full bg-slate-950 border border-emerald-500/40 rounded px-2 py-1 text-[11px] text-emerald-300 font-semibold outline-none">
+                <option value="smart_drawing" selected>🎨 Dibujo Inteligente (Trazos Adaptativos + Rellenos)</option>
+                <option value="line_art">✒️ Solo Líneas / Boceto / Entintado (Ignora Rellenos)</option>
+                <option value="shaded_art">🌓 Ilustración 2 Capas (Sombra #008800 + Medio Tono #ff8800)</option>
+                <option value="global_threshold">⬛ Silueta B/N Plana (Umbral Global Fijo)</option>
+              </select>
+            </div>
+
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-slate-300 text-[11px] shrink-0">Salida vectorial:</span>
+              <select id="vecEngraveStyleSelect" onchange="onVectorizerParamsChange()" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-[11px] text-slate-200 font-semibold outline-none">
                 <option value="vector_fill" selected>🟢 Vectores Relleno + Contorno (#008800)</option>
                 <option value="vector_outline">🟢 Solo Trazos de Contorno (#008800)</option>
                 <option value="vector_hatch">▨ Trama de Barrido Vectorial (Hatching)</option>
@@ -1252,10 +1263,26 @@
 
             <div>
               <div class="flex justify-between text-[11px] mb-0.5">
-                <span class="text-slate-300">Umbral oscuridad grabado (0-255):</span>
+                <span class="text-slate-300">Umbral oscuridad rellenos (0-255):</span>
                 <span id="vecEngraveThresholdLabel" class="text-emerald-300 font-bold">145</span>
               </div>
               <input type="range" id="vecEngraveThresholdSlider" min="15" max="245" value="145" oninput="onVectorizerParamsChange()" class="w-full accent-emerald-500" />
+            </div>
+
+            <div id="vecLocalContrastRow">
+              <div class="flex justify-between text-[11px] mb-0.5" title="Capta líneas finas de dibujo, plumas, bocetos o cambios entre colores aunque no sean negros puros">
+                <span class="text-slate-300">Sensibilidad a líneas y trazos del dibujo:</span>
+                <span id="vecLocalContrastLabel" class="text-emerald-300 font-bold">68%</span>
+              </div>
+              <input type="range" id="vecLocalContrastSlider" min="10" max="98" value="68" oninput="onVectorizerParamsChange()" class="w-full accent-emerald-400" />
+            </div>
+
+            <div>
+              <div class="flex justify-between text-[11px] mb-0.5" title="Engrosa ligeramente los trazos finos para evitar que se corten o desaparezcan al grabar con láser">
+                <span class="text-slate-300">Refuerzo / grosor de trazo fino:</span>
+                <span id="vecStrokeBoostLabel" class="text-sky-300 font-bold">+0.25 px</span>
+              </div>
+              <input type="range" id="vecStrokeBoostSlider" min="-0.4" max="1.2" step="0.05" value="0.25" oninput="onVectorizerParamsChange()" class="w-full accent-sky-400" />
             </div>
 
             <label class="flex items-center justify-between text-[11px] text-slate-300 cursor-pointer">
@@ -1275,23 +1302,33 @@
             </div>
 
             <div class="pt-1 border-t border-slate-700/60 space-y-1.5">
-              <label class="flex items-center justify-between text-[11px] text-amber-300 cursor-pointer" title="Extrae líneas de detalle interno por cambio de contraste (operador Sobel) en la capa naranja #ff8800">
-                <span>🟠 Trazar bordes finos internos (<code class="text-amber-400">#ff8800</code>)</span>
+              <label class="flex items-center justify-between text-[11px] text-amber-300 cursor-pointer" title="Extrae líneas de detalle interno por cambio de contraste y color en la capa naranja #ff8800">
+                <span>🟠 Capa extra de detalles / medios tonos (<code class="text-amber-400">#ff8800</code>)</span>
                 <input type="checkbox" id="vecDetectEdgesCheck" checked onchange="onVectorizerParamsChange()" class="accent-amber-500" />
               </label>
               <div>
                 <div class="flex justify-between text-[10px] text-slate-400 mb-0.5">
-                  <span>Sensibilidad de bordes finos:</span>
-                  <span id="vecEdgeSensLabel" class="text-amber-300 font-semibold">55%</span>
+                  <span>Sensibilidad detalles finos (#ff8800):</span>
+                  <span id="vecEdgeSensLabel" class="text-amber-300 font-semibold">58%</span>
                 </div>
-                <input type="range" id="vecEdgeSensSlider" min="15" max="95" value="55" oninput="onVectorizerParamsChange()" class="w-full accent-amber-500" />
+                <input type="range" id="vecEdgeSensSlider" min="15" max="95" value="58" oninput="onVectorizerParamsChange()" class="w-full accent-amber-500" />
               </div>
             </div>
           </div>
 
-          <!-- 4. Suavizado de curvas y limpieza de motas -->
-          <div class="bg-slate-800/50 border border-slate-700/70 rounded-xl p-2.5 space-y-1.5">
-            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">4. Suavizado Vectorial y Filtro de Ruido</span>
+          <!-- 4. Precisión, suavizado de curvas y limpieza de motas -->
+          <div class="bg-slate-800/50 border border-slate-700/70 rounded-xl p-2.5 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">4. Nitidez y Suavizado Vectorial</span>
+              <div class="flex items-center gap-1 text-[10px]">
+                <span class="text-slate-400">Resolución:</span>
+                <select id="vecTraceResSelect" onchange="onVectorizerParamsChange()" class="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] text-sky-300 font-semibold outline-none">
+                  <option value="280">Rápida (280px)</option>
+                  <option value="420" selected>Alta (420px)</option>
+                  <option value="580">Ultra Detalle (580px)</option>
+                </select>
+              </div>
+            </div>
             <div class="grid grid-cols-2 gap-2 items-center text-[11px]">
               <div>
                 <div class="flex justify-between mb-0.5">
@@ -1302,7 +1339,7 @@
               </div>
               <div class="flex items-center justify-between">
                 <span class="text-slate-300">Filtro motas (mm²):</span>
-                <input type="number" id="vecMinSpeckleInput" value="0.45" min="0.05" max="20" step="0.1" onchange="onVectorizerParamsChange()" class="w-14 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-right text-white" />
+                <input type="number" id="vecMinSpeckleInput" value="0.12" min="0.02" max="20" step="0.05" onchange="onVectorizerParamsChange()" class="w-14 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-right text-white" />
               </div>
             </div>
           </div>

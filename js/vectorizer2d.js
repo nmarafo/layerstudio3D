@@ -5,7 +5,7 @@
  */
 
 const vec2dState = {
-  imageName: 'Emblema_Laser_Demo',
+  imageName: 'Ilustracion_Laser_Demo',
   sourceCanvas: null,
   sourceWidth: 0,
   sourceHeight: 0,
@@ -15,7 +15,7 @@ const vec2dState = {
   widthMM: 100.0,
   heightMM: 100.0,
   lockAspect: true,
-  traceResolution: 240,
+  traceResolution: 420,         // Resolución de malla sub-píxel (280 | 420 | 580)
 
   // Configuración de Silueta de CORTE (#ff0000 Exterior / #0055ff Huecos)
   cutMode: 'silhouette',        // 'silhouette' | 'rounded_rect' | 'circle' | 'none'
@@ -30,18 +30,21 @@ const vec2dState = {
   keyholeDiameterMM: 4.5,
   keyholePos: 'top_center',     // 'top_center' | 'top_left' | 'left_center'
 
-  // Configuración de GRABADO LÁSER (#008800 Relleno/Vector / #ff8800 Trazos Finos)
-  engraveStyle: 'vector_fill',  // 'vector_fill' | 'vector_outline' | 'vector_hatch' | 'hybrid_raster'
-  engraveThreshold: 145,        // Umbral 0..255 de luminancia para zonas de grabado
-  invertEngrave: false,         // Invertir claro/oscuro en el grabado
-  detectFineEdges: true,        // Extraer líneas finas por gradiente Sobel (#ff8800)
-  edgeSensitivity: 55,          // Sensibilidad Sobel 10..100
-  hatchSpacingMM: 0.8,          // Paso de trama vectorial en mm (para modo vector_hatch)
-  hatchCross: false,            // Trama cruzada 45° / -45°
+  // Configuración avanzada de DETECCIÓN DE DIBUJO Y GRABADO LÁSER (#008800 / #ff8800)
+  engraveDetectMode: 'smart_drawing', // 'smart_drawing' | 'line_art' | 'shaded_art' | 'global_threshold'
+  engraveStyle: 'vector_fill',        // 'vector_fill' | 'vector_outline' | 'vector_hatch' | 'hybrid_raster'
+  engraveThreshold: 148,              // Umbral base 0..255 de luminancia
+  localContrastSens: 68,              // Sensibilidad adaptativa local a trazos y líneas de dibujo (0..100)
+  strokeBoostPx: 0.35,                // Refuerzo sub-píxel de grosor de línea (-1.0 a +2.0 px)
+  invertEngrave: false,               // Invertir claro/oscuro en el grabado
+  detectFineEdges: true,              // Extraer líneas secundarias / bordes cromáticos (#ff8800)
+  edgeSensitivity: 58,                // Sensibilidad Sobel / color 10..100
+  hatchSpacingMM: 0.8,                // Paso de trama vectorial en mm (para modo vector_hatch)
+  hatchCross: false,                  // Trama cruzada 45° / -45°
 
   // Suavizado y limpieza geométrica
-  minSpeckleMM2: 0.45,          // Descartar motas menores a X mm²
-  simplifyTolMM: 0.16,          // Tolerancia Ramer-Douglas-Peucker en mm
+  minSpeckleMM2: 0.12,          // Descartar motas menores a X mm² (bajo por defecto para preservar detalles de dibujo)
+  simplifyTolMM: 0.07,          // Tolerancia Ramer-Douglas-Peucker en mm (alta fidelidad en curvas y trazos)
   smoothIterations: 2,          // Iteraciones de suavizado Chaikin (0..4)
 
   // Vista previa en el modal
@@ -68,25 +71,133 @@ const vec2dState = {
 };
 
 // ============================================================================
-// GENERADOR DE IMÁGENES DEMO INTEGRADAS (PARA PRUEBA INMEDIATA SIN ARCHIVO)
+// GENERADOR DE IMÁGENES DEMO INTEGRADAS (INCLUYE DIBUJO ILUSTRADO DETALLADO)
 // ============================================================================
-function createDemoBitmapCanvas(presetName = 'badge') {
+function createDemoBitmapCanvas(presetName = 'drawing') {
   const c = document.createElement('canvas');
-  c.width = 400;
-  c.height = 400;
+  c.width = 480;
+  c.height = 480;
   const ctx = c.getContext('2d');
-  ctx.clearRect(0, 0, 400, 400);
+  ctx.clearRect(0, 0, 480, 480);
 
-  if (presetName === 'crest') {
+  if (presetName === 'drawing') {
+    // Ilustración detallada tipo grabado / dibujo entintado con colores, plumas y líneas finas (Búho Mecánico / Artístico)
+    ctx.save();
+    // Silueta exterior del dibujo sobre fondo transparente
+    ctx.fillStyle = '#fdfbf7';
+    ctx.beginPath();
+    ctx.ellipse(240, 255, 145, 175, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Penachos / orejas superiores
+    ctx.beginPath();
+    ctx.moveTo(115, 145);
+    ctx.quadraticCurveTo(85, 55, 175, 95);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(365, 145);
+    ctx.quadraticCurveTo(395, 55, 305, 95);
+    ctx.closePath();
+    ctx.fill();
+
+    // Zonas coloreadas suaves para demostrar que el detector adaptativo extrae las líneas sin empastar el color
+    ctx.fillStyle = '#dbeafe';
+    ctx.beginPath();
+    ctx.ellipse(240, 285, 105, 120, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#fef3c7';
+    ctx.beginPath();
+    ctx.arc(182, 185, 52, 0, Math.PI * 2);
+    ctx.arc(298, 185, 52, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Contorno principal entintado del dibujo
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 7;
+    ctx.beginPath();
+    ctx.ellipse(240, 255, 138, 168, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Ojos detallados con múltiples anillos finos y pupilas con brillo
+    [182, 298].forEach((ox) => {
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.arc(ox, 185, 50, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(ox, 185, 38, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Rayos finos del iris
+      for (let k = 0; k < 16; k++) {
+        const a = (k * Math.PI * 2) / 16;
+        ctx.beginPath();
+        ctx.moveTo(ox + Math.cos(a) * 20, 185 + Math.sin(a) * 20);
+        ctx.lineTo(ox + Math.cos(a) * 37, 185 + Math.sin(a) * 37);
+        ctx.stroke();
+      }
+
+      // Pupila sólida con reserva blanca
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.arc(ox, 185, 20, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(ox - 6, 178, 6, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    // Pico central geométrico
+    ctx.fillStyle = '#1e293b';
+    ctx.beginPath();
+    ctx.moveTo(240, 198);
+    ctx.lineTo(262, 228);
+    ctx.lineTo(240, 262);
+    ctx.lineTo(218, 228);
+    ctx.closePath();
+    ctx.fill();
+
+    // Plumas del pecho (arcos escalonados finos de dibujo)
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 4.2;
+    for (let row = 0; row < 4; row++) {
+      const yBase = 285 + row * 28;
+      const cols = 4 - (row % 2);
+      for (let col = 0; col < cols; col++) {
+        const xCenter = 240 + (col - (cols - 1) * 0.5) * 42;
+        ctx.beginPath();
+        ctx.arc(xCenter, yBase, 18, 0.15 * Math.PI, 0.85 * Math.PI);
+        ctx.stroke();
+      }
+    }
+
+    // Alas laterales con trazos de plumas
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(118, 225);
+    ctx.quadraticCurveTo(155, 295, 138, 375);
+    ctx.moveTo(362, 225);
+    ctx.quadraticCurveTo(325, 295, 342, 375);
+    ctx.stroke();
+
+    ctx.restore();
+    vec2dState.imageName = 'Ilustracion_Buho_Grabado';
+  } else if (presetName === 'crest') {
     // Escudo con hueco interior y grabado técnico
     ctx.save();
     ctx.beginPath();
-    ctx.moveTo(200, 32);
-    ctx.lineTo(340, 82);
-    ctx.lineTo(340, 215);
-    ctx.quadraticCurveTo(340, 325, 200, 372);
-    ctx.quadraticCurveTo(60, 325, 60, 215);
-    ctx.lineTo(60, 82);
+    ctx.moveTo(240, 38);
+    ctx.lineTo(408, 98);
+    ctx.lineTo(408, 258);
+    ctx.quadraticCurveTo(408, 390, 240, 446);
+    ctx.quadraticCurveTo(72, 390, 72, 258);
+    ctx.lineTo(72, 98);
     ctx.closePath();
     ctx.fillStyle = '#f8fafc';
     ctx.fill();
@@ -94,140 +205,132 @@ function createDemoBitmapCanvas(presetName = 'badge') {
     // Dos huecos pasantes superiores (transparentes)
     ctx.globalCompositeOperation = 'destination-out';
     ctx.beginPath();
-    ctx.arc(140, 92, 16, 0, Math.PI * 2);
-    ctx.arc(260, 92, 16, 0, Math.PI * 2);
+    ctx.arc(168, 110, 19, 0, Math.PI * 2);
+    ctx.arc(312, 110, 19, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalCompositeOperation = 'source-over';
 
-    // Grabado interior negro (marco interno, engranaje central y estrellas)
+    // Grabado interior negro (marco interno, rosa de los vientos y texto)
     ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 10;
+    ctx.lineWidth = 11;
     ctx.beginPath();
-    ctx.moveTo(200, 56);
-    ctx.lineTo(316, 98);
-    ctx.lineTo(316, 210);
-    ctx.quadraticCurveTo(316, 300, 200, 344);
-    ctx.quadraticCurveTo(84, 300, 84, 210);
-    ctx.lineTo(84, 98);
+    ctx.moveTo(240, 67);
+    ctx.lineTo(379, 118);
+    ctx.lineTo(379, 252);
+    ctx.quadraticCurveTo(379, 360, 240, 412);
+    ctx.quadraticCurveTo(101, 360, 101, 252);
+    ctx.lineTo(101, 118);
     ctx.closePath();
     ctx.stroke();
 
-    // Sol / Rosa de los vientos grabada en el centro
     ctx.fillStyle = '#0f172a';
     for (let i = 0; i < 8; i++) {
       ctx.save();
-      ctx.translate(200, 205);
+      ctx.translate(240, 246);
       ctx.rotate((i * Math.PI) / 4);
       ctx.beginPath();
-      ctx.moveTo(0, -76);
-      ctx.lineTo(14, -22);
-      ctx.lineTo(-14, -22);
+      ctx.moveTo(0, -90);
+      ctx.lineTo(16, -26);
+      ctx.lineTo(-16, -26);
       ctx.closePath();
       ctx.fill();
       ctx.restore();
     }
     ctx.beginPath();
-    ctx.arc(200, 205, 32, 0, Math.PI * 2);
+    ctx.arc(240, 246, 38, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = '#f8fafc';
     ctx.beginPath();
-    ctx.arc(200, 205, 14, 0, Math.PI * 2);
+    ctx.arc(240, 246, 16, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.fillStyle = '#0f172a';
-    ctx.font = 'bold 28px sans-serif';
+    ctx.font = 'bold 34px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('CANARIAS', 200, 142);
+    ctx.fillText('CANARIAS', 240, 170);
     ctx.restore();
     vec2dState.imageName = 'Escudo_Laser_Canarias';
   } else if (presetName === 'medallion') {
     // Medallón geométrico mandala con calados y grabados
     ctx.save();
     ctx.beginPath();
-    ctx.arc(200, 200, 165, 0, Math.PI * 2);
+    ctx.arc(240, 240, 198, 0, Math.PI * 2);
     ctx.fillStyle = '#ffffff';
     ctx.fill();
 
-    // Huecos pasantes en anillo exterior
     ctx.globalCompositeOperation = 'destination-out';
     for (let i = 0; i < 12; i++) {
       const ang = (i * Math.PI * 2) / 12;
-      const hx = 200 + Math.cos(ang) * 136;
-      const hy = 200 + Math.sin(ang) * 136;
+      const hx = 240 + Math.cos(ang) * 163;
+      const hy = 240 + Math.sin(ang) * 163;
       ctx.beginPath();
-      ctx.arc(hx, hy, 12, 0, Math.PI * 2);
+      ctx.arc(hx, hy, 14, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.globalCompositeOperation = 'source-over';
 
-    // Grabado concéntrico y pétalos
     ctx.strokeStyle = '#111827';
-    ctx.lineWidth = 9;
+    ctx.lineWidth = 10;
     ctx.beginPath();
-    ctx.arc(200, 200, 108, 0, Math.PI * 2);
+    ctx.arc(240, 240, 130, 0, Math.PI * 2);
     ctx.stroke();
 
     ctx.fillStyle = '#111827';
     for (let i = 0; i < 8; i++) {
       ctx.save();
-      ctx.translate(200, 200);
+      ctx.translate(240, 240);
       ctx.rotate((i * Math.PI) / 4);
       ctx.beginPath();
-      ctx.ellipse(0, -60, 16, 36, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, -72, 19, 43, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    ctx.arc(200, 200, 24, 0, Math.PI * 2);
+    ctx.arc(240, 240, 28, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
     vec2dState.imageName = 'Mandala_Calado_Laser';
   } else {
-    // Emblema / Llavero Maker con cohete/montaña, silueta troquelada y texto grabado
+    // Emblema / Llavero Maker con montañas, silueta troquelada y texto grabado
     ctx.save();
-    // Silueta base tipo insignia hexagonal redondeada
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    ctx.arc(200, 185, 138, 0, Math.PI * 2);
+    ctx.arc(240, 222, 165, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.roundRect ? ctx.roundRect(75, 255, 250, 74, 24) : ctx.rect(75, 255, 250, 74);
+    ctx.roundRect ? ctx.roundRect(90, 306, 300, 88, 28) : ctx.rect(90, 306, 300, 88);
     ctx.fill();
 
-    // Grabado negro de alto contraste: anillo, montañas, sol y texto
     ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 10;
+    ctx.lineWidth = 12;
     ctx.beginPath();
-    ctx.arc(200, 180, 114, 0, Math.PI * 2);
+    ctx.arc(240, 216, 136, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Sol grabado
     ctx.fillStyle = '#0f172a';
     ctx.beginPath();
-    ctx.arc(240, 128, 22, 0, Math.PI * 2);
+    ctx.arc(288, 154, 26, 0, Math.PI * 2);
     ctx.fill();
 
-    // Montañas grabadas
     ctx.beginPath();
-    ctx.moveTo(104, 232);
-    ctx.lineTo(168, 130);
-    ctx.lineTo(228, 232);
+    ctx.moveTo(125, 278);
+    ctx.lineTo(202, 156);
+    ctx.lineTo(274, 278);
     ctx.closePath();
     ctx.fill();
 
     ctx.beginPath();
-    ctx.moveTo(175, 232);
-    ctx.lineTo(238, 152);
-    ctx.lineTo(296, 232);
+    ctx.moveTo(210, 278);
+    ctx.lineTo(286, 182);
+    ctx.lineTo(355, 278);
     ctx.closePath();
     ctx.fill();
 
-    // Cartela inferior con texto grabado
     ctx.fillStyle = '#0f172a';
-    ctx.font = '900 33px sans-serif';
+    ctx.font = '900 39px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('LAYER 3D', 200, 304);
+    ctx.fillText('LAYER 3D', 240, 365);
     ctx.restore();
     vec2dState.imageName = 'Insignia_Layer3D_Demo';
   }
@@ -245,7 +348,7 @@ function openImageVectorizerModal(presetIfEmpty) {
   modal.classList.add('flex');
 
   if (!vec2dState.sourceCanvas || presetIfEmpty) {
-    loadVectorizerDemoPreset(presetIfEmpty || 'badge');
+    loadVectorizerDemoPreset(presetIfEmpty || 'drawing');
   } else {
     syncVectorizerModalUI();
     runImageVectorization();
@@ -269,8 +372,9 @@ function loadVectorizerDemoPreset(presetName) {
   vec2dState.heightMM = 100;
   vec2dState.bgDetectMode = 'auto';
   vec2dState.cutMode = 'silhouette';
-  vec2dState.cutOffsetMM = presetName === 'badge' ? 2.0 : 1.0;
+  vec2dState.cutOffsetMM = presetName === 'badge' ? 2.0 : 1.5;
   vec2dState.keyholeEnabled = presetName === 'badge';
+  vec2dState.engraveDetectMode = 'smart_drawing';
   syncVectorizerModalUI();
   runImageVectorization();
 }
@@ -285,7 +389,7 @@ function handleImageVectorizerFile(file) {
     const dataUrl = ev.target.result;
     const img = new Image();
     img.onload = () => {
-      const maxSrcDim = 1024;
+      const maxSrcDim = 1400;
       let w = img.naturalWidth || img.width || 256;
       let h = img.naturalHeight || img.height || 256;
       if (w > maxSrcDim || h > maxSrcDim) {
@@ -316,8 +420,7 @@ function handleImageVectorizerFile(file) {
       }
 
       // Calcular umbral óptimo inicial mediante método de Otsu
-      const autoThr = computeOtsuThresholdFromCanvas(c);
-      vec2dState.engraveThreshold = autoThr;
+      vec2dState.engraveThreshold = computeOtsuThresholdFromCanvas(c);
 
       openImageVectorizerModal();
       syncVectorizerModalUI();
@@ -344,7 +447,7 @@ function computeOtsuThresholdFromCanvas(canvas) {
     hist[luma]++;
     totalValid++;
   }
-  if (totalValid < 20) return 140;
+  if (totalValid < 20) return 145;
 
   let sum = 0;
   for (let t = 0; t < 256; t++) sum += t * hist[t];
@@ -352,7 +455,7 @@ function computeOtsuThresholdFromCanvas(canvas) {
   let sumB = 0;
   let wB = 0;
   let maxVar = 0;
-  let threshold = 140;
+  let threshold = 145;
 
   for (let t = 0; t < 256; t++) {
     wB += hist[t];
@@ -369,19 +472,74 @@ function computeOtsuThresholdFromCanvas(canvas) {
       threshold = t;
     }
   }
-  return Math.max(35, Math.min(225, threshold));
+  return Math.max(40, Math.min(225, threshold));
 }
 
 function autoAdjustVectorizerThreshold() {
   if (!vec2dState.sourceCanvas) return;
   vec2dState.engraveThreshold = computeOtsuThresholdFromCanvas(vec2dState.sourceCanvas);
+  vec2dState.localContrastSens = 68;
   syncVectorizerModalUI();
   runImageVectorization();
 }
 
 // ============================================================================
-// MOTOR GEOMÉTRICO: DISTANCE TRANSFORM 2D, MARCHING SQUARES SUB-PÍXEL, RDP Y CHAIKIN
+// MOTOR GEOMÉTRICO: INTEGRAL IMAGE (ADAPTIVE THRESHOLD), SDF 2D Y MARCHING SQUARES DIRIGIDO
 // ============================================================================
+
+// Calcula Tabla de Área Sumada (Integral Image) sobre un campo escalar W×H para obtener medias y desviaciones locales en O(1)
+function computeLocalMeanFieldIntegral(field, w, h, radiusPx) {
+  const r = Math.max(2, Math.round(radiusPx));
+  const stride = w + 1;
+  const integral = new Float64Array((w + 1) * (h + 1));
+
+  for (let y = 0; y < h; y++) {
+    let rowSum = 0;
+    const srcRow = y * w;
+    const dstRow = (y + 1) * stride;
+    const prevRow = y * stride;
+    for (let x = 0; x < w; x++) {
+      rowSum += field[srcRow + x];
+      integral[dstRow + x + 1] = integral[prevRow + x + 1] + rowSum;
+    }
+  }
+
+  const meanField = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const y0 = Math.max(0, y - r);
+    const y1 = Math.min(h - 1, y + r);
+    const r0 = y0 * stride;
+    const r1 = (y1 + 1) * stride;
+    const spanY = y1 - y0 + 1;
+    const outRow = y * w;
+    for (let x = 0; x < w; x++) {
+      const x0 = Math.max(0, x - r);
+      const x1 = Math.min(w - 1, x + r);
+      const count = (x1 - x0 + 1) * spanY;
+      const sum = integral[r1 + x1 + 1] - integral[r0 + x1 + 1] - integral[r1 + x0] + integral[r0 + x0];
+      meanField[outRow + x] = sum / count;
+    }
+  }
+  return meanField;
+}
+
+// Suavizado Gaussiano 3×3 rápido sobre un campo escalar para eliminar dientes de sierra antes de Marching Squares
+function smoothScalarField3x3(field, w, h) {
+  const out = new Float32Array(w * h);
+  out.set(field);
+  for (let y = 1; y < h - 1; y++) {
+    const r0 = (y - 1) * w;
+    const r1 = y * w;
+    const r2 = (y + 1) * w;
+    for (let x = 1; x < w - 1; x++) {
+      out[r1 + x] =
+        0.0625 * (field[r0 + x - 1] + field[r0 + x + 1] + field[r2 + x - 1] + field[r2 + x + 1]) +
+        0.1250 * (field[r0 + x] + field[r1 + x - 1] + field[r1 + x + 1] + field[r2 + x]) +
+        0.2500 * field[r1 + x];
+    }
+  }
+  return out;
+}
 
 // Transformada de distancia Chamfer 2D rápida (en píxeles) sobre máscara booleana (1 = dentro, 0 = fuera)
 function computeSignedDistanceField2D(mask, w, h) {
@@ -436,7 +594,6 @@ function computeSignedDistanceField2D(mask, w, h) {
   passChamfer(distOut);
   passChamfer(distIn);
 
-  // sdf > 0 dentro de la figura, sdf < 0 fuera de la figura
   const sdf = new Float32Array(n);
   for (let i = 0; i < n; i++) {
     sdf[i] = mask[i] ? (distIn[i] - 0.5) : -(distOut[i] - 0.5);
@@ -479,7 +636,6 @@ function separateExteriorAndInternalHolesMask(solidMask, w, h) {
     if (cy + 1 < h) pushIfBg(cx, cy + 1);
   }
 
-  // Silueta sin huecos internos = todo lo que NO es fondo exterior
   const filledOuterMask = new Uint8Array(n);
   const internalHolesMask = new Uint8Array(n);
   for (let i = 0; i < n; i++) {
@@ -493,8 +649,12 @@ function separateExteriorAndInternalHolesMask(solidMask, w, h) {
   return { filledOuterMask, internalHolesMask };
 }
 
-// Marching Squares con interpolación lineal sub-píxel sobre un campo escalar field (valores > isoValue son interiores)
-function traceIsoContoursMarchingSquares(field, w, h, isoValue = 0.0) {
+/**
+ * Marching Squares DIRIGIDO con interpolación lineal sub-píxel:
+ * Todos los segmentos se orientan dejando la región positiva (v > isoValue) a su derecha,
+ * lo que garantiza el encadenamiento exacto sin cruces erróneos en puntos de silla y preserva trazos diagonales finos.
+ */
+function traceIsoContoursMarchingSquares(field, w, h, isoValue = 0.0, connectSaddles = true) {
   const segments = [];
   const interp = (v1, v2) => {
     const dv = v2 - v1;
@@ -525,75 +685,83 @@ function traceIsoContoursMarchingSquares(field, w, h, isoValue = 0.0) {
 
       switch (mask) {
         case 1:
-        case 14:
           segments.push([pLeft, pTop]);
           break;
         case 2:
-        case 13:
           segments.push([pTop, pRight]);
           break;
         case 3:
-        case 12:
           segments.push([pLeft, pRight]);
           break;
         case 4:
-        case 11:
           segments.push([pRight, pBottom]);
           break;
         case 5: {
           const centerVal = 0.25 * (v0 + v1 + v2 + v3);
-          if (centerVal > isoValue) {
-            segments.push([pLeft, pBottom], [pTop, pRight]);
+          if (connectSaddles || centerVal > isoValue) {
+            segments.push([pLeft, pBottom], [pRight, pTop]);
           } else {
             segments.push([pLeft, pTop], [pRight, pBottom]);
           }
           break;
         }
         case 6:
-        case 9:
           segments.push([pTop, pBottom]);
           break;
         case 7:
-        case 8:
           segments.push([pLeft, pBottom]);
+          break;
+        case 8:
+          segments.push([pBottom, pLeft]);
+          break;
+        case 9:
+          segments.push([pBottom, pTop]);
           break;
         case 10: {
           const centerVal = 0.25 * (v0 + v1 + v2 + v3);
-          if (centerVal > isoValue) {
-            segments.push([pLeft, pTop], [pRight, pBottom]);
+          if (connectSaddles || centerVal > isoValue) {
+            segments.push([pTop, pLeft], [pBottom, pRight]);
           } else {
-            segments.push([pLeft, pBottom], [pTop, pRight]);
+            segments.push([pTop, pRight], [pBottom, pLeft]);
           }
           break;
         }
+        case 11:
+          segments.push([pBottom, pRight]);
+          break;
+        case 12:
+          segments.push([pRight, pLeft]);
+          break;
+        case 13:
+          segments.push([pRight, pTop]);
+          break;
+        case 14:
+          segments.push([pTop, pLeft]);
+          break;
       }
     }
   }
 
-  return chainMarchingSegmentsToLoops(segments);
+  return chainDirectedSegmentsToLoops(segments);
 }
 
-// Encadena segmentos de Marching Squares mediante hash espacial rápido
-function chainMarchingSegmentsToLoops(segments) {
+// Encadena segmentos dirigidos (start -> end) en contornos cerrados exactos
+function chainDirectedSegmentsToLoops(segments) {
   if (!segments || segments.length === 0) return [];
-  const scaleKey = 200;
+  const scaleKey = 500;
   const keyOf = (pt) => Math.round(pt.x * scaleKey) + ',' + Math.round(pt.y * scaleKey);
 
   const used = new Uint8Array(segments.length);
-  const endpointMap = new Map();
-
-  const addEndpoint = (k, segIdx, endIdx) => {
-    let arr = endpointMap.get(k);
-    if (!arr) {
-      arr = [];
-      endpointMap.set(k, arr);
-    }
-    arr.push({ segIdx, endIdx });
-  };
+  const startMap = new Map();
 
   for (let i = 0; i < segments.length; i++) {
-    addEndpoint(keyOf(segments[i][0]), i, 0);
-    addEndpoint(keyOf(segments[i][1]), i, 1);
+    const k = keyOf(segments[i][0]);
+    let arr = startMap.get(k);
+    if (!arr) {
+      arr = [];
+      startMap.set(k, arr);
+    }
+    arr.push(i);
   }
 
   const loops = [];
@@ -602,19 +770,17 @@ function chainMarchingSegmentsToLoops(segments) {
     used[i] = 1;
     const pts = [segments[i][0], segments[i][1]];
 
-    // Extender hacia adelante
     let growing = true;
     while (growing) {
       growing = false;
       const tailPt = pts[pts.length - 1];
-      const candidates = endpointMap.get(keyOf(tailPt));
+      const candidates = startMap.get(keyOf(tailPt));
       if (!candidates) break;
       for (let c = 0; c < candidates.length; c++) {
-        const cand = candidates[c];
-        if (used[cand.segIdx]) continue;
-        used[cand.segIdx] = 1;
-        const nextPt = cand.endIdx === 0 ? segments[cand.segIdx][1] : segments[cand.segIdx][0];
-        pts.push(nextPt);
+        const segIdx = candidates[c];
+        if (used[segIdx]) continue;
+        used[segIdx] = 1;
+        pts.push(segments[segIdx][1]);
         growing = true;
         break;
       }
@@ -659,7 +825,6 @@ function simplifyClosedPolygonRDP(pts, tol) {
     return dx * dx + dy * dy;
   };
 
-  // Encontrar dos vértices opuestos para abrir el ciclo en el par más lejano
   let maxDistSq = -1;
   let splitIdx = Math.floor(pts.length / 2);
   for (let i = 1; i < pts.length; i++) {
@@ -703,7 +868,7 @@ function smoothClosedPolygonChaikin(pts, iterations) {
   const iters = Math.max(0, Math.min(4, parseInt(iterations, 10) || 0));
   for (let it = 0; it < iters; it++) {
     const n = curr.length;
-    if (n < 4 || n > 1600) break;
+    if (n < 4 || n > 2400) break;
     const next = [];
     for (let i = 0; i < n; i++) {
       const pPrev = curr[(i - 1 + n) % n];
@@ -717,7 +882,7 @@ function smoothClosedPolygonChaikin(pts, iterations) {
       let isSharpCorner = false;
       if (l1 > 1e-5 && l2 > 1e-5) {
         const cosA = (v1x * v2x + v1y * v2y) / (l1 * l2);
-        if (cosA < -0.25) isSharpCorner = true;
+        if (cosA < -0.20) isSharpCorner = true;
       }
 
       if (isSharpCorner) {
@@ -750,8 +915,6 @@ function computePolygonSignedArea2D(pts) {
 
 // Convierte polilíneas de espacio píxel (0..W, 0..H) a milímetros centrados (-widthMM/2..+widthMM/2) con eje Y matemático hacia arriba
 function convertPixelLoopsToMM(pxLoops, gridW, gridH, widthMM, heightMM, minAreaMM2, simplifyTolMM, smoothIters) {
-  const scaleX = widthMM / Math.max(1, gridW - 2);
-  const scaleY = heightMM / Math.max(1, gridH - 2);
   const out = [];
 
   pxLoops.forEach((rawPts) => {
@@ -766,18 +929,20 @@ function convertPixelLoopsToMM(pxLoops, gridW, gridH, widthMM, heightMM, minArea
     if (smoothIters > 0) {
       cleanPts = smoothClosedPolygonChaikin(cleanPts, smoothIters);
     }
-    const finalArea = Math.abs(computePolygonSignedArea2D(cleanPts));
+    const signedA = computePolygonSignedArea2D(cleanPts);
+    const finalArea = Math.abs(signedA);
     if (finalArea < minAreaMM2 || cleanPts.length < 3) return;
 
     out.push({
       points: cleanPts,
       areaMM2: finalArea,
-      signedArea: computePolygonSignedArea2D(cleanPts),
-      isHole: false
+      signedArea: signedA,
+      // En Marching Squares dirigido, signedArea > 0 en eje Y-arriba indica contorno exterior y signedArea < 0 indica hueco interior
+      isHole: signedA < 0
     });
   });
 
-  // Clasificar contornos exteriores vs huecos internos por regla par-impar (punto en polígono)
+  // Verificación adicional por contención geométrica para máxima robustez en dibujos complejos anidados
   out.sort((a, b) => b.areaMM2 - a.areaMM2);
   for (let i = 0; i < out.length; i++) {
     let depth = 0;
@@ -852,19 +1017,19 @@ function generateHatchPolylinesForLoops(loops, widthMM, heightMM, spacingMM, cro
 }
 
 // ============================================================================
-// EJECUCIÓN PRINCIPAL DEL VECTORIZADOR (CORTE + GRABADO)
+// EJECUCIÓN PRINCIPAL DEL VECTORIZADOR (CORTE + DETECCIÓN INTELIGENTE DE DIBUJOS)
 // ============================================================================
 function runImageVectorization() {
   if (!vec2dState.sourceCanvas) return;
 
   const srcW = vec2dState.sourceCanvas.width;
   const srcH = vec2dState.sourceCanvas.height;
-  const maxRes = Math.max(96, Math.min(420, parseInt(vec2dState.traceResolution, 10) || 240));
+  const maxRes = Math.max(120, Math.min(640, parseInt(vec2dState.traceResolution, 10) || 420));
   const sc = maxRes / Math.max(srcW, srcH);
 
   // Dejamos un borde de 2 píxeles vacíos alrededor para garantizar cierre limpio de Marching Squares
-  const innerW = Math.max(24, Math.round(srcW * sc));
-  const innerH = Math.max(24, Math.round(srcH * sc));
+  const innerW = Math.max(32, Math.round(srcW * sc));
+  const innerH = Math.max(32, Math.round(srcH * sc));
   const gridW = innerW + 2;
   const gridH = innerH + 2;
 
@@ -876,12 +1041,12 @@ function runImageVectorization() {
   wCtx.drawImage(vec2dState.sourceCanvas, 0, 0, innerW, innerH);
   const rgba = wCtx.getImageData(0, 0, innerW, innerH).data;
 
-  // 1. Detectar si la imagen tiene transparencia real en las esquinas/bordes
+  // 1. Detectar si la imagen tiene transparencia real
   let transparentPixels = 0;
   for (let i = 3; i < rgba.length; i += 4) {
     if (rgba[i] < 128) transparentPixels++;
   }
-  const hasTransparency = transparentPixels > (innerW * innerH * 0.015);
+  const hasTransparency = transparentPixels > (innerW * innerH * 0.012);
 
   // Color medio de las 4 esquinas para detección automática de fondo en BMP / PNG opacos
   const sampleCorner = (cx, cy) => {
@@ -901,7 +1066,13 @@ function runImageVectorization() {
   const nGrid = gridW * gridH;
   const solidMask = new Uint8Array(nGrid);
   const lumaGrid = new Float32Array(nGrid);
+  const rGrid = new Float32Array(nGrid);
+  const gGrid = new Float32Array(nGrid);
+  const bGrid = new Float32Array(nGrid);
   lumaGrid.fill(255);
+  rGrid.fill(255);
+  gGrid.fill(255);
+  bGrid.fill(255);
 
   const tol = Math.max(4, Number(vec2dState.bgTolerance) || 38);
   const mode = vec2dState.bgDetectMode;
@@ -916,25 +1087,28 @@ function runImageVectorization() {
       const luma = 0.299 * r + 0.587 * g + 0.114 * b;
 
       const gIdx = (y + 1) * gridW + (x + 1);
-      lumaGrid[gIdx] = a < 35 ? 255 : luma;
+      if (a >= 35) {
+        lumaGrid[gIdx] = luma;
+        rGrid[gIdx] = r;
+        gGrid[gIdx] = g;
+        bGrid[gIdx] = b;
+      }
 
       let isFg = false;
       if (mode === 'alpha' || (mode === 'auto' && hasTransparency)) {
-        isFg = a >= 96;
+        isFg = a >= 85;
       } else if (mode === 'luma_light') {
-        isFg = a >= 60 && luma < (250 - tol);
+        isFg = a >= 60 && luma < (252 - tol);
       } else if (mode === 'luma_dark') {
         isFg = a >= 60 && luma > tol;
       } else {
-        // Auto sobre imagen opaca: distancia cromática respecto al fondo de las esquinas
         const distBg = Math.hypot(r - bgR, g - bgG, b - bgB);
-        isFg = a >= 60 && distBg > tol * 1.45;
+        isFg = a >= 60 && distBg > tol * 1.4;
       }
       if (isFg) solidMask[gIdx] = 1;
     }
   }
 
-  // Si toda la imagen era uniforme o sin fondo separable, usar el rectángulo útil como sólido base
   let fgCount = 0;
   for (let i = 0; i < nGrid; i++) fgCount += solidMask[i];
   if (fgCount < 16) {
@@ -956,34 +1130,35 @@ function runImageVectorization() {
   let holeCutLoops = [];
 
   const { filledOuterMask, internalHolesMask } = separateExteriorAndInternalHolesMask(solidMask, gridW, gridH);
+  const sdfSolid = computeSignedDistanceField2D(solidMask, gridW, gridH);
 
   if (vec2dState.cutMode === 'silhouette') {
     const sdfOuter = computeSignedDistanceField2D(filledOuterMask, gridW, gridH);
     const offsetPx = (Number(vec2dState.cutOffsetMM) || 0) / mmPerPx;
-    const rawOuterPx = traceIsoContoursMarchingSquares(sdfOuter, gridW, gridH, -offsetPx);
+    const rawOuterPx = traceIsoContoursMarchingSquares(sdfOuter, gridW, gridH, -offsetPx, true);
     const convOuter = convertPixelLoopsToMM(
       rawOuterPx,
       gridW,
       gridH,
       widthMM,
       heightMM,
-      Math.max(1.0, vec2dState.minSpeckleMM2 * 2),
-      vec2dState.simplifyTolMM,
+      Math.max(0.8, vec2dState.minSpeckleMM2 * 3),
+      vec2dState.simplifyTolMM * 1.2,
       vec2dState.smoothIterations
     );
     outerCutLoops = convOuter.filter((l) => !l.isHole);
 
     if (vec2dState.cutInternalHoles) {
       const sdfHoles = computeSignedDistanceField2D(internalHolesMask, gridW, gridH);
-      const rawHolesPx = traceIsoContoursMarchingSquares(sdfHoles, gridW, gridH, 0.0);
+      const rawHolesPx = traceIsoContoursMarchingSquares(sdfHoles, gridW, gridH, 0.0, true);
       const convHoles = convertPixelLoopsToMM(
         rawHolesPx,
         gridW,
         gridH,
         widthMM,
         heightMM,
-        Math.max(0.8, vec2dState.minSpeckleMM2 * 1.5),
-        vec2dState.simplifyTolMM,
+        Math.max(0.6, vec2dState.minSpeckleMM2 * 2),
+        vec2dState.simplifyTolMM * 1.1,
         vec2dState.smoothIterations
       );
       holeCutLoops = convHoles.filter((l) => !l.isHole).map((l) => ({
@@ -1056,24 +1231,92 @@ function runImageVectorization() {
   }
 
   // ========================================================================
-  // 3. OBTENER CONTORNOS DE GRABADO LÁSER (#008800 Y DETALLE SOBEL #ff8800)
+  // 3. MOTOR AVANZADO DE DETECCIÓN DE DIBUJOS Y TRAZOS DE GRABADO LÁSER
   // ========================================================================
-  const thr = Math.max(5, Math.min(250, Number(vec2dState.engraveThreshold) || 145));
+  const thr = Math.max(5, Math.min(250, Number(vec2dState.engraveThreshold) || 148));
   const inv = Boolean(vec2dState.invertEngrave);
-  const engraveField = new Float32Array(nGrid);
-  engraveField.fill(-100);
+  const detectMode = vec2dState.engraveDetectMode || 'smart_drawing';
+  const localSens = Math.max(0, Math.min(100, Number(vec2dState.localContrastSens) || 68));
+  const strokeBoost = Math.max(-1.2, Math.min(2.5, Number(vec2dState.strokeBoostPx) || 0));
 
-  for (let i = 0; i < nGrid; i++) {
-    // Solo grabamos dentro del área sólida de la pieza (evitando los huecos de corte pasantes)
-    if (!solidMask[i]) {
-      engraveField[i] = -50;
-      continue;
+  // Media local por imagen integral en dos escalas (ventana fina para trazos/letras y ventana media para rasgos de dibujo)
+  const radFine = Math.max(3, Math.round(Math.min(gridW, gridH) * 0.016));
+  const radMed = Math.max(7, Math.round(Math.min(gridW, gridH) * 0.042));
+  const localMeanFine = computeLocalMeanFieldIntegral(lumaGrid, gridW, gridH, radFine);
+  const localMeanMed = computeLocalMeanFieldIntegral(lumaGrid, gridW, gridH, radMed);
+
+  // Calcular gradiente cromático y de luminancia (para separar colores contiguos y resaltar líneas de dibujo)
+  const colorGradGrid = new Float32Array(nGrid);
+  for (let y = 1; y < gridH - 1; y++) {
+    const row = y * gridW;
+    for (let x = 1; x < gridW - 1; x++) {
+      const idx = row + x;
+      if (!solidMask[idx] || !solidMask[idx - 1] || !solidMask[idx + 1] || !solidMask[idx - gridW] || !solidMask[idx + gridW]) {
+        continue;
+      }
+      const drX = rGrid[idx + 1] - rGrid[idx - 1];
+      const dgX = gGrid[idx + 1] - gGrid[idx - 1];
+      const dbX = bGrid[idx + 1] - bGrid[idx - 1];
+      const drY = rGrid[idx + gridW] - rGrid[idx - gridW];
+      const dgY = gGrid[idx + gridW] - gGrid[idx - gridW];
+      const dbY = bGrid[idx + gridW] - bGrid[idx - gridW];
+      colorGradGrid[idx] = Math.sqrt(drX * drX + dgX * dgX + dbX * dbX + drY * drY + dgY * dgY) * 0.5;
     }
-    const luma = lumaGrid[i];
-    engraveField[i] = inv ? (luma - thr) : (thr - luma);
   }
 
-  const rawEngravePx = traceIsoContoursMarchingSquares(engraveField, gridW, gridH, 0.0);
+  // Si el corte es silueta sin margen (offset ~ 0), evitamos que el borde exterior se duplique como grabado
+  const minInteriorDist = (vec2dState.cutMode === 'silhouette' && Math.abs(vec2dState.cutOffsetMM) < 0.25) ? 0.6 : -0.5;
+  const adaptiveBias = Math.max(3.5, (108 - localSens) * 0.34);
+
+  const rawEngraveField = new Float32Array(nGrid);
+  rawEngraveField.fill(-80);
+
+  for (let i = 0; i < nGrid; i++) {
+    if (!solidMask[i] || sdfSolid[i] < minInteriorDist) {
+      rawEngraveField[i] = -60;
+      continue;
+    }
+
+    const luma = lumaGrid[i];
+    const mFine = localMeanFine[i];
+    const mMed = localMeanMed[i];
+    const cGrad = colorGradGrid[i];
+
+    // Diferencia adaptativa local: positiva cuando el píxel es un trazo más oscuro que su vecindario inmediato
+    const localDiffFine = inv ? (luma - mFine) : (mFine - luma);
+    const localDiffMed = inv ? (luma - mMed) : (mMed - luma);
+    const localStrokeScore = Math.max(localDiffFine * 1.35, localDiffMed) - adaptiveBias;
+
+    // Puntuación global respecto al umbral principal
+    const globalScore = inv ? (luma - thr) : (thr - luma);
+
+    if (detectMode === 'line_art') {
+      // Modo Solo Líneas / Entintado: extrae trazos locales oscuros y bordes entre colores, ignorando rellenos planos medios
+      const veryDarkInk = inv ? (luma - Math.max(210, thr + 45)) : (Math.min(58, thr * 0.42) - luma);
+      const colorEdgeScore = (cGrad - Math.max(14, (110 - localSens) * 0.55)) * 0.85;
+      rawEngraveField[i] = Math.max(localStrokeScore * 2.1, veryDarkInk, colorEdgeScore);
+    } else if (detectMode === 'global_threshold') {
+      // Modo Clásico B/N
+      rawEngraveField[i] = globalScore;
+    } else if (detectMode === 'shaded_art') {
+      // Modo Ilustración Sombreada: combina sombras intensas y trazos definidos en la capa principal #008800
+      const deepShadowThr = inv ? Math.min(240, thr + 22) : Math.max(20, thr - 22);
+      const deepScore = inv ? (luma - deepShadowThr) : (deepShadowThr - luma);
+      rawEngraveField[i] = Math.max(deepScore, localStrokeScore * 1.9);
+    } else {
+      // 'smart_drawing' (Por defecto): Combina rellenos oscuros reales + trazos de dibujo adaptativos + bordes de color
+      const solidDarkScore = globalScore;
+      const adaptiveStroke = localStrokeScore * 2.2;
+      const colorBoundary = (localSens > 30) ? ((cGrad - Math.max(22, (115 - localSens) * 0.7)) * 0.65) : -50;
+      rawEngraveField[i] = Math.max(solidDarkScore, adaptiveStroke, colorBoundary);
+    }
+  }
+
+  // Suavizado 3×3 sub-píxel + refuerzo ajustable de grosor de trazo (strokeBoost)
+  const engraveField = smoothScalarField3x3(rawEngraveField, gridW, gridH);
+  const isoEngrave = -strokeBoost * 8.5;
+
+  const rawEngravePx = traceIsoContoursMarchingSquares(engraveField, gridW, gridH, isoEngrave, true);
   const engraveLoops = convertPixelLoopsToMM(
     rawEngravePx,
     gridW,
@@ -1081,46 +1324,65 @@ function runImageVectorization() {
     widthMM,
     heightMM,
     vec2dState.minSpeckleMM2,
-    vec2dState.simplifyTolMM * 0.85,
+    vec2dState.simplifyTolMM,
     Math.max(0, vec2dState.smoothIterations - 1)
   );
 
-  // Detección opcional de bordes finos internos mediante operador Sobel (#ff8800)
+  // ========================================================================
+  // 4. CAPA COMPLEMENTARIA DE DETALLE FINO / MEDIOS TONOS (#ff8800)
+  // ========================================================================
   let fineEdgeLoops = [];
   if (vec2dState.detectFineEdges) {
-    const edgeField = new Float32Array(nGrid);
-    edgeField.fill(-50);
-    const sens = Math.max(10, Math.min(100, Number(vec2dState.edgeSensitivity) || 55));
-    const gradCutoff = (115 - sens) * 2.2;
+    const rawEdgeField = new Float32Array(nGrid);
+    rawEdgeField.fill(-60);
+    const sens = Math.max(10, Math.min(100, Number(vec2dState.edgeSensitivity) || 58));
+    const gradCutoff = (112 - sens) * 1.75;
 
     for (let y = 2; y < gridH - 2; y++) {
       for (let x = 2; x < gridW - 2; x++) {
         const idx = y * gridW + x;
-        // Ignorar el borde exterior de corte para no duplicar la silueta de corte como grabado
-        if (!solidMask[idx] || !solidMask[idx - 1] || !solidMask[idx + 1] || !solidMask[idx - gridW] || !solidMask[idx + gridW]) {
-          continue;
+        if (!solidMask[idx] || sdfSolid[idx] < 1.2) continue;
+        // No duplicar regiones que ya están fuertemente dentro del grabado principal #008800
+        if (engraveField[idx] > isoEngrave + 14) continue;
+
+        if (detectMode === 'shaded_art') {
+          // En modo Ilustración Sombreada, la capa #ff8800 captura los medios tonos suaves entre thr-22 y thr+28
+          const luma = lumaGrid[idx];
+          const midLow = Math.max(15, thr - 22);
+          const midHigh = Math.min(242, thr + 32);
+          const inMidBand = inv
+            ? (luma >= 255 - midHigh && luma <= 255 - midLow)
+            : (luma >= midLow && luma <= midHigh);
+          if (inMidBand) {
+            const centerMid = 0.5 * (midLow + midHigh);
+            const halfSpan = 0.5 * (midHigh - midLow);
+            rawEdgeField[idx] = halfSpan - Math.abs(luma - centerMid);
+          }
+        } else {
+          // Operador Sobel + gradiente cromático para detalles sutiles y transiciones de color no capturadas en #008800
+          const gx =
+            -lumaGrid[(y - 1) * gridW + (x - 1)] + lumaGrid[(y - 1) * gridW + (x + 1)] +
+            -2 * lumaGrid[y * gridW + (x - 1)] + 2 * lumaGrid[y * gridW + (x + 1)] +
+            -lumaGrid[(y + 1) * gridW + (x - 1)] + lumaGrid[(y + 1) * gridW + (x + 1)];
+          const gy =
+            -lumaGrid[(y - 1) * gridW + (x - 1)] - 2 * lumaGrid[(y - 1) * gridW + x] - lumaGrid[(y - 1) * gridW + (x + 1)] +
+            lumaGrid[(y + 1) * gridW + (x - 1)] + 2 * lumaGrid[(y + 1) * gridW + x] + lumaGrid[(y + 1) * gridW + (x + 1)];
+          const mag = Math.hypot(gx, gy) + colorGradGrid[idx] * 2.2;
+          rawEdgeField[idx] = mag - gradCutoff;
         }
-        const gx =
-          -lumaGrid[(y - 1) * gridW + (x - 1)] + lumaGrid[(y - 1) * gridW + (x + 1)] +
-          -2 * lumaGrid[y * gridW + (x - 1)] + 2 * lumaGrid[y * gridW + (x + 1)] +
-          -lumaGrid[(y + 1) * gridW + (x - 1)] + lumaGrid[(y + 1) * gridW + (x + 1)];
-        const gy =
-          -lumaGrid[(y - 1) * gridW + (x - 1)] - 2 * lumaGrid[(y - 1) * gridW + x] - lumaGrid[(y - 1) * gridW + (x + 1)] +
-          lumaGrid[(y + 1) * gridW + (x - 1)] + 2 * lumaGrid[(y + 1) * gridW + x] + lumaGrid[(y + 1) * gridW + (x + 1)];
-        const mag = Math.hypot(gx, gy);
-        edgeField[idx] = mag - gradCutoff;
       }
     }
 
-    const rawEdgesPx = traceIsoContoursMarchingSquares(edgeField, gridW, gridH, 0.0);
+    const edgeField = smoothScalarField3x3(rawEdgeField, gridW, gridH);
+    const rawEdgesPx = traceIsoContoursMarchingSquares(edgeField, gridW, gridH, 0.0, true);
     fineEdgeLoops = convertPixelLoopsToMM(
       rawEdgesPx,
       gridW,
       gridH,
       widthMM,
       heightMM,
-      Math.max(0.25, vec2dState.minSpeckleMM2 * 0.7),
-      vec2dState.simplifyTolMM * 0.8,
+      Math.max(0.10, vec2dState.minSpeckleMM2 * 0.8),
+      vec2dState.simplifyTolMM * 0.85,
       1
     ).filter((l) => !l.isHole);
   }
@@ -1149,7 +1411,7 @@ function runImageVectorization() {
       for (let x = 0; x < innerW; x++) {
         const gIdx = (y + 1) * gridW + (x + 1);
         const pIdx = (y * innerW + x) * 4;
-        if (engraveField[gIdx] > 0) {
+        if (engraveField[gIdx] > isoEngrave) {
           rImg.data[pIdx] = 0;
           rImg.data[pIdx + 1] = 110;
           rImg.data[pIdx + 2] = 0;
@@ -1284,7 +1546,7 @@ function renderImageVectorizerPreview() {
         ctx.closePath();
       });
       if (vec2dState.engraveStyle !== 'vector_outline') {
-        ctx.fillStyle = 'rgba(16, 185, 129, 0.45)';
+        ctx.fillStyle = 'rgba(16, 185, 129, 0.48)';
         ctx.fill('evenodd');
       }
       ctx.strokeStyle = '#10b981';
@@ -1296,7 +1558,7 @@ function renderImageVectorizerPreview() {
     if (vec2dState.detectFineEdges && res.fineEdgeLoops.length > 0) {
       ctx.save();
       ctx.strokeStyle = '#f59e0b';
-      ctx.lineWidth = 1.0;
+      ctx.lineWidth = 1.05;
       ctx.beginPath();
       res.fineEdgeLoops.forEach((l) => {
         l.points.forEach((p, i) => {
@@ -1305,6 +1567,10 @@ function renderImageVectorizerPreview() {
         });
         ctx.closePath();
       });
+      if (vec2dState.engraveDetectMode === 'shaded_art') {
+        ctx.fillStyle = 'rgba(245, 158, 11, 0.28)';
+        ctx.fill('evenodd');
+      }
       ctx.stroke();
       ctx.restore();
     }
@@ -1365,8 +1631,8 @@ function updateVectorizerStatsUI() {
   badge.innerHTML =
     '✂️ <strong>Corte Ext.:</strong> ' + st.cutOuterCount +
     ' · 🔵 <strong>Huecos:</strong> ' + st.cutHoleCount +
-    ' · ⚡ <strong>Grabado:</strong> ' + st.engraveIslandCount + ' regiones' +
-    (vec2dState.detectFineEdges ? (' + ' + st.fineEdgeCount + ' bordes') : '') +
+    ' · ⚡ <strong>Grabado:</strong> ' + st.engraveIslandCount + ' vectores' +
+    (vec2dState.detectFineEdges ? (' + ' + st.fineEdgeCount + ' detalles') : '') +
     (vec2dState.engraveStyle === 'vector_hatch' ? (' (' + st.hatchLinesCount + ' líneas trama)') : '') +
     ' · 📐 ' + vec2dState.widthMM.toFixed(1) + '×' + vec2dState.heightMM.toFixed(1) + ' mm';
 }
@@ -1443,7 +1709,10 @@ function generateVectorizedImageSVG() {
       dEdges += d;
     });
     if (dEdges.trim().length > 0) {
-      lines.push('  <g id="GRABADO_DETALLE_FINO" fill="none" stroke="#ff8800" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+      const edgeFill = vec2dState.engraveDetectMode === 'shaded_art'
+        ? 'fill="#ff8800" fill-opacity="0.22" fill-rule="evenodd"'
+        : 'fill="none"';
+      lines.push('  <g id="GRABADO_DETALLE_FINO" ' + edgeFill + ' stroke="#ff8800" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
       lines.push('    <path id="bordes_finos" d="' + dEdges.trim() + '" vector-effect="non-scaling-stroke" />');
       lines.push('  </g>');
     }
@@ -1536,7 +1805,6 @@ function applyVectorizedImageToLayerStudio(asReliefMultilayer = false) {
   state.constructionMode = 'stacked';
   state.axis = 'z';
 
-  // Si la silueta de corte estaba desactivada ('none'), usamos el rectángulo contenedor como contorno de corte
   const baseOuterLoops = res.outerCutLoops.length > 0
     ? res.outerCutLoops
     : [{
@@ -1569,7 +1837,6 @@ function applyVectorizedImageToLayerStudio(asReliefMultilayer = false) {
   });
 
   if (!asReliefMultilayer) {
-    // MODO 1 CAPA: Pieza de Corte + Grabado Láser lista para Inspector 2D, Nesting en Tablero y Exportación
     state.dimsMM = { x: wMM, y: hMM, z: thickMM };
     state.sliceCount = 1;
 
@@ -1601,14 +1868,12 @@ function applyVectorizedImageToLayerStudio(asReliefMultilayer = false) {
       filteredCount: 0
     }];
   } else {
-    // MODO RELIEVE 3D MULTICAPA: Genera N capas apiladas por umbrales tonales desde la silueta base hasta las zonas de relieve
     const numLayers = Math.max(2, Math.min(10, parseInt(vec2dState.reliefLayersCount, 10) || 4));
     const totalZ = numLayers * thickMM;
     state.dimsMM = { x: wMM, y: hMM, z: totalZ };
     state.sliceCount = numLayers;
     state.slices = [];
 
-    // Capa #1 (Base): Silueta completa de corte con huecos pasantes y grabado guía
     state.slices.push({
       index: 0,
       coord: -totalZ * 0.5 + thickMM * 0.5,
@@ -1624,10 +1889,9 @@ function applyVectorizedImageToLayerStudio(asReliefMultilayer = false) {
       filteredCount: 0
     });
 
-    // Capas superiores (#2..#N): Trazado multinivel por luminancia
     const srcW = vec2dState.sourceCanvas.width;
     const srcH = vec2dState.sourceCanvas.height;
-    const sc = 200 / Math.max(srcW, srcH);
+    const sc = 240 / Math.max(srcW, srcH);
     const iW = Math.max(24, Math.round(srcW * sc));
     const iH = Math.max(24, Math.round(srcH * sc));
     const gW = iW + 2;
@@ -1655,8 +1919,8 @@ function applyVectorizedImageToLayerStudio(asReliefMultilayer = false) {
           fieldK[(y + 1) * gW + (x + 1)] = vec2dState.invertEngrave ? (luma - layerThr) : (layerThr - luma);
         }
       }
-      const rawPxK = traceIsoContoursMarchingSquares(fieldK, gW, gH, 0.0);
-      const loopsK = convertPixelLoopsToMM(rawPxK, gW, gH, wMM, hMM, Math.max(1.2, vec2dState.minSpeckleMM2 * 2), vec2dState.simplifyTolMM, vec2dState.smoothIterations)
+      const rawPxK = traceIsoContoursMarchingSquares(smoothScalarField3x3(fieldK, gW, gH), gW, gH, 0.0, true);
+      const loopsK = convertPixelLoopsToMM(rawPxK, gW, gH, wMM, hMM, Math.max(0.8, vec2dState.minSpeckleMM2 * 2), vec2dState.simplifyTolMM, vec2dState.smoothIterations)
         .map((l) => ({
           points: l.points,
           absArea: l.areaMM2,
@@ -1718,6 +1982,7 @@ function syncVectorizerModalUI() {
   setVal('vecWidthMMInput', vec2dState.widthMM);
   setVal('vecHeightMMInput', vec2dState.heightMM);
   setChk('vecLockAspectCheck', vec2dState.lockAspect);
+  setVal('vecTraceResSelect', vec2dState.traceResolution);
   setVal('vecCutModeSelect', vec2dState.cutMode);
   setVal('vecBgDetectSelect', vec2dState.bgDetectMode);
   setVal('vecBgToleranceSlider', vec2dState.bgTolerance);
@@ -1728,9 +1993,14 @@ function syncVectorizerModalUI() {
   setVal('vecKeyholeDiamInput', vec2dState.keyholeDiameterMM);
   setVal('vecKeyholePosSelect', vec2dState.keyholePos);
 
+  setVal('vecEngraveDetectModeSelect', vec2dState.engraveDetectMode);
   setVal('vecEngraveStyleSelect', vec2dState.engraveStyle);
   setVal('vecEngraveThresholdSlider', vec2dState.engraveThreshold);
   setTxt('vecEngraveThresholdLabel', vec2dState.engraveThreshold);
+  setVal('vecLocalContrastSlider', vec2dState.localContrastSens);
+  setTxt('vecLocalContrastLabel', vec2dState.localContrastSens + '%');
+  setVal('vecStrokeBoostSlider', vec2dState.strokeBoostPx);
+  setTxt('vecStrokeBoostLabel', (vec2dState.strokeBoostPx >= 0 ? '+' : '') + Number(vec2dState.strokeBoostPx).toFixed(2) + ' px');
   setChk('vecInvertEngraveCheck', vec2dState.invertEngrave);
   setChk('vecDetectEdgesCheck', vec2dState.detectFineEdges);
   setVal('vecEdgeSensSlider', vec2dState.edgeSensitivity);
@@ -1748,6 +2018,11 @@ function syncVectorizerModalUI() {
 
   const keyholeBox = document.getElementById('vecKeyholeOptionsBox');
   if (keyholeBox) keyholeBox.classList.toggle('hidden', !vec2dState.keyholeEnabled);
+
+  const localContrastRow = document.getElementById('vecLocalContrastRow');
+  if (localContrastRow) {
+    localContrastRow.classList.toggle('opacity-40', vec2dState.engraveDetectMode === 'global_threshold');
+  }
 
   ['combined', 'cut_only', 'engrave_only', 'original'].forEach((m) => {
     const btn = document.getElementById('vecPreviewBtn_' + m);
@@ -1790,6 +2065,7 @@ function onVectorizerParamsChange() {
     return el ? el.checked : def;
   };
 
+  vec2dState.traceResolution = parseInt(getVal('vecTraceResSelect', vec2dState.traceResolution), 10) || 420;
   vec2dState.cutMode = getVal('vecCutModeSelect', vec2dState.cutMode);
   vec2dState.bgDetectMode = getVal('vecBgDetectSelect', vec2dState.bgDetectMode);
   vec2dState.bgTolerance = parseInt(getVal('vecBgToleranceSlider', vec2dState.bgTolerance), 10) || 38;
@@ -1799,16 +2075,19 @@ function onVectorizerParamsChange() {
   vec2dState.keyholeDiameterMM = Math.max(1.5, parseFloat(getVal('vecKeyholeDiamInput', vec2dState.keyholeDiameterMM)) || 4.5);
   vec2dState.keyholePos = getVal('vecKeyholePosSelect', vec2dState.keyholePos);
 
+  vec2dState.engraveDetectMode = getVal('vecEngraveDetectModeSelect', vec2dState.engraveDetectMode);
   vec2dState.engraveStyle = getVal('vecEngraveStyleSelect', vec2dState.engraveStyle);
-  vec2dState.engraveThreshold = parseInt(getVal('vecEngraveThresholdSlider', vec2dState.engraveThreshold), 10) || 145;
+  vec2dState.engraveThreshold = parseInt(getVal('vecEngraveThresholdSlider', vec2dState.engraveThreshold), 10) || 148;
+  vec2dState.localContrastSens = parseInt(getVal('vecLocalContrastSlider', vec2dState.localContrastSens), 10) || 68;
+  vec2dState.strokeBoostPx = parseFloat(getVal('vecStrokeBoostSlider', vec2dState.strokeBoostPx)) || 0;
   vec2dState.invertEngrave = getChk('vecInvertEngraveCheck', vec2dState.invertEngrave);
   vec2dState.detectFineEdges = getChk('vecDetectEdgesCheck', vec2dState.detectFineEdges);
-  vec2dState.edgeSensitivity = parseInt(getVal('vecEdgeSensSlider', vec2dState.edgeSensitivity), 10) || 55;
+  vec2dState.edgeSensitivity = parseInt(getVal('vecEdgeSensSlider', vec2dState.edgeSensitivity), 10) || 58;
   vec2dState.hatchSpacingMM = Math.max(0.25, parseFloat(getVal('vecHatchSpacingInput', vec2dState.hatchSpacingMM)) || 0.8);
   vec2dState.hatchCross = getChk('vecHatchCrossCheck', vec2dState.hatchCross);
 
   vec2dState.smoothIterations = parseInt(getVal('vecSmoothSlider', vec2dState.smoothIterations), 10) || 0;
-  vec2dState.minSpeckleMM2 = Math.max(0.05, parseFloat(getVal('vecMinSpeckleInput', vec2dState.minSpeckleMM2)) || 0.45);
+  vec2dState.minSpeckleMM2 = Math.max(0.02, parseFloat(getVal('vecMinSpeckleInput', vec2dState.minSpeckleMM2)) || 0.12);
   vec2dState.reliefLayersCount = Math.max(2, Math.min(10, parseInt(getVal('vecReliefLayersInput', vec2dState.reliefLayersCount), 10) || 4));
 
   syncVectorizerModalUI();
@@ -1821,7 +2100,6 @@ function setVectorizerPreviewMode(mode) {
   renderImageVectorizerPreview();
 }
 
-// Inicialización de eventos de carga de imagen PNG/BMP
 if (typeof window !== 'undefined') {
   window.openImageVectorizerModal = openImageVectorizerModal;
   window.closeImageVectorizerModal = closeImageVectorizerModal;
