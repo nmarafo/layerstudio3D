@@ -203,7 +203,7 @@ function isPointInIslandMaterial(pt, outerPts, holeLoops) {
 }
 
 // Recorta las polilíneas de una lasca adyacente (superior o inferior) exclusivamente dentro de una isla
-function getGuidePolylinesForIsland(outerPts, holeLoops, guideSlice) {
+function getGuidePolylinesForIsland(outerPts, holeLoops, guideSlice, isFrameRingIsland = false) {
   const guideLoops = guideSlice ? (guideSlice.unsplitLoops || guideSlice.loops) : null;
   if (!guideLoops) return [];
   const allPolylines = [];
@@ -217,6 +217,8 @@ function getGuidePolylinesForIsland(outerPts, holeLoops, guideSlice) {
   };
 
   guideLoops.forEach((loop) => {
+    if (loop.isFrameOuter) return;
+    if (loop.isFrameInner && isFrameRingIsland) return;
     if (state.guideOnlyOuter && loop.isHole) return;
     const pts = loop.points;
     if (!pts || pts.length < 3) return;
@@ -638,9 +640,15 @@ function extractIslandsFromSlices(targetSlices) {
       // Varillas que caen dentro de esta isla
       const islandRods = sliceRods.filter((r) => isPointInIslandMaterial(r, outer.points, islandHoles));
 
+      // Vectores de grabado u orla de marco que caen dentro de esta isla
+      const islandEngraveLoops = (slice.engraveLoops || []).filter((el) =>
+        el && el.points && el.points.length >= 3 && isPointInIslandMaterial(el.points[0], outer.points, islandHoles)
+      );
+
       // Polilíneas de guía superior (#N+1) e inferior (#N-1) recortadas a esta isla
-      const upperPolys = nextSlice ? getGuidePolylinesForIsland(outer.points, islandHoles, nextSlice) : [];
-      const lowerPolys = prevSlice ? getGuidePolylinesForIsland(outer.points, islandHoles, prevSlice) : [];
+      const isFrameRingIsl = Boolean(outer.isFrameLoop && slice.hasFrameWindow);
+      const upperPolys = nextSlice ? getGuidePolylinesForIsland(outer.points, islandHoles, nextSlice, isFrameRingIsl) : [];
+      const lowerPolys = prevSlice ? getGuidePolylinesForIsland(outer.points, islandHoles, prevSlice, isFrameRingIsl) : [];
 
       let customCode = null;
       if (isSplitMulti && outer.sectorCode) {
@@ -667,6 +675,7 @@ function extractIslandsFromSlices(targetSlices) {
         outerArea: outer.absArea,
         holes: islandHoles,
         rods: islandRods,
+        engraveLoops: islandEngraveLoops,
         upperPolys: upperPolys,
         lowerPolys: lowerPolys,
         bounds: bounds,
@@ -1145,6 +1154,10 @@ function packIslandsIntoBoards(islands, boardW, boardH, margin, spacing, allowRo
     const placedOuter = island.outerPoints.map(transformPt);
     const placedHoles = island.holes.map((h) => ({ points: h.points.map(transformPt), absArea: h.absArea }));
     const placedRods = island.rods.map(transformPt);
+    const placedEngraves = (island.engraveLoops || []).map((el) => ({
+      points: el.points.map(transformPt),
+      isHole: Boolean(el.isHole)
+    }));
 
     // Calcular el encaje exacto del texto en la orientación final de la isla sobre el tablero
     const placedTextLayout = computeOptimalIslandTextLayout(placedOuter, placedHoles, placedRods, island);
@@ -1162,6 +1175,7 @@ function packIslandsIntoBoards(islands, boardW, boardH, margin, spacing, allowRo
       outerPoints: placedOuter,
       holes: placedHoles,
       rods: placedRods,
+      engraveLoops: placedEngraves,
       upperPolys: island.upperPolys.map((poly) => poly.map(transformPt)),
       lowerPolys: island.lowerPolys.map((poly) => poly.map(transformPt)),
       textLayout: placedTextLayout

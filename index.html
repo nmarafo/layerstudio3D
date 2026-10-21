@@ -35,17 +35,17 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
 
   <!-- Hoja de estilos principal -->
-  <link rel="stylesheet" href="css/styles.css?v=2.8.4" />
+  <link rel="stylesheet" href="css/styles.css?v=2.8.5" />
 
   <!-- Módulos de la aplicación (cargados en orden de dependencia con defer y cache-busting) -->
-  <script src="js/state.js?v=2.8.4" defer></script>
-  <script src="js/viewer3d.js?v=2.8.4" defer></script>
-  <script src="js/slicer.js?v=2.8.4" defer></script>
-  <script src="js/nesting.js?v=2.8.4" defer></script>
-  <script src="js/modals-guide.js?v=2.8.4" defer></script>
-  <script src="js/viewer2d.js?v=2.8.4" defer></script>
-  <script src="js/exporters.js?v=2.8.4" defer></script>
-  <script src="js/vectorizer2d.js?v=2.8.4" defer></script>
+  <script src="js/state.js?v=2.8.5" defer></script>
+  <script src="js/viewer3d.js?v=2.8.5" defer></script>
+  <script src="js/slicer.js?v=2.8.5" defer></script>
+  <script src="js/nesting.js?v=2.8.5" defer></script>
+  <script src="js/modals-guide.js?v=2.8.5" defer></script>
+  <script src="js/viewer2d.js?v=2.8.5" defer></script>
+  <script src="js/exporters.js?v=2.8.5" defer></script>
+  <script src="js/vectorizer2d.js?v=2.8.5" defer></script>
 </head>
 <body class="h-screen w-screen flex flex-col">
 
@@ -391,9 +391,9 @@
         </div>
       </div>
 
-      <!-- 3. VISUALIZACIÓN 3D, GUÍAS Y SUJECIÓN POR PRESIÓN -->
+      <!-- 3. VISUALIZACIÓN 3D, MARCO CONFIGURABLE, GUÍAS Y SUJECIÓN POR PRESIÓN -->
       <div class="bg-slate-800/50 border border-slate-700/70 rounded-xl p-3 space-y-2.5">
-        <h2 class="text-xs font-bold uppercase tracking-wider text-sky-400">3. Vista 3D y Acabado de Corte</h2>
+        <h2 class="text-xs font-bold uppercase tracking-wider text-sky-400">3. Vista 3D, Marco y Acabado</h2>
 
         <div>
           <div class="flex justify-between text-xs mb-1">
@@ -478,6 +478,87 @@
             <div class="flex items-center justify-between text-xs">
               <span class="text-slate-400">Diámetro varilla (mm):</span>
               <input type="number" id="rodDiameterInput" value="4" min="1" max="50" step="0.5" onchange="onRodSettingsChange()" class="w-16 bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-right text-white" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Marco / Placa Exterior Configurable en el Laminador 3D -->
+        <div class="pt-2 border-t border-slate-700/60 space-y-2">
+          <label class="flex items-center justify-between text-xs font-semibold text-indigo-300 cursor-pointer" title="Añade un marco exterior 3D, placa base o molde negativo alrededor de las lascas del modelo 3D">
+            <span>🖼️ Añadir marco configurable 3D</span>
+            <input type="checkbox" id="slicerFrameEnabledCheck" onchange="setSlicerFrameEnabled(this.checked)" class="accent-indigo-500 w-3.5 h-3.5" />
+          </label>
+
+          <div id="slicerFrameConfigPanel" class="hidden space-y-2 bg-slate-900/85 border border-indigo-500/35 rounded-lg p-2.5">
+            <div class="flex items-center justify-between gap-2 text-[11px]">
+              <span class="text-slate-400 shrink-0">Forma:</span>
+              <select id="slicerFrameShapeSelect" onchange="onSlicerFrameSettingsChange()" class="w-full bg-slate-950 border border-slate-700 rounded px-1.5 py-1 text-[10px] text-indigo-200 font-semibold outline-none">
+                <option value="rounded_rect" selected>▭ Rectangular Redondeado / Recto</option>
+                <option value="circle">◯ Circular / Óvalo / Medallón</option>
+                <option value="octagon">⯃ Octogonal / Chaflán Clásico</option>
+                <option value="arch">🏛️ Arco Superior (Escudo / Placa)</option>
+                <option value="hexagon">⬡ Hexagonal</option>
+              </select>
+            </div>
+
+            <div class="flex items-center justify-between gap-2 text-[11px]">
+              <span class="text-slate-400 shrink-0">Modo 3D:</span>
+              <select id="slicerFrameModeSelect" onchange="onSlicerFrameSettingsChange()" class="w-full bg-slate-950 border border-slate-700 rounded px-1.5 py-1 text-[10px] text-sky-300 font-semibold outline-none">
+                <option value="base_and_ring" selected>🖼️ Base Sólida (#1..N) + Marco Hueco Superior</option>
+                <option value="all_layers_ring">🔲 Marco Hueco en Todas las Capas</option>
+                <option value="base_plate_only">🪨 Solo Placa Base / Peana en Primeras Capas</option>
+                <option value="negative_mold">🔄 Molde Negativo / Vaciado 3D en Placa</option>
+                <option value="engrave_on_base">🟢 Placa Base + Orla Decorativa Grabada</option>
+              </select>
+            </div>
+
+            <div class="flex items-center justify-between gap-2 text-[11px]">
+              <span class="text-slate-400 shrink-0">Orla (#008800):</span>
+              <select id="slicerFrameStyleSelect" onchange="onSlicerFrameSettingsChange()" class="w-full bg-slate-950 border border-slate-700 rounded px-1.5 py-1 text-[10px] text-emerald-300 outline-none">
+                <option value="none" selected>🚫 Sin grabado de orla (Solo corte)</option>
+                <option value="double_line">═ Doble Filete Clásico (#008800)</option>
+                <option value="ornate_corners">❖ Doble Filete + Esquinas Decorativas</option>
+                <option value="solid_band">▬ Banda Sólida Grabada (#008800)</option>
+              </select>
+            </div>
+
+            <div class="grid grid-cols-3 gap-1.5 text-[10px]">
+              <div class="bg-slate-950 border border-slate-800 rounded px-1.5 py-1" title="Ancho de la banda del marco en mm">
+                <span class="text-slate-400 block text-[9px]">Grosor (mm)</span>
+                <input type="number" id="slicerFrameThicknessInput" value="8.0" min="1" max="150" step="0.5" onchange="onSlicerFrameSettingsChange()" class="w-full bg-transparent text-indigo-300 font-bold text-right outline-none" />
+              </div>
+              <div class="bg-slate-950 border border-slate-800 rounded px-1.5 py-1" title="Separación interior entre el modelo 3D y la ventana del marco en mm">
+                <span class="text-slate-400 block text-[9px]">Margen (mm)</span>
+                <input type="number" id="slicerFrameMarginInput" value="5.0" min="-30" max="150" step="0.5" onchange="onSlicerFrameSettingsChange()" class="w-full bg-transparent text-sky-300 font-bold text-right outline-none" />
+              </div>
+              <div class="bg-slate-950 border border-slate-800 rounded px-1.5 py-1" title="Radio de esquina redondeada o chaflán (0 = esquina recta)">
+                <span class="text-slate-400 block text-[9px]">Radio (mm)</span>
+                <input type="number" id="slicerFrameRadiusInput" value="8.0" min="0" max="150" step="1" onchange="onSlicerFrameSettingsChange()" class="w-full bg-transparent text-amber-300 font-bold text-right outline-none" />
+              </div>
+            </div>
+
+            <div id="slicerFrameBaseLayersRow" class="flex items-center justify-between text-[11px] pt-0.5" title="Número de capas inferiores que actúan como placa de fondo maciza">
+              <span class="text-slate-300">Capas de placa base maciza (#1..N):</span>
+              <input type="number" id="slicerFrameBaseLayersInput" value="1" min="1" max="20" step="1" onchange="onSlicerFrameSettingsChange()" class="w-14 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-indigo-300 font-bold" />
+            </div>
+
+            <div class="flex items-center justify-between text-[11px] pt-0.5 border-t border-slate-800/80">
+              <label class="flex items-center gap-1.5 text-amber-300 cursor-pointer" title="Añade un taladro circular en el borde superior del marco para colgar en pared">
+                <input type="checkbox" id="slicerFrameKeyholeCheck" onchange="onSlicerFrameSettingsChange()" class="accent-amber-500" />
+                <span>🔑 Agujero colgar Ø (mm):</span>
+              </label>
+              <input type="number" id="slicerFrameKeyholeDiamInput" value="5.0" min="1.5" max="30" step="0.5" onchange="onSlicerFrameSettingsChange()" class="w-14 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-amber-300 font-bold" />
+            </div>
+
+            <!-- Presets rápidos de Marco 3D -->
+            <div class="grid grid-cols-3 gap-1 pt-0.5">
+              <button onclick="setSlicerFramePreset('rounded_rect', 'base_and_ring', 8, 5, 8)" class="py-1 bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/40 rounded text-[9px] text-indigo-200 font-semibold" title="Cuadro 3D con Base Sólida #1 + Marco Redondeado">🖼️ Cuadro 3D</button>
+              <button onclick="setSlicerFramePreset('circle', 'base_plate_only', 8, 6, 0)" class="py-1 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300" title="Peana Circular en la Base #1">🪨 Peana Circular</button>
+              <button onclick="setSlicerFramePreset('rounded_rect', 'negative_mold', 10, 6, 6)" class="py-1 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300" title="Molde Negativo Vaciado en Placa">🔄 Molde Negativo</button>
+            </div>
+
+            <div id="slicerFrameSummaryBadge" class="text-[10px] text-indigo-200 bg-indigo-950/40 border border-indigo-500/30 rounded p-1.5 text-center font-medium">
+              Sin marco exterior (silueta directa del modelo 3D)
             </div>
           </div>
         </div>
@@ -872,6 +953,10 @@
           <label class="flex items-center justify-between p-2 rounded-lg bg-slate-800/60 border border-slate-700 text-xs cursor-pointer">
             <span class="text-slate-300">Grabar etiqueta de código y cota en cada pieza</span>
             <input type="checkbox" id="modalIncludeLabelsCheck" checked onchange="setIncludeLabels(this.checked)" class="accent-sky-500" />
+          </label>
+          <label class="flex items-center justify-between p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/30 text-xs cursor-pointer">
+            <span class="font-semibold text-indigo-300">🖼️ Incluir Marco / Placa Configurable 3D</span>
+            <input type="checkbox" id="modalSlicerFrameCheck" onchange="setSlicerFrameEnabled(this.checked)" class="accent-indigo-500" />
           </label>
           <div class="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-xs">
             <label class="flex items-center gap-2 text-yellow-300 font-semibold cursor-pointer">

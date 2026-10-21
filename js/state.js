@@ -45,6 +45,17 @@ const state = {
   guideClipToSlice: true,      // true = recorta las guías que sobresalgan fuera del contorno de la lasca actual
   rodCount: 0,
   rodDiameter: 4,
+  // Marco / Placa Exterior Configurable en el Laminador 3D
+  slicerFrameEnabled: false,          // true = añade un marco o placa base configurable a las capas del modelo 3D
+  slicerFrameShape: 'rounded_rect',   // 'rounded_rect' | 'circle' | 'octagon' | 'arch' | 'hexagon'
+  slicerFrameMode: 'base_and_ring',   // 'base_and_ring' | 'all_layers_ring' | 'base_plate_only' | 'negative_mold' | 'engrave_on_base'
+  slicerFrameStyle: 'none',           // 'none' | 'double_line' | 'ornate_corners' | 'solid_band'
+  slicerFrameThicknessMM: 8.0,        // Grosor del anillo del marco en mm
+  slicerFrameMarginMM: 5.0,           // Margen libre entre el modelo 3D y la ventana interior del marco en mm
+  slicerFrameRadiusMM: 8.0,           // Radio de esquina o chaflán en mm (0 = esquina recta)
+  slicerFrameBaseLayers: 1,           // Nº de capas inferiores con placa base maciza (en modos con base)
+  slicerFrameKeyhole: false,          // true = añade agujero pasante superior para colgar el cuadro/marco 3D
+  slicerFrameKeyholeDiamMM: 5.0,      // Diámetro del agujero de colgado en mm
   // Sistema de Micro-uniones / Pestañas de sujeción por presión (Holding Tabs / Bridges)
   tabsEnabled: false,          // true = deja puntos sin cortar para desprender la pieza haciendo presión
   tabMode: 'count',            // 'count' (nº fijo de puntos por pieza) | 'spacing' (cada X mm de perímetro)

@@ -182,6 +182,11 @@ function getModelBounds2D(axisOverride) {
   }
   w = Math.max(1, Number(w) || 100);
   h = Math.max(1, Number(h) || 100);
+  if (state.slicerFrameEnabled && typeof getSlicerFrameDimensionsForAxis === 'function') {
+    const fDims = getSlicerFrameDimensionsForAxis(ax);
+    w = Math.max(w, fDims.outerW);
+    h = Math.max(h, fDims.outerH);
+  }
   return {
     minX: -w / 2,
     minY: -h / 2,
@@ -435,6 +440,26 @@ function render2DBoard(ctx, canvas) {
     pl.holes.forEach((h) => {
       drawContourWithTabsOnCanvas(ctx, h.points, true, '#38bdf8', 1.4, toScreenX, toScreenY);
     });
+
+    // Grabado vectorial u orla de marco 3D perteneciente a esta isla
+    if (pl.engraveLoops && pl.engraveLoops.length > 0) {
+      ctx.save();
+      ctx.beginPath();
+      pl.engraveLoops.forEach((el) => {
+        if (!el.points || el.points.length < 3) return;
+        el.points.forEach((pt, i) => {
+          if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+          else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+        });
+        ctx.closePath();
+      });
+      ctx.fillStyle = 'rgba(16, 185, 129, 0.30)';
+      ctx.fill('evenodd');
+      ctx.strokeStyle = '#10b981';
+      ctx.lineWidth = 1.15;
+      ctx.stroke();
+      ctx.restore();
+    }
 
     // Guía inferior (#N-1) si está activa
     if (state.includePrevSliceGuide && pl.lowerPolys.length > 0) {

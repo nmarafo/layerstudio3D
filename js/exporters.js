@@ -302,6 +302,7 @@ function generateBoardSVG(board) {
   const outerPaths = [];
   const holePaths = [];
   const rodCircles = [];
+  let boardEngravePath = '';
   let upperGuidePath = '';
   let lowerGuidePath = '';
   const islandLabels = [];
@@ -337,6 +338,13 @@ function generateBoardSVG(board) {
     pl.rods.forEach((r) => {
       rodCircles.push({ cx: toX(r.x), cy: toY(r.y) });
     });
+
+    if (pl.engraveLoops && pl.engraveLoops.length > 0) {
+      pl.engraveLoops.forEach((el) => {
+        if (!el.points || el.points.length < 3) return;
+        boardEngravePath += 'M ' + el.points.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z ';
+      });
+    }
 
     if (state.includeNextSliceGuide && pl.upperPolys.length > 0) {
       pl.upperPolys.forEach((poly) => {
@@ -408,6 +416,12 @@ function generateBoardSVG(board) {
     lines.push('  </g>');
   }
 
+  if (boardEngravePath.trim().length > 0) {
+    lines.push('  <g id="GRABADO_VECTORIAL_MARCO_TABLERO" fill="#008800" fill-opacity="0.22" fill-rule="evenodd" stroke="#008800" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    lines.push('    <path id="grabado_tablero_trazos" d="' + boardEngravePath.trim() + '" vector-effect="non-scaling-stroke" />');
+    lines.push('  </g>');
+  }
+
   if (lowerGuidePath.trim().length > 0) {
     const lowerDashAttr = getSvgDashAttr(state.lowerGuideStyle);
     lines.push('  <g id="GUIA_INFERIOR_TABLERO" fill="none" stroke="#9900ff" stroke-width="' + strokeMm + '"' + lowerDashAttr + ' stroke-linecap="round" stroke-linejoin="round">');
@@ -445,6 +459,26 @@ function generateBoardDXF(board) {
   board.placements.forEach((pl) => {
     pushLoopLinesWithTabsDXF(dxf, pl.outerPoints, false, 'CORTE_EXTERIOR', '1', 0, 0);
     pl.holes.forEach((h) => pushLoopLinesWithTabsDXF(dxf, h.points, true, 'CORTE_INTERIOR', '5', 0, 0));
+    if (pl.engraveLoops && pl.engraveLoops.length > 0) {
+      pl.engraveLoops.forEach((el) => {
+        if (!el.points || el.points.length < 3) return;
+        for (let i = 0, n = el.points.length; i < n; i++) {
+          const p1 = el.points[i];
+          const p2 = el.points[(i + 1) % n];
+          dxf.push(
+            '0', 'LINE',
+            '8', 'GRABADO_VECTORIAL',
+            '62', '3',
+            '10', p1.x.toFixed(4),
+            '20', p1.y.toFixed(4),
+            '30', '0.0',
+            '11', p2.x.toFixed(4),
+            '21', p2.y.toFixed(4),
+            '31', '0.0'
+          );
+        }
+      });
+    }
 
     if (state.includePrevSliceGuide && pl.lowerPolys.length > 0) {
       pl.lowerPolys.forEach((poly) => {
@@ -535,6 +569,27 @@ function generateSliceDXF(slice, idx) {
     const color = loop.isHole ? '5' : '1';
     pushLoopLinesWithTabsDXF(dxf, loop.points, loop.isHole, layer, color, ox, oy);
   });
+
+  if (slice.engraveLoops && slice.engraveLoops.length > 0) {
+    slice.engraveLoops.forEach((el) => {
+      if (!el.points || el.points.length < 3) return;
+      for (let i = 0, n = el.points.length; i < n; i++) {
+        const p1 = el.points[i];
+        const p2 = el.points[(i + 1) % n];
+        dxf.push(
+          '0', 'LINE',
+          '8', 'GRABADO_VECTORIAL',
+          '62', '3',
+          '10', (p1.x - ox).toFixed(4),
+          '20', (p1.y - oy).toFixed(4),
+          '30', '0.0',
+          '11', (p2.x - ox).toFixed(4),
+          '21', (p2.y - oy).toFixed(4),
+          '31', '0.0'
+        );
+      }
+    });
+  }
 
   // Incluir guía de la lámina INFERIOR (#N-1) en capa independiente DXF si está activada
   if (lowerSlice && lowerSlice.loops) {
@@ -704,6 +759,7 @@ function openExportModal() {
 
   updateFilteredIslandsUI();
   syncHoldingTabsUI();
+  if (typeof syncSlicerFrameUI === 'function') syncSlicerFrameUI();
   const subOpts = document.getElementById('modalNestingSubOptions');
   if (subOpts) subOpts.classList.toggle('hidden', !state.nestingEnabled);
   syncBoardInputsUI();
@@ -981,6 +1037,16 @@ function exportProjectFile() {
     nestEngraveGuideType: state.nestEngraveGuideType,
     rodCount: state.rodCount,
     rodDiameter: state.rodDiameter,
+    slicerFrameEnabled: state.slicerFrameEnabled,
+    slicerFrameShape: state.slicerFrameShape,
+    slicerFrameMode: state.slicerFrameMode,
+    slicerFrameStyle: state.slicerFrameStyle,
+    slicerFrameThicknessMM: state.slicerFrameThicknessMM,
+    slicerFrameMarginMM: state.slicerFrameMarginMM,
+    slicerFrameRadiusMM: state.slicerFrameRadiusMM,
+    slicerFrameBaseLayers: state.slicerFrameBaseLayers,
+    slicerFrameKeyhole: state.slicerFrameKeyhole,
+    slicerFrameKeyholeDiamMM: state.slicerFrameKeyholeDiamMM,
     tabsEnabled: state.tabsEnabled,
     tabMode: state.tabMode,
     tabCount: state.tabCount,
@@ -1032,6 +1098,17 @@ function importProjectFile(file) {
       state.thickness = data.thickness || 5;
       state.rodCount = data.rodCount || 0;
       state.rodDiameter = data.rodDiameter || 4;
+      if (typeof data.slicerFrameEnabled === 'boolean') state.slicerFrameEnabled = data.slicerFrameEnabled;
+      if (data.slicerFrameShape) state.slicerFrameShape = data.slicerFrameShape;
+      if (data.slicerFrameMode) state.slicerFrameMode = data.slicerFrameMode;
+      if (data.slicerFrameStyle) state.slicerFrameStyle = data.slicerFrameStyle;
+      if (typeof data.slicerFrameThicknessMM === 'number') state.slicerFrameThicknessMM = data.slicerFrameThicknessMM;
+      if (typeof data.slicerFrameMarginMM === 'number') state.slicerFrameMarginMM = data.slicerFrameMarginMM;
+      if (typeof data.slicerFrameRadiusMM === 'number') state.slicerFrameRadiusMM = data.slicerFrameRadiusMM;
+      if (typeof data.slicerFrameBaseLayers === 'number') state.slicerFrameBaseLayers = data.slicerFrameBaseLayers;
+      if (typeof data.slicerFrameKeyhole === 'boolean') state.slicerFrameKeyhole = data.slicerFrameKeyhole;
+      if (typeof data.slicerFrameKeyholeDiamMM === 'number') state.slicerFrameKeyholeDiamMM = data.slicerFrameKeyholeDiamMM;
+      if (typeof syncSlicerFrameUI === 'function') syncSlicerFrameUI();
       if (typeof data.tabsEnabled === 'boolean') state.tabsEnabled = data.tabsEnabled;
       if (data.tabMode === 'count' || data.tabMode === 'spacing') state.tabMode = data.tabMode;
       if (typeof data.tabCount === 'number') state.tabCount = data.tabCount;

@@ -102,7 +102,7 @@ input[type="range"] {
   display: block;
 }
 
-</style>
+  </style>
 
   <!-- Módulos de la aplicación (cargados en orden de dependencia con defer y cache-busting) -->
   <script>
@@ -153,6 +153,17 @@ const state = {
   guideClipToSlice: true,      // true = recorta las guías que sobresalgan fuera del contorno de la lasca actual
   rodCount: 0,
   rodDiameter: 4,
+  // Marco / Placa Exterior Configurable en el Laminador 3D
+  slicerFrameEnabled: false,          // true = añade un marco o placa base configurable a las capas del modelo 3D
+  slicerFrameShape: 'rounded_rect',   // 'rounded_rect' | 'circle' | 'octagon' | 'arch' | 'hexagon'
+  slicerFrameMode: 'base_and_ring',   // 'base_and_ring' | 'all_layers_ring' | 'base_plate_only' | 'negative_mold' | 'engrave_on_base'
+  slicerFrameStyle: 'none',           // 'none' | 'double_line' | 'ornate_corners' | 'solid_band'
+  slicerFrameThicknessMM: 8.0,        // Grosor del anillo del marco en mm
+  slicerFrameMarginMM: 5.0,           // Margen libre entre el modelo 3D y la ventana interior del marco en mm
+  slicerFrameRadiusMM: 8.0,           // Radio de esquina o chaflán en mm (0 = esquina recta)
+  slicerFrameBaseLayers: 1,           // Nº de capas inferiores con placa base maciza (en modos con base)
+  slicerFrameKeyhole: false,          // true = añade agujero pasante superior para colgar el cuadro/marco 3D
+  slicerFrameKeyholeDiamMM: 5.0,      // Diámetro del agujero de colgado en mm
   // Sistema de Micro-uniones / Pestañas de sujeción por presión (Holding Tabs / Bridges)
   tabsEnabled: false,          // true = deja puntos sin cortar para desprender la pieza haciendo presión
   tabMode: 'count',            // 'count' (nº fijo de puntos por pieza) | 'spacing' (cada X mm de perímetro)
@@ -221,7 +232,7 @@ let scene, camera, renderer, controls, raycaster, mouse;
 let sliceGroup3D, ghostMesh3D, gridHelper3D;
 
 
-</script>
+  </script>
   <script>
 /**
  * LayerStudio 3D - 3D Viewport, Loaders & Dynamic Sizing
@@ -550,7 +561,7 @@ function onAxisDimChange(axis, valStr) {
   resetCamera3D();
 }
 
-</script>
+  </script>
   <script>
 /**
  * LayerStudio 3D - Geometric Slicing Engine & Layer Guides
@@ -1171,7 +1182,14 @@ function getSlicePlaneSpan2D(sliceAxis) {
 
 // Calcula la cuadrícula de subdivisión 2D (columnas, filas y coordenadas de líneas de corte)
 function getSliceSplitGrid(sliceAxis, sliceIndex = 0) {
-  const { spanX, spanY, labelX, labelY } = getSlicePlaneSpan2D(sliceAxis);
+  const { spanX: baseSpanX, spanY: baseSpanY, labelX, labelY } = getSlicePlaneSpan2D(sliceAxis);
+  let spanX = baseSpanX;
+  let spanY = baseSpanY;
+  if (state.slicerFrameEnabled && typeof getSlicerFrameDimensionsForAxis === 'function') {
+    const fDims = getSlicerFrameDimensionsForAxis(sliceAxis);
+    spanX = Math.max(spanX, fDims.outerW);
+    spanY = Math.max(spanY, fDims.outerH);
+  }
   let cols = 1;
   let rows = 1;
 
@@ -1439,7 +1457,10 @@ function applyModelSplitToExistingSlices(triggerRender = true) {
         points: l.points,
         absArea: l.absArea,
         signedArea: l.signedArea,
-        isHole: l.isHole
+        isHole: l.isHole,
+        isFrameLoop: Boolean(l.isFrameLoop),
+        isFrameOuter: Boolean(l.isFrameOuter),
+        isFrameInner: Boolean(l.isFrameInner)
       }));
       slice.splitGrid = null;
       slice.splitCutSeams = [];
@@ -1456,6 +1477,9 @@ function applyModelSplitToExistingSlices(triggerRender = true) {
         absArea: l.absArea,
         signedArea: l.signedArea,
         isHole: l.isHole,
+        isFrameLoop: Boolean(l.isFrameLoop),
+        isFrameOuter: Boolean(l.isFrameOuter),
+        isFrameInner: Boolean(l.isFrameInner),
         sectorCol: 0,
         sectorRow: 0,
         sectorCode: 'A1'
@@ -1624,7 +1648,10 @@ function rebuildGhostAndSlices() {
 
     state.thickness = state.puzzleMaterialThicknessMM;
     state.slices = slicesA.concat(slicesB);
-    state.slices.forEach((s) => { s.unsplitLoops = (s.loops || []).slice(); });
+    state.slices.forEach((s) => {
+      s.modelLoops = (s.loops || []).slice();
+      s.unsplitLoops = (s.loops || []).slice();
+    });
     state.filteredIslandsCount = totalRemovedIslands;
     updateFilteredIslandsUI();
     syncConstructionModeUI();
@@ -1659,6 +1686,7 @@ function rebuildGhostAndSlices() {
         puzzleCode: null,
         selected: true,
         rawLoops: rawLoops,
+        modelLoops: filteredRes.loops.slice(),
         unsplitLoops: filteredRes.loops.slice(),
         loops: filteredRes.loops,
         slots: []
@@ -1670,6 +1698,7 @@ function rebuildGhostAndSlices() {
     updateFilteredIslandsUI();
   }
 
+  applySlicerFrameToExistingSlices(false);
   applyModelSplitToExistingSlices(false);
 
   if (state.activeSliceIndex >= state.slices.length) {
@@ -1761,6 +1790,7 @@ function applyIslandFilterToExistingSlices() {
     const base = slice.rawLoops || slice.loops || [];
     const res = filterLoopsByMinIslandSize(base);
     slice.baseLoops = res.loops;
+    slice.modelLoops = res.loops.slice();
     slice.unsplitLoops = res.loops.slice();
     slice.loops = res.loops;
     totalRemoved += res.removedCount;
@@ -1771,10 +1801,14 @@ function applyIslandFilterToExistingSlices() {
     const slicesA = state.slices.filter((s) => s.puzzleSeries === 'A');
     const slicesB = state.slices.filter((s) => s.puzzleSeries === 'B');
     carveInterlockingPuzzleSlots(slicesA, slicesB, cfg.axisA, cfg.axisB);
-    state.slices.forEach((s) => { s.unsplitLoops = (s.loops || []).slice(); });
+    state.slices.forEach((s) => {
+      s.modelLoops = (s.loops || []).slice();
+      s.unsplitLoops = (s.loops || []).slice();
+    });
     syncConstructionModeUI();
   }
 
+  applySlicerFrameToExistingSlices(false);
   applyModelSplitToExistingSlices(false);
 
   state.filteredIslandsCount = totalRemoved;
@@ -2022,6 +2056,22 @@ function classifyLoopsOuterAndHoles(rawLoops) {
   return items;
 }
 
+// Determina si un hueco (hole) pertenece directamente a un contorno exterior (outer) sin estar dentro de otra isla menor
+function isHoleDirectChildOfOuter(hole, outer, allOuters) {
+  if (!hole || !outer || !hole.points || !hole.points.length || !outer.points || !outer.points.length) return false;
+  if (hole.absArea >= outer.absArea) return false;
+  if (!isPointInPolygon(hole.points[0], outer.points)) return false;
+  for (let k = 0; k < allOuters.length; k++) {
+    const other = allOuters[k];
+    if (other !== outer && other.absArea < outer.absArea && other.absArea > hole.absArea) {
+      if (isPointInPolygon(hole.points[0], other.points)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 // =========================================================================
 // CONSTRUCCIÓN DE LASCAS 3D EXTRUIDAS (APILADO 1 EJE, PUZZLE 3D Y BLOQUES MODULARES)
 // =========================================================================
@@ -2086,7 +2136,7 @@ function build3DSlicesMesh() {
           sh.closePath();
 
           holes.forEach((h) => {
-            if (isPointInPolygon(h.points[0], outer.points)) {
+            if (isHoleDirectChildOfOuter(h, outer, secGroup.outers)) {
               const path = new THREE.Path();
               h.points.forEach((pt, i) => {
                 if (i === 0) path.moveTo(pt.x, pt.y);
@@ -2149,7 +2199,7 @@ function build3DSlicesMesh() {
       sh.closePath();
 
       holes.forEach((h) => {
-        if (isPointInPolygon(h.points[0], outer.points)) {
+        if (isHoleDirectChildOfOuter(h, outer, outers)) {
           const path = new THREE.Path();
           h.points.forEach((pt, i) => {
             if (i === 0) path.moveTo(pt.x, pt.y);
@@ -2415,6 +2465,8 @@ function getGuidePolylinesForSlice(slice, guideSlice) {
   };
 
   guideLoops.forEach((loop) => {
+    if (loop.isFrameOuter) return;
+    if (loop.isFrameInner && slice && slice.hasFrameWindow) return;
     if (state.guideOnlyOuter && loop.isHole) return;
     const pts = loop.points;
     if (!pts || pts.length < 3) return;
@@ -2958,9 +3010,585 @@ if (typeof window !== 'undefined') {
   window.onSplitExplodeInput = onSplitExplodeInput;
 }
 
+// =========================================================================
+// MOTOR DE MARCO / PLACA EXTERIOR CONFIGURABLE EN EL LAMINADOR 3D
+// =========================================================================
+
+/**
+ * Calcula las dimensiones interiores (ventana) y exteriores (borde de corte)
+ * del marco configurable 3D en el plano perpendicular a sliceAxis.
+ */
+function getSlicerFrameDimensionsForAxis(sliceAxis) {
+  const { spanX: baseW, spanY: baseH } = getSlicePlaneSpan2D(sliceAxis || state.axis);
+  const thicknessMM = Math.max(1.0, Number(state.slicerFrameThicknessMM) || 8.0);
+  const marginMM = Number.isFinite(Number(state.slicerFrameMarginMM)) ? Number(state.slicerFrameMarginMM) : 5.0;
+  const radiusMM = Math.max(0, Number(state.slicerFrameRadiusMM) || 0);
+  const shape = state.slicerFrameShape || 'rounded_rect';
+
+  let innerW = Math.max(6.0, baseW + 2 * marginMM);
+  let innerH = Math.max(6.0, baseH + 2 * marginMM);
+
+  // Cuando el margen es positivo o cero en formas curvas/achaflanadas (círculo, octógono, hexágono, arco),
+  // garantizamos una holgura suave respecto a las aristas reales de las lascas del modelo 3D
+  if (marginMM >= 0 && (shape === 'circle' || shape === 'octagon' || shape === 'hexagon' || shape === 'arch') && Array.isArray(state.slices)) {
+    const ax = sliceAxis || state.axis;
+    let maxRadNorm = 1.0;
+    const rx0 = Math.max(3.0, innerW * 0.5);
+    const ry0 = Math.max(3.0, innerH * 0.5);
+    for (let sIdx = 0; sIdx < state.slices.length; sIdx++) {
+      const s = state.slices[sIdx];
+      if ((s.sliceAxis || state.axis) !== ax) continue;
+      const mLoops = s.modelLoops || s.baseLoops || [];
+      for (let lIdx = 0; lIdx < mLoops.length; lIdx++) {
+        const pts = mLoops[lIdx].points || [];
+        const step = Math.max(1, Math.floor(pts.length / 24));
+        for (let pIdx = 0; pIdx < pts.length; pIdx += step) {
+          const p = pts[pIdx];
+          const nx = Math.abs(p.x) / rx0;
+          const ny = Math.abs(p.y) / ry0;
+          let metric = Math.max(nx, ny);
+          if (shape === 'circle') {
+            metric = Math.hypot(nx, ny) * 1.03;
+          } else if (shape === 'octagon') {
+            metric = Math.max(nx, ny, (nx + ny) * 0.76);
+          } else if (shape === 'hexagon') {
+            metric = Math.max(nx, ny + nx * 0.52);
+          } else if (shape === 'arch' && p.y > 0) {
+            metric = Math.hypot(nx, ny) * 1.02;
+          }
+          if (metric > maxRadNorm) maxRadNorm = metric;
+        }
+      }
+    }
+    if (maxRadNorm > 1.0) {
+      const clampScale = Math.min(1.38, maxRadNorm);
+      innerW *= clampScale;
+      innerH *= clampScale;
+    }
+  }
+
+  const outerW = Math.max(innerW + 2.0, innerW + 2 * thicknessMM);
+  const outerH = Math.max(innerH + 2.0, innerH + 2 * thicknessMM);
+
+  return {
+    baseW,
+    baseH,
+    innerW,
+    innerH,
+    outerW,
+    outerH,
+    thicknessMM,
+    marginMM,
+    radiusMM,
+    shape
+  };
+}
+
+/**
+ * Genera un contorno cerrado 2D centrado en (0,0) con la forma del marco 3D
+ * ('rounded_rect', 'circle', 'octagon', 'arch', 'hexagon').
+ * En el plano 2D del laminador 3D, +X es derecha y +Y es arriba.
+ */
+function generateSlicerFrameContour2D(w, h, shape, cornerRadiusMM, wantHole = false) {
+  const hw = Math.max(2.0, w * 0.5);
+  const hh = Math.max(2.0, h * 0.5);
+  const r = Math.max(0, Math.min(Number(cornerRadiusMM) || 0, hw - 0.25, hh - 0.25));
+  const pts = [];
+
+  if (shape === 'circle') {
+    const segs = 72;
+    for (let i = 0; i < segs; i++) {
+      const a = (i / segs) * Math.PI * 2;
+      pts.push({ x: Math.cos(a) * hw, y: Math.sin(a) * hh });
+    }
+  } else if (shape === 'octagon') {
+    const ch = r > 0.2 ? Math.min(r, hw * 0.65, hh * 0.65) : Math.min(hw, hh) * 0.28;
+    pts.push(
+      { x: -hw + ch, y: -hh },
+      { x: hw - ch, y: -hh },
+      { x: hw, y: -hh + ch },
+      { x: hw, y: hh - ch },
+      { x: hw - ch, y: hh },
+      { x: -hw + ch, y: hh },
+      { x: -hw, y: hh - ch },
+      { x: -hw, y: -hh + ch }
+    );
+  } else if (shape === 'hexagon') {
+    pts.push(
+      { x: 0, y: -hh },
+      { x: hw, y: -hh * 0.5 },
+      { x: hw, y: hh * 0.5 },
+      { x: 0, y: hh },
+      { x: -hw, y: hh * 0.5 },
+      { x: -hw, y: -hh * 0.5 }
+    );
+  } else if (shape === 'arch') {
+    // Base inferior con esquinas redondeadas (y = -hh) y arco superior semicircular/elíptico (hacia y = +hh)
+    const rBot = Math.min(r, hw * 0.45, hh * 0.45);
+    const archH = Math.min(hw, hh * 0.85);
+    const archCenterY = hh - archH;
+
+    if (rBot <= 0.2) {
+      pts.push({ x: -hw, y: -hh }, { x: hw, y: -hh });
+    } else {
+      const arcSegs = 8;
+      // Esquina inferior izquierda (-hw + rBot, -hh + rBot) de PI a 1.5*PI
+      for (let i = 0; i <= arcSegs; i++) {
+        const a = Math.PI + (i / arcSegs) * (Math.PI * 0.5);
+        pts.push({ x: -hw + rBot + Math.cos(a) * rBot, y: -hh + rBot + Math.sin(a) * rBot });
+      }
+      // Esquina inferior derecha (hw - rBot, -hh + rBot) de 1.5*PI a 2*PI
+      for (let i = 0; i <= arcSegs; i++) {
+        const a = Math.PI * 1.5 + (i / arcSegs) * (Math.PI * 0.5);
+        pts.push({ x: hw - rBot + Math.cos(a) * rBot, y: -hh + rBot + Math.sin(a) * rBot });
+      }
+    }
+
+    // Arco superior desde ángulo 0 (derecha) hasta PI (izquierda) pasando por +hh (arriba)
+    const topSegs = 36;
+    for (let i = 0; i <= topSegs; i++) {
+      const a = (i / topSegs) * Math.PI;
+      pts.push({
+        x: Math.cos(a) * hw,
+        y: archCenterY + Math.sin(a) * archH
+      });
+    }
+  } else {
+    // 'rounded_rect' (Rectangular Redondeado o Recto si r === 0)
+    if (r <= 0.15) {
+      pts.push(
+        { x: -hw, y: -hh },
+        { x: hw, y: -hh },
+        { x: hw, y: hh },
+        { x: -hw, y: hh }
+      );
+    } else {
+      const segsPerCorner = 10;
+      const corners = [
+        { cx: hw - r, cy: -hh + r, a0: -Math.PI * 0.5, a1: 0 },
+        { cx: hw - r, cy: hh - r, a0: 0, a1: Math.PI * 0.5 },
+        { cx: -hw + r, cy: hh - r, a0: Math.PI * 0.5, a1: Math.PI },
+        { cx: -hw + r, cy: -hh + r, a0: Math.PI, a1: Math.PI * 1.5 }
+      ];
+      corners.forEach((c) => {
+        for (let i = 0; i <= segsPerCorner; i++) {
+          const a = c.a0 + (i / segsPerCorner) * (c.a1 - c.a0);
+          pts.push({
+            x: c.cx + Math.cos(a) * r,
+            y: c.cy + Math.sin(a) * r
+          });
+        }
+      });
+    }
+  }
+
+  let signed = computeSignedArea(pts);
+  const absArea = Math.abs(signed);
+  if ((!wantHole && signed < 0) || (wantHole && signed > 0)) {
+    pts.reverse();
+    signed = -signed;
+  }
+
+  return {
+    points: pts,
+    absArea,
+    signedArea: signed,
+    isHole: Boolean(wantHole),
+    isFrameLoop: true,
+    isFrameOuter: !wantHole,
+    isFrameInner: Boolean(wantHole)
+  };
+}
+
+/**
+ * Genera el taladro pasante superior de colgado (#0055ff) en la banda superior del marco 3D.
+ */
+function generateSlicerFrameKeyholeLoop2D(innerH, outerH, diamMM) {
+  const rad = Math.max(0.75, Math.min(25, (Number(diamMM) || 5.0) * 0.5));
+  const bandThickness = Math.max(2.0, (outerH - innerH) * 0.5);
+  const cy = (outerH * 0.5) - Math.max(rad + 1.2, bandThickness * 0.5);
+  const segs = 28;
+  const pts = [];
+  // Sentido horario (isHole = true)
+  for (let i = 0; i < segs; i++) {
+    const a = -((i / segs) * Math.PI * 2);
+    pts.push({ x: Math.cos(a) * rad, y: cy + Math.sin(a) * rad });
+  }
+  const signed = computeSignedArea(pts);
+  return {
+    points: pts,
+    absArea: Math.abs(signed),
+    signedArea: -Math.abs(signed),
+    isHole: true,
+    isFrameLoop: true
+  };
+}
+
+/**
+ * Genera los contornos de orla decorativa de grabado láser (#008800) sobre el marco 3D.
+ */
+function generateSlicerFrameOrnamentalLoops2D(fDims, effectiveStyle) {
+  const style = effectiveStyle || state.slicerFrameStyle || 'none';
+  if (style === 'none') return [];
+
+  const { innerW, innerH, outerW, outerH, thicknessMM, radiusMM, shape } = fDims;
+  const out = [];
+  const inset = Math.min(1.2, thicknessMM * 0.16);
+  const eOutW = Math.max(innerW + 0.8, outerW - 2 * inset);
+  const eOutH = Math.max(innerH + 0.8, outerH - 2 * inset);
+  const eInW = Math.max(4.0, innerW + 2 * inset);
+  const eInH = Math.max(4.0, innerH + 2 * inset);
+  const rOut = Math.max(0, radiusMM + thicknessMM - inset);
+  const rIn = Math.max(0, radiusMM + inset);
+
+  if (style === 'solid_band') {
+    const lOut = generateSlicerFrameContour2D(eOutW, eOutH, shape, rOut, false);
+    const lIn = generateSlicerFrameContour2D(eInW, eInH, shape, rIn, true);
+    lOut.isFrameEngrave = true;
+    lIn.isFrameEngrave = true;
+    out.push(lOut, lIn);
+    return out;
+  }
+
+  // 'double_line' o 'ornate_corners': dos filetes paralelos a lo largo de la banda del marco
+  const strokeW = Math.max(0.7, Math.min(2.0, thicknessMM * 0.22));
+  const f1Out = generateSlicerFrameContour2D(eOutW, eOutH, shape, rOut, false);
+  const f1In = generateSlicerFrameContour2D(Math.max(4, eOutW - 2 * strokeW), Math.max(4, eOutH - 2 * strokeW), shape, Math.max(0, rOut - strokeW), true);
+  f1Out.isFrameEngrave = true;
+  f1In.isFrameEngrave = true;
+  out.push(f1Out, f1In);
+
+  if (thicknessMM >= 3.2) {
+    const f2Out = generateSlicerFrameContour2D(eInW + 2 * strokeW, eInH + 2 * strokeW, shape, rIn + strokeW, false);
+    const f2In = generateSlicerFrameContour2D(eInW, eInH, shape, rIn, true);
+    f2Out.isFrameEngrave = true;
+    f2In.isFrameEngrave = true;
+    out.push(f2Out, f2In);
+  }
+
+  if (style === 'ornate_corners') {
+    const midW = (innerW + outerW) * 0.25;
+    const midH = (innerH + outerH) * 0.25;
+    const dSize = Math.max(1.2, Math.min(5.0, thicknessMM * 0.34));
+    const signs = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+    signs.forEach(([sx, sy]) => {
+      const cx = sx * (midW - (shape === 'circle' ? midW * 0.29 : radiusMM * 0.35));
+      const cy = sy * (midH - (shape === 'circle' ? midH * 0.29 : radiusMM * 0.35));
+      const dPts = [
+        { x: cx, y: cy - dSize },
+        { x: cx + dSize, y: cy },
+        { x: cx, y: cy + dSize },
+        { x: cx - dSize, y: cy }
+      ];
+      const sArea = Math.abs(computeSignedArea(dPts));
+      out.push({
+        points: dPts,
+        absArea: sArea,
+        signedArea: sArea,
+        isHole: false,
+        isFrameEngrave: true
+      });
+    });
+  }
+
+  return out;
+}
+
+/**
+ * Aplica el Marco / Placa Configurable 3D sobre todas las lascas del modelo (`state.slices`)
+ * sin necesidad de recalcular la intersección de triángulos 3D.
+ */
+function applySlicerFrameToExistingSlices(triggerRender = true) {
+  const totalSlices = state.slices.length;
+  const baseLayersCfg = Math.max(1, Math.min(30, parseInt(state.slicerFrameBaseLayers, 10) || 1));
+  const mode = state.slicerFrameMode || 'base_and_ring';
+
+  state.slices.forEach((slice, sIdx) => {
+    if (!slice.modelLoops) {
+      slice.modelLoops = (slice.baseLoops || slice.loops || []).filter((l) => !l.isFrameLoop).slice();
+    }
+    if (!slice.baseEngraveLoops) {
+      slice.baseEngraveLoops = (slice.engraveLoops || []).filter((l) => !l.isFrameEngrave).slice();
+    }
+
+    if (!state.slicerFrameEnabled) {
+      slice.hasFrameWindow = false;
+      slice.isSolidFrameBase = false;
+      slice.unsplitLoops = slice.modelLoops.map((l) => ({
+        points: l.points,
+        absArea: l.absArea,
+        signedArea: l.signedArea,
+        isHole: l.isHole
+      }));
+      slice.engraveLoops = slice.baseEngraveLoops.slice();
+      return;
+    }
+
+    const ax = slice.sliceAxis || state.axis;
+    const fDims = getSlicerFrameDimensionsForAxis(ax);
+    const { innerW, innerH, outerW, outerH, thicknessMM, radiusMM, shape } = fDims;
+
+    const outerFrameLoop = generateSlicerFrameContour2D(outerW, outerH, shape, radiusMM + thicknessMM, false);
+    const innerWindowHoleLoop = generateSlicerFrameContour2D(innerW, innerH, shape, radiusMM, true);
+    const keyholeLoop = state.slicerFrameKeyhole
+      ? generateSlicerFrameKeyholeLoop2D(innerH, outerH, state.slicerFrameKeyholeDiamMM)
+      : null;
+
+    const isPuzzle = state.constructionMode === 'puzzle3d';
+    const effectiveBaseCount = (!isPuzzle && totalSlices > 1)
+      ? Math.min(baseLayersCfg, totalSlices - 1)
+      : baseLayersCfg;
+    const isBaseLayer = !isPuzzle && sIdx < effectiveBaseCount;
+
+    let newUnsplit = [];
+    let extraEngrave = [];
+    slice.hasFrameWindow = false;
+    slice.isSolidFrameBase = false;
+
+    const ornStyle = (mode === 'engrave_on_base' && (!state.slicerFrameStyle || state.slicerFrameStyle === 'none'))
+      ? 'double_line'
+      : (state.slicerFrameStyle || 'none');
+    const ornLoops = generateSlicerFrameOrnamentalLoops2D(fDims, ornStyle);
+
+    if (mode === 'all_layers_ring' || (mode === 'base_and_ring' && (!isBaseLayer || totalSlices === 1))) {
+      // Marco hueco alrededor de la lasca + islas del modelo en su interior
+      slice.hasFrameWindow = true;
+      newUnsplit.push(outerFrameLoop, innerWindowHoleLoop);
+      if (keyholeLoop) newUnsplit.push(keyholeLoop);
+      slice.modelLoops.forEach((ml) => {
+        newUnsplit.push({
+          points: ml.points,
+          absArea: ml.absArea,
+          signedArea: ml.signedArea,
+          isHole: ml.isHole
+        });
+      });
+      extraEngrave = ornLoops;
+    } else if (mode === 'base_and_ring' && isBaseLayer) {
+      // Placa base sólida inferior (#1..N) donde apoyan tanto el marco como las islas del modelo
+      slice.isSolidFrameBase = true;
+      newUnsplit.push(outerFrameLoop);
+      if (keyholeLoop) newUnsplit.push(keyholeLoop);
+      // Grabar en verde la silueta de apoyo de la propia capa #1 sobre la placa base
+      slice.modelLoops.forEach((ml) => {
+        if (!ml.isHole) {
+          extraEngrave.push({
+            points: ml.points,
+            absArea: ml.absArea,
+            signedArea: ml.signedArea,
+            isHole: false,
+            isFrameEngrave: true
+          });
+        }
+      });
+      extraEngrave = extraEngrave.concat(ornLoops);
+    } else if (mode === 'base_plate_only' || mode === 'engrave_on_base') {
+      if (isBaseLayer || totalSlices === 1) {
+        slice.isSolidFrameBase = true;
+        newUnsplit.push(outerFrameLoop);
+        if (keyholeLoop) newUnsplit.push(keyholeLoop);
+        if (totalSlices === 1) {
+          // Si solo hay 1 capa, conservamos los huecos internos de la pieza dentro de la placa
+          slice.modelLoops.forEach((ml) => {
+            if (ml.isHole) {
+              newUnsplit.push({
+                points: ml.points,
+                absArea: ml.absArea,
+                signedArea: ml.signedArea,
+                isHole: true
+              });
+            }
+          });
+        } else {
+          // Grabar sobre la peana la huella de contacto de la figura 3D
+          slice.modelLoops.forEach((ml) => {
+            if (!ml.isHole) {
+              extraEngrave.push({
+                points: ml.points,
+                absArea: ml.absArea,
+                signedArea: ml.signedArea,
+                isHole: false,
+                isFrameEngrave: true
+              });
+            }
+          });
+        }
+        extraEngrave = extraEngrave.concat(ornLoops);
+      } else {
+        // Las capas superiores mantienen únicamente la geometría exenta del modelo 3D
+        newUnsplit = slice.modelLoops.map((ml) => ({
+          points: ml.points,
+          absArea: ml.absArea,
+          signedArea: ml.signedArea,
+          isHole: ml.isHole
+        }));
+      }
+    } else if (mode === 'negative_mold') {
+      // Molde Negativo / Vaciado 3D: la placa del marco es sólida y las islas del modelo se vacían como huecos interiores
+      slice.hasFrameWindow = false;
+      newUnsplit.push(outerFrameLoop);
+      if (keyholeLoop) newUnsplit.push(keyholeLoop);
+      slice.modelLoops.forEach((ml) => {
+        const revPts = ml.points.slice().reverse();
+        newUnsplit.push({
+          points: revPts,
+          absArea: ml.absArea,
+          signedArea: -ml.signedArea,
+          isHole: !ml.isHole
+        });
+      });
+      extraEngrave = ornLoops;
+    }
+
+    slice.unsplitLoops = newUnsplit;
+    slice.engraveLoops = slice.baseEngraveLoops.concat(extraEngrave);
+    if (extraEngrave.length > 0 && !slice.engraveStyle) {
+      slice.engraveStyle = 'vector_outline';
+    }
+  });
+
+  syncSlicerFrameUI();
+
+  if (triggerRender) {
+    applyModelSplitToExistingSlices(false);
+    build3DSlicesMesh();
+    if (state.nestingEnabled) {
+      recomputeBoardNesting();
+    }
+    renderSliceStripUI();
+    update2DInspectorHeader();
+    render2DSlice();
+  }
+}
+
+function syncSlicerFrameUI() {
+  const chkSidebar = document.getElementById('slicerFrameEnabledCheck');
+  const chkModal = document.getElementById('modalSlicerFrameCheck');
+  const panel = document.getElementById('slicerFrameConfigPanel');
+  const baseLayersRow = document.getElementById('slicerFrameBaseLayersRow');
+  const badge = document.getElementById('slicerFrameSummaryBadge');
+
+  if (chkSidebar) chkSidebar.checked = Boolean(state.slicerFrameEnabled);
+  if (chkModal) chkModal.checked = Boolean(state.slicerFrameEnabled);
+  if (panel) panel.classList.toggle('hidden', !state.slicerFrameEnabled);
+
+  const setVal = (id, v) => {
+    const el = document.getElementById(id);
+    if (el) el.value = v;
+  };
+  const setChk = (id, v) => {
+    const el = document.getElementById(id);
+    if (el) el.checked = Boolean(v);
+  };
+
+  setVal('slicerFrameShapeSelect', state.slicerFrameShape);
+  setVal('slicerFrameModeSelect', state.slicerFrameMode);
+  setVal('slicerFrameStyleSelect', state.slicerFrameStyle);
+  setVal('slicerFrameThicknessInput', state.slicerFrameThicknessMM);
+  setVal('slicerFrameMarginInput', state.slicerFrameMarginMM);
+  setVal('slicerFrameRadiusInput', state.slicerFrameRadiusMM);
+  setVal('slicerFrameBaseLayersInput', state.slicerFrameBaseLayers);
+  setChk('slicerFrameKeyholeCheck', state.slicerFrameKeyhole);
+  setVal('slicerFrameKeyholeDiamInput', state.slicerFrameKeyholeDiamMM);
+
+  const usesBaseLayers = (
+    state.slicerFrameMode === 'base_and_ring' ||
+    state.slicerFrameMode === 'base_plate_only' ||
+    state.slicerFrameMode === 'engrave_on_base'
+  );
+  if (baseLayersRow) baseLayersRow.classList.toggle('hidden', !usesBaseLayers);
+
+  if (badge) {
+    if (!state.slicerFrameEnabled) {
+      badge.textContent = 'Sin marco exterior (silueta directa del modelo 3D)';
+    } else {
+      const fDims = getSlicerFrameDimensionsForAxis(state.axis);
+      const modeNames = {
+        base_and_ring: 'Base #' + state.slicerFrameBaseLayers + ' + Marco 3D',
+        all_layers_ring: 'Marco Hueco en Todas las Capas',
+        base_plate_only: 'Peana / Base en #' + state.slicerFrameBaseLayers + ' capa(s)',
+        negative_mold: 'Molde Negativo Vaciado',
+        engrave_on_base: 'Placa Base + Orla Grabada'
+      };
+      badge.innerHTML =
+        '🖼️ Exterior marco: <strong>' + fDims.outerW.toFixed(1) + ' × ' + fDims.outerH.toFixed(1) + ' mm</strong> · ' +
+        (modeNames[state.slicerFrameMode] || 'Marco 3D');
+    }
+  }
+
+  // Actualizar etiqueta global de dimensiones si está disponible
+  const totalBadge = document.getElementById('modelTotalDimsBadge');
+  if (totalBadge && state.dimsMM) {
+    if (state.slicerFrameEnabled) {
+      const fDims = getSlicerFrameDimensionsForAxis(state.axis);
+      totalBadge.textContent =
+        'Pieza: ' + state.dimsMM.x.toFixed(1) + '×' + state.dimsMM.y.toFixed(1) + '×' + state.dimsMM.z.toFixed(1) +
+        ' mm (Con Marco: ' + fDims.outerW.toFixed(1) + '×' + fDims.outerH.toFixed(1) + ' mm)';
+    } else {
+      totalBadge.textContent =
+        'Pieza: ' + state.dimsMM.x.toFixed(1) + ' × ' + state.dimsMM.y.toFixed(1) + ' × ' + state.dimsMM.z.toFixed(1) + ' mm';
+    }
+  }
+}
+
+function setSlicerFrameEnabled(val) {
+  state.slicerFrameEnabled = Boolean(val);
+  applySlicerFrameToExistingSlices(true);
+}
+
+function onSlicerFrameSettingsChange() {
+  const shapeEl = document.getElementById('slicerFrameShapeSelect');
+  const modeEl = document.getElementById('slicerFrameModeSelect');
+  const styleEl = document.getElementById('slicerFrameStyleSelect');
+  const thEl = document.getElementById('slicerFrameThicknessInput');
+  const mgEl = document.getElementById('slicerFrameMarginInput');
+  const radEl = document.getElementById('slicerFrameRadiusInput');
+  const baseEl = document.getElementById('slicerFrameBaseLayersInput');
+  const khCheck = document.getElementById('slicerFrameKeyholeCheck');
+  const khDiam = document.getElementById('slicerFrameKeyholeDiamInput');
+
+  if (shapeEl) state.slicerFrameShape = shapeEl.value;
+  if (modeEl) state.slicerFrameMode = modeEl.value;
+  if (styleEl) state.slicerFrameStyle = styleEl.value;
+  if (thEl) state.slicerFrameThicknessMM = Math.max(1.0, Math.min(150, parseFloat(thEl.value) || 8.0));
+  if (mgEl) {
+    const mVal = parseFloat(mgEl.value);
+    if (Number.isFinite(mVal)) state.slicerFrameMarginMM = Math.max(-50, Math.min(200, mVal));
+  }
+  if (radEl) {
+    const rVal = parseFloat(radEl.value);
+    if (Number.isFinite(rVal)) state.slicerFrameRadiusMM = Math.max(0, Math.min(200, rVal));
+  }
+  if (baseEl) state.slicerFrameBaseLayers = Math.max(1, Math.min(30, parseInt(baseEl.value, 10) || 1));
+  if (khCheck) state.slicerFrameKeyhole = Boolean(khCheck.checked);
+  if (khDiam) state.slicerFrameKeyholeDiamMM = Math.max(1.5, Math.min(40, parseFloat(khDiam.value) || 5.0));
+
+  applySlicerFrameToExistingSlices(true);
+}
+
+function setSlicerFramePreset(shape, mode, thicknessMM, marginMM, radiusMM) {
+  state.slicerFrameEnabled = true;
+  state.slicerFrameShape = shape;
+  state.slicerFrameMode = mode;
+  state.slicerFrameThicknessMM = thicknessMM;
+  state.slicerFrameMarginMM = marginMM;
+  state.slicerFrameRadiusMM = radiusMM;
+  applySlicerFrameToExistingSlices(true);
+}
+
+if (typeof window !== 'undefined') {
+  window.getSlicerFrameDimensionsForAxis = getSlicerFrameDimensionsForAxis;
+  window.applySlicerFrameToExistingSlices = applySlicerFrameToExistingSlices;
+  window.syncSlicerFrameUI = syncSlicerFrameUI;
+  window.setSlicerFrameEnabled = setSlicerFrameEnabled;
+  window.onSlicerFrameSettingsChange = onSlicerFrameSettingsChange;
+  window.setSlicerFramePreset = setSlicerFramePreset;
+}
 
 
-</script>
+
+
+  </script>
   <script>
 /**
  * LayerStudio 3D - 2D Board Nesting Engine (MaxRects)
@@ -3167,7 +3795,7 @@ function isPointInIslandMaterial(pt, outerPts, holeLoops) {
 }
 
 // Recorta las polilíneas de una lasca adyacente (superior o inferior) exclusivamente dentro de una isla
-function getGuidePolylinesForIsland(outerPts, holeLoops, guideSlice) {
+function getGuidePolylinesForIsland(outerPts, holeLoops, guideSlice, isFrameRingIsland = false) {
   const guideLoops = guideSlice ? (guideSlice.unsplitLoops || guideSlice.loops) : null;
   if (!guideLoops) return [];
   const allPolylines = [];
@@ -3181,6 +3809,8 @@ function getGuidePolylinesForIsland(outerPts, holeLoops, guideSlice) {
   };
 
   guideLoops.forEach((loop) => {
+    if (loop.isFrameOuter) return;
+    if (loop.isFrameInner && isFrameRingIsland) return;
     if (state.guideOnlyOuter && loop.isHole) return;
     const pts = loop.points;
     if (!pts || pts.length < 3) return;
@@ -3602,9 +4232,15 @@ function extractIslandsFromSlices(targetSlices) {
       // Varillas que caen dentro de esta isla
       const islandRods = sliceRods.filter((r) => isPointInIslandMaterial(r, outer.points, islandHoles));
 
+      // Vectores de grabado u orla de marco que caen dentro de esta isla
+      const islandEngraveLoops = (slice.engraveLoops || []).filter((el) =>
+        el && el.points && el.points.length >= 3 && isPointInIslandMaterial(el.points[0], outer.points, islandHoles)
+      );
+
       // Polilíneas de guía superior (#N+1) e inferior (#N-1) recortadas a esta isla
-      const upperPolys = nextSlice ? getGuidePolylinesForIsland(outer.points, islandHoles, nextSlice) : [];
-      const lowerPolys = prevSlice ? getGuidePolylinesForIsland(outer.points, islandHoles, prevSlice) : [];
+      const isFrameRingIsl = Boolean(outer.isFrameLoop && slice.hasFrameWindow);
+      const upperPolys = nextSlice ? getGuidePolylinesForIsland(outer.points, islandHoles, nextSlice, isFrameRingIsl) : [];
+      const lowerPolys = prevSlice ? getGuidePolylinesForIsland(outer.points, islandHoles, prevSlice, isFrameRingIsl) : [];
 
       let customCode = null;
       if (isSplitMulti && outer.sectorCode) {
@@ -3631,6 +4267,7 @@ function extractIslandsFromSlices(targetSlices) {
         outerArea: outer.absArea,
         holes: islandHoles,
         rods: islandRods,
+        engraveLoops: islandEngraveLoops,
         upperPolys: upperPolys,
         lowerPolys: lowerPolys,
         bounds: bounds,
@@ -4109,6 +4746,10 @@ function packIslandsIntoBoards(islands, boardW, boardH, margin, spacing, allowRo
     const placedOuter = island.outerPoints.map(transformPt);
     const placedHoles = island.holes.map((h) => ({ points: h.points.map(transformPt), absArea: h.absArea }));
     const placedRods = island.rods.map(transformPt);
+    const placedEngraves = (island.engraveLoops || []).map((el) => ({
+      points: el.points.map(transformPt),
+      isHole: Boolean(el.isHole)
+    }));
 
     // Calcular el encaje exacto del texto en la orientación final de la isla sobre el tablero
     const placedTextLayout = computeOptimalIslandTextLayout(placedOuter, placedHoles, placedRods, island);
@@ -4126,6 +4767,7 @@ function packIslandsIntoBoards(islands, boardW, boardH, margin, spacing, allowRo
       outerPoints: placedOuter,
       holes: placedHoles,
       rods: placedRods,
+      engraveLoops: placedEngraves,
       upperPolys: island.upperPolys.map((poly) => poly.map(transformPt)),
       lowerPolys: island.lowerPolys.map((poly) => poly.map(transformPt)),
       textLayout: placedTextLayout
@@ -4289,7 +4931,7 @@ function selectActiveBoard(bIdx) {
   render2DSlice();
 }
 
-</script>
+  </script>
   <script>
 /**
  * LayerStudio 3D - Board Inspector & Vector-Illustrated Step-by-Step Assembly Guide
@@ -6304,7 +6946,7 @@ if (typeof window !== 'undefined') {
 }
 
 
-</script>
+  </script>
   <script>
 /**
  * LayerStudio 3D - 2D Interactive Canvas Inspector & Slice Strip
@@ -6490,6 +7132,11 @@ function getModelBounds2D(axisOverride) {
   }
   w = Math.max(1, Number(w) || 100);
   h = Math.max(1, Number(h) || 100);
+  if (state.slicerFrameEnabled && typeof getSlicerFrameDimensionsForAxis === 'function') {
+    const fDims = getSlicerFrameDimensionsForAxis(ax);
+    w = Math.max(w, fDims.outerW);
+    h = Math.max(h, fDims.outerH);
+  }
   return {
     minX: -w / 2,
     minY: -h / 2,
@@ -6743,6 +7390,26 @@ function render2DBoard(ctx, canvas) {
     pl.holes.forEach((h) => {
       drawContourWithTabsOnCanvas(ctx, h.points, true, '#38bdf8', 1.4, toScreenX, toScreenY);
     });
+
+    // Grabado vectorial u orla de marco 3D perteneciente a esta isla
+    if (pl.engraveLoops && pl.engraveLoops.length > 0) {
+      ctx.save();
+      ctx.beginPath();
+      pl.engraveLoops.forEach((el) => {
+        if (!el.points || el.points.length < 3) return;
+        el.points.forEach((pt, i) => {
+          if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+          else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+        });
+        ctx.closePath();
+      });
+      ctx.fillStyle = 'rgba(16, 185, 129, 0.30)';
+      ctx.fill('evenodd');
+      ctx.strokeStyle = '#10b981';
+      ctx.lineWidth = 1.15;
+      ctx.stroke();
+      ctx.restore();
+    }
 
     // Guía inferior (#N-1) si está activa
     if (state.includePrevSliceGuide && pl.lowerPolys.length > 0) {
@@ -7242,7 +7909,7 @@ function updateSelectedCountBadge() {
   document.getElementById('selectedCountBadge').textContent = sel + ' / ' + state.slices.length;
 }
 
-</script>
+  </script>
   <script>
 /**
  * LayerStudio 3D - CAD/CAM Exporters (SVG, DXF, STL, ZIP, LASCA)
@@ -7548,6 +8215,7 @@ function generateBoardSVG(board) {
   const outerPaths = [];
   const holePaths = [];
   const rodCircles = [];
+  let boardEngravePath = '';
   let upperGuidePath = '';
   let lowerGuidePath = '';
   const islandLabels = [];
@@ -7583,6 +8251,13 @@ function generateBoardSVG(board) {
     pl.rods.forEach((r) => {
       rodCircles.push({ cx: toX(r.x), cy: toY(r.y) });
     });
+
+    if (pl.engraveLoops && pl.engraveLoops.length > 0) {
+      pl.engraveLoops.forEach((el) => {
+        if (!el.points || el.points.length < 3) return;
+        boardEngravePath += 'M ' + el.points.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z ';
+      });
+    }
 
     if (state.includeNextSliceGuide && pl.upperPolys.length > 0) {
       pl.upperPolys.forEach((poly) => {
@@ -7654,6 +8329,12 @@ function generateBoardSVG(board) {
     lines.push('  </g>');
   }
 
+  if (boardEngravePath.trim().length > 0) {
+    lines.push('  <g id="GRABADO_VECTORIAL_MARCO_TABLERO" fill="#008800" fill-opacity="0.22" fill-rule="evenodd" stroke="#008800" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    lines.push('    <path id="grabado_tablero_trazos" d="' + boardEngravePath.trim() + '" vector-effect="non-scaling-stroke" />');
+    lines.push('  </g>');
+  }
+
   if (lowerGuidePath.trim().length > 0) {
     const lowerDashAttr = getSvgDashAttr(state.lowerGuideStyle);
     lines.push('  <g id="GUIA_INFERIOR_TABLERO" fill="none" stroke="#9900ff" stroke-width="' + strokeMm + '"' + lowerDashAttr + ' stroke-linecap="round" stroke-linejoin="round">');
@@ -7691,6 +8372,26 @@ function generateBoardDXF(board) {
   board.placements.forEach((pl) => {
     pushLoopLinesWithTabsDXF(dxf, pl.outerPoints, false, 'CORTE_EXTERIOR', '1', 0, 0);
     pl.holes.forEach((h) => pushLoopLinesWithTabsDXF(dxf, h.points, true, 'CORTE_INTERIOR', '5', 0, 0));
+    if (pl.engraveLoops && pl.engraveLoops.length > 0) {
+      pl.engraveLoops.forEach((el) => {
+        if (!el.points || el.points.length < 3) return;
+        for (let i = 0, n = el.points.length; i < n; i++) {
+          const p1 = el.points[i];
+          const p2 = el.points[(i + 1) % n];
+          dxf.push(
+            '0', 'LINE',
+            '8', 'GRABADO_VECTORIAL',
+            '62', '3',
+            '10', p1.x.toFixed(4),
+            '20', p1.y.toFixed(4),
+            '30', '0.0',
+            '11', p2.x.toFixed(4),
+            '21', p2.y.toFixed(4),
+            '31', '0.0'
+          );
+        }
+      });
+    }
 
     if (state.includePrevSliceGuide && pl.lowerPolys.length > 0) {
       pl.lowerPolys.forEach((poly) => {
@@ -7781,6 +8482,27 @@ function generateSliceDXF(slice, idx) {
     const color = loop.isHole ? '5' : '1';
     pushLoopLinesWithTabsDXF(dxf, loop.points, loop.isHole, layer, color, ox, oy);
   });
+
+  if (slice.engraveLoops && slice.engraveLoops.length > 0) {
+    slice.engraveLoops.forEach((el) => {
+      if (!el.points || el.points.length < 3) return;
+      for (let i = 0, n = el.points.length; i < n; i++) {
+        const p1 = el.points[i];
+        const p2 = el.points[(i + 1) % n];
+        dxf.push(
+          '0', 'LINE',
+          '8', 'GRABADO_VECTORIAL',
+          '62', '3',
+          '10', (p1.x - ox).toFixed(4),
+          '20', (p1.y - oy).toFixed(4),
+          '30', '0.0',
+          '11', (p2.x - ox).toFixed(4),
+          '21', (p2.y - oy).toFixed(4),
+          '31', '0.0'
+        );
+      }
+    });
+  }
 
   // Incluir guía de la lámina INFERIOR (#N-1) en capa independiente DXF si está activada
   if (lowerSlice && lowerSlice.loops) {
@@ -7950,6 +8672,7 @@ function openExportModal() {
 
   updateFilteredIslandsUI();
   syncHoldingTabsUI();
+  if (typeof syncSlicerFrameUI === 'function') syncSlicerFrameUI();
   const subOpts = document.getElementById('modalNestingSubOptions');
   if (subOpts) subOpts.classList.toggle('hidden', !state.nestingEnabled);
   syncBoardInputsUI();
@@ -8227,6 +8950,16 @@ function exportProjectFile() {
     nestEngraveGuideType: state.nestEngraveGuideType,
     rodCount: state.rodCount,
     rodDiameter: state.rodDiameter,
+    slicerFrameEnabled: state.slicerFrameEnabled,
+    slicerFrameShape: state.slicerFrameShape,
+    slicerFrameMode: state.slicerFrameMode,
+    slicerFrameStyle: state.slicerFrameStyle,
+    slicerFrameThicknessMM: state.slicerFrameThicknessMM,
+    slicerFrameMarginMM: state.slicerFrameMarginMM,
+    slicerFrameRadiusMM: state.slicerFrameRadiusMM,
+    slicerFrameBaseLayers: state.slicerFrameBaseLayers,
+    slicerFrameKeyhole: state.slicerFrameKeyhole,
+    slicerFrameKeyholeDiamMM: state.slicerFrameKeyholeDiamMM,
     tabsEnabled: state.tabsEnabled,
     tabMode: state.tabMode,
     tabCount: state.tabCount,
@@ -8278,6 +9011,17 @@ function importProjectFile(file) {
       state.thickness = data.thickness || 5;
       state.rodCount = data.rodCount || 0;
       state.rodDiameter = data.rodDiameter || 4;
+      if (typeof data.slicerFrameEnabled === 'boolean') state.slicerFrameEnabled = data.slicerFrameEnabled;
+      if (data.slicerFrameShape) state.slicerFrameShape = data.slicerFrameShape;
+      if (data.slicerFrameMode) state.slicerFrameMode = data.slicerFrameMode;
+      if (data.slicerFrameStyle) state.slicerFrameStyle = data.slicerFrameStyle;
+      if (typeof data.slicerFrameThicknessMM === 'number') state.slicerFrameThicknessMM = data.slicerFrameThicknessMM;
+      if (typeof data.slicerFrameMarginMM === 'number') state.slicerFrameMarginMM = data.slicerFrameMarginMM;
+      if (typeof data.slicerFrameRadiusMM === 'number') state.slicerFrameRadiusMM = data.slicerFrameRadiusMM;
+      if (typeof data.slicerFrameBaseLayers === 'number') state.slicerFrameBaseLayers = data.slicerFrameBaseLayers;
+      if (typeof data.slicerFrameKeyhole === 'boolean') state.slicerFrameKeyhole = data.slicerFrameKeyhole;
+      if (typeof data.slicerFrameKeyholeDiamMM === 'number') state.slicerFrameKeyholeDiamMM = data.slicerFrameKeyholeDiamMM;
+      if (typeof syncSlicerFrameUI === 'function') syncSlicerFrameUI();
       if (typeof data.tabsEnabled === 'boolean') state.tabsEnabled = data.tabsEnabled;
       if (data.tabMode === 'count' || data.tabMode === 'spacing') state.tabMode = data.tabMode;
       if (typeof data.tabCount === 'number') state.tabCount = data.tabCount;
@@ -8365,7 +9109,7 @@ function importProjectFile(file) {
   reader.readAsText(file);
 }
 
-</script>
+  </script>
   <script>
 /**
  * LayerStudio 3D — Vectorizador Automático 2D (PNG / BMP / JPG / WEBP -> SVG / DXF de Corte y Grabado Láser + Relieve 3D)
@@ -10833,8 +11577,10 @@ function applyVectorizedImageToLayerStudio(asReliefMultilayer = false) {
       sliceAxis: 'z',
       selected: true,
       rawLoops: baseCutLoops,
+      modelLoops: baseCutLoops.slice(),
       unsplitLoops: baseCutLoops,
       loops: baseCutLoops.slice(),
+      baseEngraveLoops: engraveLoopsCopy.slice(),
       engraveLoops: engraveLoopsCopy,
       fineEdgeLoops: fineEdgeLoopsCopy,
       hatchPolylines: res.hatchPolylines ? res.hatchPolylines.slice() : [],
@@ -10854,8 +11600,10 @@ function applyVectorizedImageToLayerStudio(asReliefMultilayer = false) {
       sliceAxis: 'z',
       selected: true,
       rawLoops: baseCutLoops,
+      modelLoops: baseCutLoops.slice(),
       unsplitLoops: baseCutLoops,
       loops: baseCutLoops.slice(),
+      baseEngraveLoops: combinedEngrave.slice(),
       engraveLoops: combinedEngrave.slice(),
       fineEdgeLoops: [],
       hatchPolylines: [],
@@ -10911,14 +11659,17 @@ function applyVectorizedImageToLayerStudio(asReliefMultilayer = false) {
         .concat(frameReliefLoops);
 
       const zCoord = -totalZ * 0.5 + (k + 0.5) * thickMM;
+      const effLoopsK = loopsK.length > 0 ? loopsK : baseCutLoops;
       state.slices.push({
         index: k,
         coord: zCoord,
         sliceAxis: 'z',
         selected: true,
-        rawLoops: loopsK.length > 0 ? loopsK : baseCutLoops,
-        unsplitLoops: loopsK.length > 0 ? loopsK : baseCutLoops,
-        loops: loopsK.length > 0 ? loopsK.slice() : baseCutLoops.slice(),
+        rawLoops: effLoopsK,
+        modelLoops: effLoopsK.slice(),
+        unsplitLoops: effLoopsK,
+        loops: effLoopsK.slice(),
+        baseEngraveLoops: [],
         engraveLoops: [],
         fineEdgeLoops: [],
         hatchPolylines: [],
@@ -10929,6 +11680,9 @@ function applyVectorizedImageToLayerStudio(asReliefMultilayer = false) {
 
   state.activeSliceIndex = 0;
   if (typeof syncDimensionInputsUI === 'function') syncDimensionInputsUI();
+  if (typeof applySlicerFrameToExistingSlices === 'function') {
+    applySlicerFrameToExistingSlices(false);
+  }
   if (typeof applyModelSplitToExistingSlices === 'function') {
     applyModelSplitToExistingSlices(false);
   }
@@ -12153,7 +12907,7 @@ if (typeof window !== 'undefined') {
   });
 }
 
-</script>
+  </script>
 </head>
 <body class="h-screen w-screen flex flex-col">
 
@@ -12499,9 +13253,9 @@ if (typeof window !== 'undefined') {
         </div>
       </div>
 
-      <!-- 3. VISUALIZACIÓN 3D, GUÍAS Y SUJECIÓN POR PRESIÓN -->
+      <!-- 3. VISUALIZACIÓN 3D, MARCO CONFIGURABLE, GUÍAS Y SUJECIÓN POR PRESIÓN -->
       <div class="bg-slate-800/50 border border-slate-700/70 rounded-xl p-3 space-y-2.5">
-        <h2 class="text-xs font-bold uppercase tracking-wider text-sky-400">3. Vista 3D y Acabado de Corte</h2>
+        <h2 class="text-xs font-bold uppercase tracking-wider text-sky-400">3. Vista 3D, Marco y Acabado</h2>
 
         <div>
           <div class="flex justify-between text-xs mb-1">
@@ -12586,6 +13340,87 @@ if (typeof window !== 'undefined') {
             <div class="flex items-center justify-between text-xs">
               <span class="text-slate-400">Diámetro varilla (mm):</span>
               <input type="number" id="rodDiameterInput" value="4" min="1" max="50" step="0.5" onchange="onRodSettingsChange()" class="w-16 bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-xs text-right text-white" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Marco / Placa Exterior Configurable en el Laminador 3D -->
+        <div class="pt-2 border-t border-slate-700/60 space-y-2">
+          <label class="flex items-center justify-between text-xs font-semibold text-indigo-300 cursor-pointer" title="Añade un marco exterior 3D, placa base o molde negativo alrededor de las lascas del modelo 3D">
+            <span>🖼️ Añadir marco configurable 3D</span>
+            <input type="checkbox" id="slicerFrameEnabledCheck" onchange="setSlicerFrameEnabled(this.checked)" class="accent-indigo-500 w-3.5 h-3.5" />
+          </label>
+
+          <div id="slicerFrameConfigPanel" class="hidden space-y-2 bg-slate-900/85 border border-indigo-500/35 rounded-lg p-2.5">
+            <div class="flex items-center justify-between gap-2 text-[11px]">
+              <span class="text-slate-400 shrink-0">Forma:</span>
+              <select id="slicerFrameShapeSelect" onchange="onSlicerFrameSettingsChange()" class="w-full bg-slate-950 border border-slate-700 rounded px-1.5 py-1 text-[10px] text-indigo-200 font-semibold outline-none">
+                <option value="rounded_rect" selected>▭ Rectangular Redondeado / Recto</option>
+                <option value="circle">◯ Circular / Óvalo / Medallón</option>
+                <option value="octagon">⯃ Octogonal / Chaflán Clásico</option>
+                <option value="arch">🏛️ Arco Superior (Escudo / Placa)</option>
+                <option value="hexagon">⬡ Hexagonal</option>
+              </select>
+            </div>
+
+            <div class="flex items-center justify-between gap-2 text-[11px]">
+              <span class="text-slate-400 shrink-0">Modo 3D:</span>
+              <select id="slicerFrameModeSelect" onchange="onSlicerFrameSettingsChange()" class="w-full bg-slate-950 border border-slate-700 rounded px-1.5 py-1 text-[10px] text-sky-300 font-semibold outline-none">
+                <option value="base_and_ring" selected>🖼️ Base Sólida (#1..N) + Marco Hueco Superior</option>
+                <option value="all_layers_ring">🔲 Marco Hueco en Todas las Capas</option>
+                <option value="base_plate_only">🪨 Solo Placa Base / Peana en Primeras Capas</option>
+                <option value="negative_mold">🔄 Molde Negativo / Vaciado 3D en Placa</option>
+                <option value="engrave_on_base">🟢 Placa Base + Orla Decorativa Grabada</option>
+              </select>
+            </div>
+
+            <div class="flex items-center justify-between gap-2 text-[11px]">
+              <span class="text-slate-400 shrink-0">Orla (#008800):</span>
+              <select id="slicerFrameStyleSelect" onchange="onSlicerFrameSettingsChange()" class="w-full bg-slate-950 border border-slate-700 rounded px-1.5 py-1 text-[10px] text-emerald-300 outline-none">
+                <option value="none" selected>🚫 Sin grabado de orla (Solo corte)</option>
+                <option value="double_line">═ Doble Filete Clásico (#008800)</option>
+                <option value="ornate_corners">❖ Doble Filete + Esquinas Decorativas</option>
+                <option value="solid_band">▬ Banda Sólida Grabada (#008800)</option>
+              </select>
+            </div>
+
+            <div class="grid grid-cols-3 gap-1.5 text-[10px]">
+              <div class="bg-slate-950 border border-slate-800 rounded px-1.5 py-1" title="Ancho de la banda del marco en mm">
+                <span class="text-slate-400 block text-[9px]">Grosor (mm)</span>
+                <input type="number" id="slicerFrameThicknessInput" value="8.0" min="1" max="150" step="0.5" onchange="onSlicerFrameSettingsChange()" class="w-full bg-transparent text-indigo-300 font-bold text-right outline-none" />
+              </div>
+              <div class="bg-slate-950 border border-slate-800 rounded px-1.5 py-1" title="Separación interior entre el modelo 3D y la ventana del marco en mm">
+                <span class="text-slate-400 block text-[9px]">Margen (mm)</span>
+                <input type="number" id="slicerFrameMarginInput" value="5.0" min="-30" max="150" step="0.5" onchange="onSlicerFrameSettingsChange()" class="w-full bg-transparent text-sky-300 font-bold text-right outline-none" />
+              </div>
+              <div class="bg-slate-950 border border-slate-800 rounded px-1.5 py-1" title="Radio de esquina redondeada o chaflán (0 = esquina recta)">
+                <span class="text-slate-400 block text-[9px]">Radio (mm)</span>
+                <input type="number" id="slicerFrameRadiusInput" value="8.0" min="0" max="150" step="1" onchange="onSlicerFrameSettingsChange()" class="w-full bg-transparent text-amber-300 font-bold text-right outline-none" />
+              </div>
+            </div>
+
+            <div id="slicerFrameBaseLayersRow" class="flex items-center justify-between text-[11px] pt-0.5" title="Número de capas inferiores que actúan como placa de fondo maciza">
+              <span class="text-slate-300">Capas de placa base maciza (#1..N):</span>
+              <input type="number" id="slicerFrameBaseLayersInput" value="1" min="1" max="20" step="1" onchange="onSlicerFrameSettingsChange()" class="w-14 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-indigo-300 font-bold" />
+            </div>
+
+            <div class="flex items-center justify-between text-[11px] pt-0.5 border-t border-slate-800/80">
+              <label class="flex items-center gap-1.5 text-amber-300 cursor-pointer" title="Añade un taladro circular en el borde superior del marco para colgar en pared">
+                <input type="checkbox" id="slicerFrameKeyholeCheck" onchange="onSlicerFrameSettingsChange()" class="accent-amber-500" />
+                <span>🔑 Agujero colgar Ø (mm):</span>
+              </label>
+              <input type="number" id="slicerFrameKeyholeDiamInput" value="5.0" min="1.5" max="30" step="0.5" onchange="onSlicerFrameSettingsChange()" class="w-14 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-amber-300 font-bold" />
+            </div>
+
+            <!-- Presets rápidos de Marco 3D -->
+            <div class="grid grid-cols-3 gap-1 pt-0.5">
+              <button onclick="setSlicerFramePreset('rounded_rect', 'base_and_ring', 8, 5, 8)" class="py-1 bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/40 rounded text-[9px] text-indigo-200 font-semibold" title="Cuadro 3D con Base Sólida #1 + Marco Redondeado">🖼️ Cuadro 3D</button>
+              <button onclick="setSlicerFramePreset('circle', 'base_plate_only', 8, 6, 0)" class="py-1 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300" title="Peana Circular en la Base #1">🪨 Peana Circular</button>
+              <button onclick="setSlicerFramePreset('rounded_rect', 'negative_mold', 10, 6, 6)" class="py-1 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300" title="Molde Negativo Vaciado en Placa">🔄 Molde Negativo</button>
+            </div>
+
+            <div id="slicerFrameSummaryBadge" class="text-[10px] text-indigo-200 bg-indigo-950/40 border border-indigo-500/30 rounded p-1.5 text-center font-medium">
+              Sin marco exterior (silueta directa del modelo 3D)
             </div>
           </div>
         </div>
@@ -12980,6 +13815,10 @@ if (typeof window !== 'undefined') {
           <label class="flex items-center justify-between p-2 rounded-lg bg-slate-800/60 border border-slate-700 text-xs cursor-pointer">
             <span class="text-slate-300">Grabar etiqueta de código y cota en cada pieza</span>
             <input type="checkbox" id="modalIncludeLabelsCheck" checked onchange="setIncludeLabels(this.checked)" class="accent-sky-500" />
+          </label>
+          <label class="flex items-center justify-between p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/30 text-xs cursor-pointer">
+            <span class="font-semibold text-indigo-300">🖼️ Incluir Marco / Placa Configurable 3D</span>
+            <input type="checkbox" id="modalSlicerFrameCheck" onchange="setSlicerFrameEnabled(this.checked)" class="accent-indigo-500" />
           </label>
           <div class="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30 text-xs">
             <label class="flex items-center gap-2 text-yellow-300 font-semibold cursor-pointer">

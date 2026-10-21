@@ -617,7 +617,14 @@ function getSlicePlaneSpan2D(sliceAxis) {
 
 // Calcula la cuadrícula de subdivisión 2D (columnas, filas y coordenadas de líneas de corte)
 function getSliceSplitGrid(sliceAxis, sliceIndex = 0) {
-  const { spanX, spanY, labelX, labelY } = getSlicePlaneSpan2D(sliceAxis);
+  const { spanX: baseSpanX, spanY: baseSpanY, labelX, labelY } = getSlicePlaneSpan2D(sliceAxis);
+  let spanX = baseSpanX;
+  let spanY = baseSpanY;
+  if (state.slicerFrameEnabled && typeof getSlicerFrameDimensionsForAxis === 'function') {
+    const fDims = getSlicerFrameDimensionsForAxis(sliceAxis);
+    spanX = Math.max(spanX, fDims.outerW);
+    spanY = Math.max(spanY, fDims.outerH);
+  }
   let cols = 1;
   let rows = 1;
 
@@ -885,7 +892,10 @@ function applyModelSplitToExistingSlices(triggerRender = true) {
         points: l.points,
         absArea: l.absArea,
         signedArea: l.signedArea,
-        isHole: l.isHole
+        isHole: l.isHole,
+        isFrameLoop: Boolean(l.isFrameLoop),
+        isFrameOuter: Boolean(l.isFrameOuter),
+        isFrameInner: Boolean(l.isFrameInner)
       }));
       slice.splitGrid = null;
       slice.splitCutSeams = [];
@@ -902,6 +912,9 @@ function applyModelSplitToExistingSlices(triggerRender = true) {
         absArea: l.absArea,
         signedArea: l.signedArea,
         isHole: l.isHole,
+        isFrameLoop: Boolean(l.isFrameLoop),
+        isFrameOuter: Boolean(l.isFrameOuter),
+        isFrameInner: Boolean(l.isFrameInner),
         sectorCol: 0,
         sectorRow: 0,
         sectorCode: 'A1'
@@ -1070,7 +1083,10 @@ function rebuildGhostAndSlices() {
 
     state.thickness = state.puzzleMaterialThicknessMM;
     state.slices = slicesA.concat(slicesB);
-    state.slices.forEach((s) => { s.unsplitLoops = (s.loops || []).slice(); });
+    state.slices.forEach((s) => {
+      s.modelLoops = (s.loops || []).slice();
+      s.unsplitLoops = (s.loops || []).slice();
+    });
     state.filteredIslandsCount = totalRemovedIslands;
     updateFilteredIslandsUI();
     syncConstructionModeUI();
@@ -1105,6 +1121,7 @@ function rebuildGhostAndSlices() {
         puzzleCode: null,
         selected: true,
         rawLoops: rawLoops,
+        modelLoops: filteredRes.loops.slice(),
         unsplitLoops: filteredRes.loops.slice(),
         loops: filteredRes.loops,
         slots: []
@@ -1116,6 +1133,7 @@ function rebuildGhostAndSlices() {
     updateFilteredIslandsUI();
   }
 
+  applySlicerFrameToExistingSlices(false);
   applyModelSplitToExistingSlices(false);
 
   if (state.activeSliceIndex >= state.slices.length) {
@@ -1207,6 +1225,7 @@ function applyIslandFilterToExistingSlices() {
     const base = slice.rawLoops || slice.loops || [];
     const res = filterLoopsByMinIslandSize(base);
     slice.baseLoops = res.loops;
+    slice.modelLoops = res.loops.slice();
     slice.unsplitLoops = res.loops.slice();
     slice.loops = res.loops;
     totalRemoved += res.removedCount;
@@ -1217,10 +1236,14 @@ function applyIslandFilterToExistingSlices() {
     const slicesA = state.slices.filter((s) => s.puzzleSeries === 'A');
     const slicesB = state.slices.filter((s) => s.puzzleSeries === 'B');
     carveInterlockingPuzzleSlots(slicesA, slicesB, cfg.axisA, cfg.axisB);
-    state.slices.forEach((s) => { s.unsplitLoops = (s.loops || []).slice(); });
+    state.slices.forEach((s) => {
+      s.modelLoops = (s.loops || []).slice();
+      s.unsplitLoops = (s.loops || []).slice();
+    });
     syncConstructionModeUI();
   }
 
+  applySlicerFrameToExistingSlices(false);
   applyModelSplitToExistingSlices(false);
 
   state.filteredIslandsCount = totalRemoved;
@@ -1468,6 +1491,22 @@ function classifyLoopsOuterAndHoles(rawLoops) {
   return items;
 }
 
+// Determina si un hueco (hole) pertenece directamente a un contorno exterior (outer) sin estar dentro de otra isla menor
+function isHoleDirectChildOfOuter(hole, outer, allOuters) {
+  if (!hole || !outer || !hole.points || !hole.points.length || !outer.points || !outer.points.length) return false;
+  if (hole.absArea >= outer.absArea) return false;
+  if (!isPointInPolygon(hole.points[0], outer.points)) return false;
+  for (let k = 0; k < allOuters.length; k++) {
+    const other = allOuters[k];
+    if (other !== outer && other.absArea < outer.absArea && other.absArea > hole.absArea) {
+      if (isPointInPolygon(hole.points[0], other.points)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 // =========================================================================
 // CONSTRUCCIÓN DE LASCAS 3D EXTRUIDAS (APILADO 1 EJE, PUZZLE 3D Y BLOQUES MODULARES)
 // =========================================================================
@@ -1532,7 +1571,7 @@ function build3DSlicesMesh() {
           sh.closePath();
 
           holes.forEach((h) => {
-            if (isPointInPolygon(h.points[0], outer.points)) {
+            if (isHoleDirectChildOfOuter(h, outer, secGroup.outers)) {
               const path = new THREE.Path();
               h.points.forEach((pt, i) => {
                 if (i === 0) path.moveTo(pt.x, pt.y);
@@ -1595,7 +1634,7 @@ function build3DSlicesMesh() {
       sh.closePath();
 
       holes.forEach((h) => {
-        if (isPointInPolygon(h.points[0], outer.points)) {
+        if (isHoleDirectChildOfOuter(h, outer, outers)) {
           const path = new THREE.Path();
           h.points.forEach((pt, i) => {
             if (i === 0) path.moveTo(pt.x, pt.y);
@@ -1861,6 +1900,8 @@ function getGuidePolylinesForSlice(slice, guideSlice) {
   };
 
   guideLoops.forEach((loop) => {
+    if (loop.isFrameOuter) return;
+    if (loop.isFrameInner && slice && slice.hasFrameWindow) return;
     if (state.guideOnlyOuter && loop.isHole) return;
     const pts = loop.points;
     if (!pts || pts.length < 3) return;
@@ -2403,5 +2444,581 @@ if (typeof window !== 'undefined') {
   window.scaleModelToSplitMultiple = scaleModelToSplitMultiple;
   window.onSplitExplodeInput = onSplitExplodeInput;
 }
+
+// =========================================================================
+// MOTOR DE MARCO / PLACA EXTERIOR CONFIGURABLE EN EL LAMINADOR 3D
+// =========================================================================
+
+/**
+ * Calcula las dimensiones interiores (ventana) y exteriores (borde de corte)
+ * del marco configurable 3D en el plano perpendicular a sliceAxis.
+ */
+function getSlicerFrameDimensionsForAxis(sliceAxis) {
+  const { spanX: baseW, spanY: baseH } = getSlicePlaneSpan2D(sliceAxis || state.axis);
+  const thicknessMM = Math.max(1.0, Number(state.slicerFrameThicknessMM) || 8.0);
+  const marginMM = Number.isFinite(Number(state.slicerFrameMarginMM)) ? Number(state.slicerFrameMarginMM) : 5.0;
+  const radiusMM = Math.max(0, Number(state.slicerFrameRadiusMM) || 0);
+  const shape = state.slicerFrameShape || 'rounded_rect';
+
+  let innerW = Math.max(6.0, baseW + 2 * marginMM);
+  let innerH = Math.max(6.0, baseH + 2 * marginMM);
+
+  // Cuando el margen es positivo o cero en formas curvas/achaflanadas (círculo, octógono, hexágono, arco),
+  // garantizamos una holgura suave respecto a las aristas reales de las lascas del modelo 3D
+  if (marginMM >= 0 && (shape === 'circle' || shape === 'octagon' || shape === 'hexagon' || shape === 'arch') && Array.isArray(state.slices)) {
+    const ax = sliceAxis || state.axis;
+    let maxRadNorm = 1.0;
+    const rx0 = Math.max(3.0, innerW * 0.5);
+    const ry0 = Math.max(3.0, innerH * 0.5);
+    for (let sIdx = 0; sIdx < state.slices.length; sIdx++) {
+      const s = state.slices[sIdx];
+      if ((s.sliceAxis || state.axis) !== ax) continue;
+      const mLoops = s.modelLoops || s.baseLoops || [];
+      for (let lIdx = 0; lIdx < mLoops.length; lIdx++) {
+        const pts = mLoops[lIdx].points || [];
+        const step = Math.max(1, Math.floor(pts.length / 24));
+        for (let pIdx = 0; pIdx < pts.length; pIdx += step) {
+          const p = pts[pIdx];
+          const nx = Math.abs(p.x) / rx0;
+          const ny = Math.abs(p.y) / ry0;
+          let metric = Math.max(nx, ny);
+          if (shape === 'circle') {
+            metric = Math.hypot(nx, ny) * 1.03;
+          } else if (shape === 'octagon') {
+            metric = Math.max(nx, ny, (nx + ny) * 0.76);
+          } else if (shape === 'hexagon') {
+            metric = Math.max(nx, ny + nx * 0.52);
+          } else if (shape === 'arch' && p.y > 0) {
+            metric = Math.hypot(nx, ny) * 1.02;
+          }
+          if (metric > maxRadNorm) maxRadNorm = metric;
+        }
+      }
+    }
+    if (maxRadNorm > 1.0) {
+      const clampScale = Math.min(1.38, maxRadNorm);
+      innerW *= clampScale;
+      innerH *= clampScale;
+    }
+  }
+
+  const outerW = Math.max(innerW + 2.0, innerW + 2 * thicknessMM);
+  const outerH = Math.max(innerH + 2.0, innerH + 2 * thicknessMM);
+
+  return {
+    baseW,
+    baseH,
+    innerW,
+    innerH,
+    outerW,
+    outerH,
+    thicknessMM,
+    marginMM,
+    radiusMM,
+    shape
+  };
+}
+
+/**
+ * Genera un contorno cerrado 2D centrado en (0,0) con la forma del marco 3D
+ * ('rounded_rect', 'circle', 'octagon', 'arch', 'hexagon').
+ * En el plano 2D del laminador 3D, +X es derecha y +Y es arriba.
+ */
+function generateSlicerFrameContour2D(w, h, shape, cornerRadiusMM, wantHole = false) {
+  const hw = Math.max(2.0, w * 0.5);
+  const hh = Math.max(2.0, h * 0.5);
+  const r = Math.max(0, Math.min(Number(cornerRadiusMM) || 0, hw - 0.25, hh - 0.25));
+  const pts = [];
+
+  if (shape === 'circle') {
+    const segs = 72;
+    for (let i = 0; i < segs; i++) {
+      const a = (i / segs) * Math.PI * 2;
+      pts.push({ x: Math.cos(a) * hw, y: Math.sin(a) * hh });
+    }
+  } else if (shape === 'octagon') {
+    const ch = r > 0.2 ? Math.min(r, hw * 0.65, hh * 0.65) : Math.min(hw, hh) * 0.28;
+    pts.push(
+      { x: -hw + ch, y: -hh },
+      { x: hw - ch, y: -hh },
+      { x: hw, y: -hh + ch },
+      { x: hw, y: hh - ch },
+      { x: hw - ch, y: hh },
+      { x: -hw + ch, y: hh },
+      { x: -hw, y: hh - ch },
+      { x: -hw, y: -hh + ch }
+    );
+  } else if (shape === 'hexagon') {
+    pts.push(
+      { x: 0, y: -hh },
+      { x: hw, y: -hh * 0.5 },
+      { x: hw, y: hh * 0.5 },
+      { x: 0, y: hh },
+      { x: -hw, y: hh * 0.5 },
+      { x: -hw, y: -hh * 0.5 }
+    );
+  } else if (shape === 'arch') {
+    // Base inferior con esquinas redondeadas (y = -hh) y arco superior semicircular/elíptico (hacia y = +hh)
+    const rBot = Math.min(r, hw * 0.45, hh * 0.45);
+    const archH = Math.min(hw, hh * 0.85);
+    const archCenterY = hh - archH;
+
+    if (rBot <= 0.2) {
+      pts.push({ x: -hw, y: -hh }, { x: hw, y: -hh });
+    } else {
+      const arcSegs = 8;
+      // Esquina inferior izquierda (-hw + rBot, -hh + rBot) de PI a 1.5*PI
+      for (let i = 0; i <= arcSegs; i++) {
+        const a = Math.PI + (i / arcSegs) * (Math.PI * 0.5);
+        pts.push({ x: -hw + rBot + Math.cos(a) * rBot, y: -hh + rBot + Math.sin(a) * rBot });
+      }
+      // Esquina inferior derecha (hw - rBot, -hh + rBot) de 1.5*PI a 2*PI
+      for (let i = 0; i <= arcSegs; i++) {
+        const a = Math.PI * 1.5 + (i / arcSegs) * (Math.PI * 0.5);
+        pts.push({ x: hw - rBot + Math.cos(a) * rBot, y: -hh + rBot + Math.sin(a) * rBot });
+      }
+    }
+
+    // Arco superior desde ángulo 0 (derecha) hasta PI (izquierda) pasando por +hh (arriba)
+    const topSegs = 36;
+    for (let i = 0; i <= topSegs; i++) {
+      const a = (i / topSegs) * Math.PI;
+      pts.push({
+        x: Math.cos(a) * hw,
+        y: archCenterY + Math.sin(a) * archH
+      });
+    }
+  } else {
+    // 'rounded_rect' (Rectangular Redondeado o Recto si r === 0)
+    if (r <= 0.15) {
+      pts.push(
+        { x: -hw, y: -hh },
+        { x: hw, y: -hh },
+        { x: hw, y: hh },
+        { x: -hw, y: hh }
+      );
+    } else {
+      const segsPerCorner = 10;
+      const corners = [
+        { cx: hw - r, cy: -hh + r, a0: -Math.PI * 0.5, a1: 0 },
+        { cx: hw - r, cy: hh - r, a0: 0, a1: Math.PI * 0.5 },
+        { cx: -hw + r, cy: hh - r, a0: Math.PI * 0.5, a1: Math.PI },
+        { cx: -hw + r, cy: -hh + r, a0: Math.PI, a1: Math.PI * 1.5 }
+      ];
+      corners.forEach((c) => {
+        for (let i = 0; i <= segsPerCorner; i++) {
+          const a = c.a0 + (i / segsPerCorner) * (c.a1 - c.a0);
+          pts.push({
+            x: c.cx + Math.cos(a) * r,
+            y: c.cy + Math.sin(a) * r
+          });
+        }
+      });
+    }
+  }
+
+  let signed = computeSignedArea(pts);
+  const absArea = Math.abs(signed);
+  if ((!wantHole && signed < 0) || (wantHole && signed > 0)) {
+    pts.reverse();
+    signed = -signed;
+  }
+
+  return {
+    points: pts,
+    absArea,
+    signedArea: signed,
+    isHole: Boolean(wantHole),
+    isFrameLoop: true,
+    isFrameOuter: !wantHole,
+    isFrameInner: Boolean(wantHole)
+  };
+}
+
+/**
+ * Genera el taladro pasante superior de colgado (#0055ff) en la banda superior del marco 3D.
+ */
+function generateSlicerFrameKeyholeLoop2D(innerH, outerH, diamMM) {
+  const rad = Math.max(0.75, Math.min(25, (Number(diamMM) || 5.0) * 0.5));
+  const bandThickness = Math.max(2.0, (outerH - innerH) * 0.5);
+  const cy = (outerH * 0.5) - Math.max(rad + 1.2, bandThickness * 0.5);
+  const segs = 28;
+  const pts = [];
+  // Sentido horario (isHole = true)
+  for (let i = 0; i < segs; i++) {
+    const a = -((i / segs) * Math.PI * 2);
+    pts.push({ x: Math.cos(a) * rad, y: cy + Math.sin(a) * rad });
+  }
+  const signed = computeSignedArea(pts);
+  return {
+    points: pts,
+    absArea: Math.abs(signed),
+    signedArea: -Math.abs(signed),
+    isHole: true,
+    isFrameLoop: true
+  };
+}
+
+/**
+ * Genera los contornos de orla decorativa de grabado láser (#008800) sobre el marco 3D.
+ */
+function generateSlicerFrameOrnamentalLoops2D(fDims, effectiveStyle) {
+  const style = effectiveStyle || state.slicerFrameStyle || 'none';
+  if (style === 'none') return [];
+
+  const { innerW, innerH, outerW, outerH, thicknessMM, radiusMM, shape } = fDims;
+  const out = [];
+  const inset = Math.min(1.2, thicknessMM * 0.16);
+  const eOutW = Math.max(innerW + 0.8, outerW - 2 * inset);
+  const eOutH = Math.max(innerH + 0.8, outerH - 2 * inset);
+  const eInW = Math.max(4.0, innerW + 2 * inset);
+  const eInH = Math.max(4.0, innerH + 2 * inset);
+  const rOut = Math.max(0, radiusMM + thicknessMM - inset);
+  const rIn = Math.max(0, radiusMM + inset);
+
+  if (style === 'solid_band') {
+    const lOut = generateSlicerFrameContour2D(eOutW, eOutH, shape, rOut, false);
+    const lIn = generateSlicerFrameContour2D(eInW, eInH, shape, rIn, true);
+    lOut.isFrameEngrave = true;
+    lIn.isFrameEngrave = true;
+    out.push(lOut, lIn);
+    return out;
+  }
+
+  // 'double_line' o 'ornate_corners': dos filetes paralelos a lo largo de la banda del marco
+  const strokeW = Math.max(0.7, Math.min(2.0, thicknessMM * 0.22));
+  const f1Out = generateSlicerFrameContour2D(eOutW, eOutH, shape, rOut, false);
+  const f1In = generateSlicerFrameContour2D(Math.max(4, eOutW - 2 * strokeW), Math.max(4, eOutH - 2 * strokeW), shape, Math.max(0, rOut - strokeW), true);
+  f1Out.isFrameEngrave = true;
+  f1In.isFrameEngrave = true;
+  out.push(f1Out, f1In);
+
+  if (thicknessMM >= 3.2) {
+    const f2Out = generateSlicerFrameContour2D(eInW + 2 * strokeW, eInH + 2 * strokeW, shape, rIn + strokeW, false);
+    const f2In = generateSlicerFrameContour2D(eInW, eInH, shape, rIn, true);
+    f2Out.isFrameEngrave = true;
+    f2In.isFrameEngrave = true;
+    out.push(f2Out, f2In);
+  }
+
+  if (style === 'ornate_corners') {
+    const midW = (innerW + outerW) * 0.25;
+    const midH = (innerH + outerH) * 0.25;
+    const dSize = Math.max(1.2, Math.min(5.0, thicknessMM * 0.34));
+    const signs = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+    signs.forEach(([sx, sy]) => {
+      const cx = sx * (midW - (shape === 'circle' ? midW * 0.29 : radiusMM * 0.35));
+      const cy = sy * (midH - (shape === 'circle' ? midH * 0.29 : radiusMM * 0.35));
+      const dPts = [
+        { x: cx, y: cy - dSize },
+        { x: cx + dSize, y: cy },
+        { x: cx, y: cy + dSize },
+        { x: cx - dSize, y: cy }
+      ];
+      const sArea = Math.abs(computeSignedArea(dPts));
+      out.push({
+        points: dPts,
+        absArea: sArea,
+        signedArea: sArea,
+        isHole: false,
+        isFrameEngrave: true
+      });
+    });
+  }
+
+  return out;
+}
+
+/**
+ * Aplica el Marco / Placa Configurable 3D sobre todas las lascas del modelo (`state.slices`)
+ * sin necesidad de recalcular la intersección de triángulos 3D.
+ */
+function applySlicerFrameToExistingSlices(triggerRender = true) {
+  const totalSlices = state.slices.length;
+  const baseLayersCfg = Math.max(1, Math.min(30, parseInt(state.slicerFrameBaseLayers, 10) || 1));
+  const mode = state.slicerFrameMode || 'base_and_ring';
+
+  state.slices.forEach((slice, sIdx) => {
+    if (!slice.modelLoops) {
+      slice.modelLoops = (slice.baseLoops || slice.loops || []).filter((l) => !l.isFrameLoop).slice();
+    }
+    if (!slice.baseEngraveLoops) {
+      slice.baseEngraveLoops = (slice.engraveLoops || []).filter((l) => !l.isFrameEngrave).slice();
+    }
+
+    if (!state.slicerFrameEnabled) {
+      slice.hasFrameWindow = false;
+      slice.isSolidFrameBase = false;
+      slice.unsplitLoops = slice.modelLoops.map((l) => ({
+        points: l.points,
+        absArea: l.absArea,
+        signedArea: l.signedArea,
+        isHole: l.isHole
+      }));
+      slice.engraveLoops = slice.baseEngraveLoops.slice();
+      return;
+    }
+
+    const ax = slice.sliceAxis || state.axis;
+    const fDims = getSlicerFrameDimensionsForAxis(ax);
+    const { innerW, innerH, outerW, outerH, thicknessMM, radiusMM, shape } = fDims;
+
+    const outerFrameLoop = generateSlicerFrameContour2D(outerW, outerH, shape, radiusMM + thicknessMM, false);
+    const innerWindowHoleLoop = generateSlicerFrameContour2D(innerW, innerH, shape, radiusMM, true);
+    const keyholeLoop = state.slicerFrameKeyhole
+      ? generateSlicerFrameKeyholeLoop2D(innerH, outerH, state.slicerFrameKeyholeDiamMM)
+      : null;
+
+    const isPuzzle = state.constructionMode === 'puzzle3d';
+    const effectiveBaseCount = (!isPuzzle && totalSlices > 1)
+      ? Math.min(baseLayersCfg, totalSlices - 1)
+      : baseLayersCfg;
+    const isBaseLayer = !isPuzzle && sIdx < effectiveBaseCount;
+
+    let newUnsplit = [];
+    let extraEngrave = [];
+    slice.hasFrameWindow = false;
+    slice.isSolidFrameBase = false;
+
+    const ornStyle = (mode === 'engrave_on_base' && (!state.slicerFrameStyle || state.slicerFrameStyle === 'none'))
+      ? 'double_line'
+      : (state.slicerFrameStyle || 'none');
+    const ornLoops = generateSlicerFrameOrnamentalLoops2D(fDims, ornStyle);
+
+    if (mode === 'all_layers_ring' || (mode === 'base_and_ring' && (!isBaseLayer || totalSlices === 1))) {
+      // Marco hueco alrededor de la lasca + islas del modelo en su interior
+      slice.hasFrameWindow = true;
+      newUnsplit.push(outerFrameLoop, innerWindowHoleLoop);
+      if (keyholeLoop) newUnsplit.push(keyholeLoop);
+      slice.modelLoops.forEach((ml) => {
+        newUnsplit.push({
+          points: ml.points,
+          absArea: ml.absArea,
+          signedArea: ml.signedArea,
+          isHole: ml.isHole
+        });
+      });
+      extraEngrave = ornLoops;
+    } else if (mode === 'base_and_ring' && isBaseLayer) {
+      // Placa base sólida inferior (#1..N) donde apoyan tanto el marco como las islas del modelo
+      slice.isSolidFrameBase = true;
+      newUnsplit.push(outerFrameLoop);
+      if (keyholeLoop) newUnsplit.push(keyholeLoop);
+      // Grabar en verde la silueta de apoyo de la propia capa #1 sobre la placa base
+      slice.modelLoops.forEach((ml) => {
+        if (!ml.isHole) {
+          extraEngrave.push({
+            points: ml.points,
+            absArea: ml.absArea,
+            signedArea: ml.signedArea,
+            isHole: false,
+            isFrameEngrave: true
+          });
+        }
+      });
+      extraEngrave = extraEngrave.concat(ornLoops);
+    } else if (mode === 'base_plate_only' || mode === 'engrave_on_base') {
+      if (isBaseLayer || totalSlices === 1) {
+        slice.isSolidFrameBase = true;
+        newUnsplit.push(outerFrameLoop);
+        if (keyholeLoop) newUnsplit.push(keyholeLoop);
+        if (totalSlices === 1) {
+          // Si solo hay 1 capa, conservamos los huecos internos de la pieza dentro de la placa
+          slice.modelLoops.forEach((ml) => {
+            if (ml.isHole) {
+              newUnsplit.push({
+                points: ml.points,
+                absArea: ml.absArea,
+                signedArea: ml.signedArea,
+                isHole: true
+              });
+            }
+          });
+        } else {
+          // Grabar sobre la peana la huella de contacto de la figura 3D
+          slice.modelLoops.forEach((ml) => {
+            if (!ml.isHole) {
+              extraEngrave.push({
+                points: ml.points,
+                absArea: ml.absArea,
+                signedArea: ml.signedArea,
+                isHole: false,
+                isFrameEngrave: true
+              });
+            }
+          });
+        }
+        extraEngrave = extraEngrave.concat(ornLoops);
+      } else {
+        // Las capas superiores mantienen únicamente la geometría exenta del modelo 3D
+        newUnsplit = slice.modelLoops.map((ml) => ({
+          points: ml.points,
+          absArea: ml.absArea,
+          signedArea: ml.signedArea,
+          isHole: ml.isHole
+        }));
+      }
+    } else if (mode === 'negative_mold') {
+      // Molde Negativo / Vaciado 3D: la placa del marco es sólida y las islas del modelo se vacían como huecos interiores
+      slice.hasFrameWindow = false;
+      newUnsplit.push(outerFrameLoop);
+      if (keyholeLoop) newUnsplit.push(keyholeLoop);
+      slice.modelLoops.forEach((ml) => {
+        const revPts = ml.points.slice().reverse();
+        newUnsplit.push({
+          points: revPts,
+          absArea: ml.absArea,
+          signedArea: -ml.signedArea,
+          isHole: !ml.isHole
+        });
+      });
+      extraEngrave = ornLoops;
+    }
+
+    slice.unsplitLoops = newUnsplit;
+    slice.engraveLoops = slice.baseEngraveLoops.concat(extraEngrave);
+    if (extraEngrave.length > 0 && !slice.engraveStyle) {
+      slice.engraveStyle = 'vector_outline';
+    }
+  });
+
+  syncSlicerFrameUI();
+
+  if (triggerRender) {
+    applyModelSplitToExistingSlices(false);
+    build3DSlicesMesh();
+    if (state.nestingEnabled) {
+      recomputeBoardNesting();
+    }
+    renderSliceStripUI();
+    update2DInspectorHeader();
+    render2DSlice();
+  }
+}
+
+function syncSlicerFrameUI() {
+  const chkSidebar = document.getElementById('slicerFrameEnabledCheck');
+  const chkModal = document.getElementById('modalSlicerFrameCheck');
+  const panel = document.getElementById('slicerFrameConfigPanel');
+  const baseLayersRow = document.getElementById('slicerFrameBaseLayersRow');
+  const badge = document.getElementById('slicerFrameSummaryBadge');
+
+  if (chkSidebar) chkSidebar.checked = Boolean(state.slicerFrameEnabled);
+  if (chkModal) chkModal.checked = Boolean(state.slicerFrameEnabled);
+  if (panel) panel.classList.toggle('hidden', !state.slicerFrameEnabled);
+
+  const setVal = (id, v) => {
+    const el = document.getElementById(id);
+    if (el) el.value = v;
+  };
+  const setChk = (id, v) => {
+    const el = document.getElementById(id);
+    if (el) el.checked = Boolean(v);
+  };
+
+  setVal('slicerFrameShapeSelect', state.slicerFrameShape);
+  setVal('slicerFrameModeSelect', state.slicerFrameMode);
+  setVal('slicerFrameStyleSelect', state.slicerFrameStyle);
+  setVal('slicerFrameThicknessInput', state.slicerFrameThicknessMM);
+  setVal('slicerFrameMarginInput', state.slicerFrameMarginMM);
+  setVal('slicerFrameRadiusInput', state.slicerFrameRadiusMM);
+  setVal('slicerFrameBaseLayersInput', state.slicerFrameBaseLayers);
+  setChk('slicerFrameKeyholeCheck', state.slicerFrameKeyhole);
+  setVal('slicerFrameKeyholeDiamInput', state.slicerFrameKeyholeDiamMM);
+
+  const usesBaseLayers = (
+    state.slicerFrameMode === 'base_and_ring' ||
+    state.slicerFrameMode === 'base_plate_only' ||
+    state.slicerFrameMode === 'engrave_on_base'
+  );
+  if (baseLayersRow) baseLayersRow.classList.toggle('hidden', !usesBaseLayers);
+
+  if (badge) {
+    if (!state.slicerFrameEnabled) {
+      badge.textContent = 'Sin marco exterior (silueta directa del modelo 3D)';
+    } else {
+      const fDims = getSlicerFrameDimensionsForAxis(state.axis);
+      const modeNames = {
+        base_and_ring: 'Base #' + state.slicerFrameBaseLayers + ' + Marco 3D',
+        all_layers_ring: 'Marco Hueco en Todas las Capas',
+        base_plate_only: 'Peana / Base en #' + state.slicerFrameBaseLayers + ' capa(s)',
+        negative_mold: 'Molde Negativo Vaciado',
+        engrave_on_base: 'Placa Base + Orla Grabada'
+      };
+      badge.innerHTML =
+        '🖼️ Exterior marco: <strong>' + fDims.outerW.toFixed(1) + ' × ' + fDims.outerH.toFixed(1) + ' mm</strong> · ' +
+        (modeNames[state.slicerFrameMode] || 'Marco 3D');
+    }
+  }
+
+  // Actualizar etiqueta global de dimensiones si está disponible
+  const totalBadge = document.getElementById('modelTotalDimsBadge');
+  if (totalBadge && state.dimsMM) {
+    if (state.slicerFrameEnabled) {
+      const fDims = getSlicerFrameDimensionsForAxis(state.axis);
+      totalBadge.textContent =
+        'Pieza: ' + state.dimsMM.x.toFixed(1) + '×' + state.dimsMM.y.toFixed(1) + '×' + state.dimsMM.z.toFixed(1) +
+        ' mm (Con Marco: ' + fDims.outerW.toFixed(1) + '×' + fDims.outerH.toFixed(1) + ' mm)';
+    } else {
+      totalBadge.textContent =
+        'Pieza: ' + state.dimsMM.x.toFixed(1) + ' × ' + state.dimsMM.y.toFixed(1) + ' × ' + state.dimsMM.z.toFixed(1) + ' mm';
+    }
+  }
+}
+
+function setSlicerFrameEnabled(val) {
+  state.slicerFrameEnabled = Boolean(val);
+  applySlicerFrameToExistingSlices(true);
+}
+
+function onSlicerFrameSettingsChange() {
+  const shapeEl = document.getElementById('slicerFrameShapeSelect');
+  const modeEl = document.getElementById('slicerFrameModeSelect');
+  const styleEl = document.getElementById('slicerFrameStyleSelect');
+  const thEl = document.getElementById('slicerFrameThicknessInput');
+  const mgEl = document.getElementById('slicerFrameMarginInput');
+  const radEl = document.getElementById('slicerFrameRadiusInput');
+  const baseEl = document.getElementById('slicerFrameBaseLayersInput');
+  const khCheck = document.getElementById('slicerFrameKeyholeCheck');
+  const khDiam = document.getElementById('slicerFrameKeyholeDiamInput');
+
+  if (shapeEl) state.slicerFrameShape = shapeEl.value;
+  if (modeEl) state.slicerFrameMode = modeEl.value;
+  if (styleEl) state.slicerFrameStyle = styleEl.value;
+  if (thEl) state.slicerFrameThicknessMM = Math.max(1.0, Math.min(150, parseFloat(thEl.value) || 8.0));
+  if (mgEl) {
+    const mVal = parseFloat(mgEl.value);
+    if (Number.isFinite(mVal)) state.slicerFrameMarginMM = Math.max(-50, Math.min(200, mVal));
+  }
+  if (radEl) {
+    const rVal = parseFloat(radEl.value);
+    if (Number.isFinite(rVal)) state.slicerFrameRadiusMM = Math.max(0, Math.min(200, rVal));
+  }
+  if (baseEl) state.slicerFrameBaseLayers = Math.max(1, Math.min(30, parseInt(baseEl.value, 10) || 1));
+  if (khCheck) state.slicerFrameKeyhole = Boolean(khCheck.checked);
+  if (khDiam) state.slicerFrameKeyholeDiamMM = Math.max(1.5, Math.min(40, parseFloat(khDiam.value) || 5.0));
+
+  applySlicerFrameToExistingSlices(true);
+}
+
+function setSlicerFramePreset(shape, mode, thicknessMM, marginMM, radiusMM) {
+  state.slicerFrameEnabled = true;
+  state.slicerFrameShape = shape;
+  state.slicerFrameMode = mode;
+  state.slicerFrameThicknessMM = thicknessMM;
+  state.slicerFrameMarginMM = marginMM;
+  state.slicerFrameRadiusMM = radiusMM;
+  applySlicerFrameToExistingSlices(true);
+}
+
+if (typeof window !== 'undefined') {
+  window.getSlicerFrameDimensionsForAxis = getSlicerFrameDimensionsForAxis;
+  window.applySlicerFrameToExistingSlices = applySlicerFrameToExistingSlices;
+  window.syncSlicerFrameUI = syncSlicerFrameUI;
+  window.setSlicerFrameEnabled = setSlicerFrameEnabled;
+  window.onSlicerFrameSettingsChange = onSlicerFrameSettingsChange;
+  window.setSlicerFramePreset = setSlicerFramePreset;
+}
+
 
 

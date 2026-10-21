@@ -2464,8 +2464,10 @@ function applyVectorizedImageToLayerStudio(asReliefMultilayer = false) {
       sliceAxis: 'z',
       selected: true,
       rawLoops: baseCutLoops,
+      modelLoops: baseCutLoops.slice(),
       unsplitLoops: baseCutLoops,
       loops: baseCutLoops.slice(),
+      baseEngraveLoops: engraveLoopsCopy.slice(),
       engraveLoops: engraveLoopsCopy,
       fineEdgeLoops: fineEdgeLoopsCopy,
       hatchPolylines: res.hatchPolylines ? res.hatchPolylines.slice() : [],
@@ -2485,8 +2487,10 @@ function applyVectorizedImageToLayerStudio(asReliefMultilayer = false) {
       sliceAxis: 'z',
       selected: true,
       rawLoops: baseCutLoops,
+      modelLoops: baseCutLoops.slice(),
       unsplitLoops: baseCutLoops,
       loops: baseCutLoops.slice(),
+      baseEngraveLoops: combinedEngrave.slice(),
       engraveLoops: combinedEngrave.slice(),
       fineEdgeLoops: [],
       hatchPolylines: [],
@@ -2542,14 +2546,17 @@ function applyVectorizedImageToLayerStudio(asReliefMultilayer = false) {
         .concat(frameReliefLoops);
 
       const zCoord = -totalZ * 0.5 + (k + 0.5) * thickMM;
+      const effLoopsK = loopsK.length > 0 ? loopsK : baseCutLoops;
       state.slices.push({
         index: k,
         coord: zCoord,
         sliceAxis: 'z',
         selected: true,
-        rawLoops: loopsK.length > 0 ? loopsK : baseCutLoops,
-        unsplitLoops: loopsK.length > 0 ? loopsK : baseCutLoops,
-        loops: loopsK.length > 0 ? loopsK.slice() : baseCutLoops.slice(),
+        rawLoops: effLoopsK,
+        modelLoops: effLoopsK.slice(),
+        unsplitLoops: effLoopsK,
+        loops: effLoopsK.slice(),
+        baseEngraveLoops: [],
         engraveLoops: [],
         fineEdgeLoops: [],
         hatchPolylines: [],
@@ -2560,6 +2567,9 @@ function applyVectorizedImageToLayerStudio(asReliefMultilayer = false) {
 
   state.activeSliceIndex = 0;
   if (typeof syncDimensionInputsUI === 'function') syncDimensionInputsUI();
+  if (typeof applySlicerFrameToExistingSlices === 'function') {
+    applySlicerFrameToExistingSlices(false);
+  }
   if (typeof applyModelSplitToExistingSlices === 'function') {
     applyModelSplitToExistingSlices(false);
   }
