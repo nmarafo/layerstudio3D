@@ -1778,16 +1778,33 @@ function generateVectorizedImageDXF() {
   return dxf;
 }
 
+function triggerVectorizerFileDownload(blob, filename) {
+  if (typeof triggerBrowserDownload === 'function') {
+    triggerBrowserDownload(blob, filename);
+    return;
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  if (document.body) document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    if (document.body && a.parentNode === document.body) document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 4000);
+}
+
 function downloadVectorizedSVG() {
   const svg = generateVectorizedImageSVG();
   const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
-  triggerDownload(blob, (vec2dState.imageName || 'Imagen_Laser') + '_CORTE_Y_GRABADO.svg');
+  triggerVectorizerFileDownload(blob, (vec2dState.imageName || 'Imagen_Laser') + '_CORTE_Y_GRABADO.svg');
 }
 
 function downloadVectorizedDXF() {
   const dxf = generateVectorizedImageDXF();
   const blob = new Blob([dxf], { type: 'application/dxf;charset=utf-8' });
-  triggerDownload(blob, (vec2dState.imageName || 'Imagen_Laser') + '_CORTE_Y_GRABADO.dxf');
+  triggerVectorizerFileDownload(blob, (vec2dState.imageName || 'Imagen_Laser') + '_CORTE_Y_GRABADO.dxf');
 }
 
 // ============================================================================

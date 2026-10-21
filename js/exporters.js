@@ -624,12 +624,17 @@ function triggerBrowserDownload(blob, filename) {
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
-  document.body.appendChild(a);
+  if (document.body) document.body.appendChild(a);
   a.click();
   setTimeout(() => {
-    document.body.removeChild(a);
+    if (document.body && a.parentNode === document.body) document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }, 4000);
+}
+const triggerDownload = triggerBrowserDownload;
+if (typeof window !== 'undefined') {
+  window.triggerBrowserDownload = triggerBrowserDownload;
+  window.triggerDownload = triggerBrowserDownload;
 }
 
 function downloadCurrentSlice(format) {
