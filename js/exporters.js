@@ -1606,6 +1606,9 @@ function exportProjectFile() {
     filterSmallIslands: state.filterSmallIslands,
     minIslandSizeMM: state.minIslandSizeMM,
     minIslandCriteria: state.minIslandCriteria,
+    fillInternalHoles: state.fillInternalHoles,
+    fillHolesMode: state.fillHolesMode,
+    fillHolesMaxSizeMM: state.fillHolesMaxSizeMM,
     nestingEnabled: state.nestingEnabled,
     boardWidthMM: state.boardWidthMM,
     boardHeightMM: state.boardHeightMM,
@@ -1711,6 +1714,9 @@ function importProjectFile(file) {
       if (typeof data.filterSmallIslands === 'boolean') state.filterSmallIslands = data.filterSmallIslands;
       if (typeof data.minIslandSizeMM === 'number') state.minIslandSizeMM = data.minIslandSizeMM;
       if (data.minIslandCriteria) state.minIslandCriteria = data.minIslandCriteria;
+      if (typeof data.fillInternalHoles === 'boolean') state.fillInternalHoles = data.fillInternalHoles;
+      if (data.fillHolesMode) state.fillHolesMode = data.fillHolesMode;
+      if (typeof data.fillHolesMaxSizeMM === 'number') state.fillHolesMaxSizeMM = data.fillHolesMaxSizeMM;
 
       if (typeof data.includeLabels === 'boolean') setIncludeLabels(data.includeLabels);
       if (typeof data.includeNextSliceGuide === 'boolean') setIncludeNextGuide(data.includeNextSliceGuide);

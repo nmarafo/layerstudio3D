@@ -1025,12 +1025,14 @@ function rebuildGhostAndSlices() {
     const slicesA = [];
     const slicesB = [];
     let totalRemovedIslands = 0;
+    let totalFilledHoles = 0;
 
     for (let i = 0; i < countA; i++) {
       const coordA = minA + stepA * (i + 0.5);
       const rawLoops = sliceTrianglesAtPlane(verts, cfg.axisA, coordA, spanA);
       const filteredRes = filterLoopsByMinIslandSize(rawLoops);
       totalRemovedIslands += filteredRes.removedCount;
+      totalFilledHoles += (filteredRes.filledHolesCount || 0);
       slicesA.push({
         index: i,
         coord: coordA,
@@ -1052,6 +1054,7 @@ function rebuildGhostAndSlices() {
       const rawLoops = sliceTrianglesAtPlane(verts, cfg.axisB, coordB, spanB);
       const filteredRes = filterLoopsByMinIslandSize(rawLoops);
       totalRemovedIslands += filteredRes.removedCount;
+      totalFilledHoles += (filteredRes.filledHolesCount || 0);
       slicesB.push({
         index: countA + j,
         coord: coordB,
@@ -1077,6 +1080,7 @@ function rebuildGhostAndSlices() {
       s.unsplitLoops = (s.loops || []).slice();
     });
     state.filteredIslandsCount = totalRemovedIslands;
+    state.filledHolesCount = totalFilledHoles;
     updateFilteredIslandsUI();
     syncConstructionModeUI();
   } else {
@@ -1096,12 +1100,14 @@ function rebuildGhostAndSlices() {
     const step = axisSpan / state.sliceCount;
     const newSlices = [];
     let totalRemovedIslands = 0;
+    let totalFilledHoles = 0;
 
     for (let i = 0; i < state.sliceCount; i++) {
       const planeCoord = minCoord + step * (i + 0.5);
       const rawLoops = sliceTrianglesAtPlane(verts, state.axis, planeCoord, axisSpan);
       const filteredRes = filterLoopsByMinIslandSize(rawLoops);
       totalRemovedIslands += filteredRes.removedCount;
+      totalFilledHoles += (filteredRes.filledHolesCount || 0);
       newSlices.push({
         index: i,
         coord: planeCoord,
@@ -1119,6 +1125,7 @@ function rebuildGhostAndSlices() {
 
     state.slices = newSlices;
     state.filteredIslandsCount = totalRemovedIslands;
+    state.filledHolesCount = totalFilledHoles;
     updateFilteredIslandsUI();
   }
 
@@ -1154,21 +1161,58 @@ function doesIslandPassMinSizeFilter(widthMM, heightMM, areaMM2) {
   return Math.max(widthMM, heightMM) >= threshold;
 }
 
-// Filtra los contornos de una lasca eliminando las islas pequeñas y sus huecos internos asociados
+// Evalúa si un hueco interior debe rellenarse (eliminarse para dejar la pieza maciza) según la configuración
+function shouldFillInternalHole(hole) {
+  if (!state.fillInternalHoles || !hole || !hole.points || hole.points.length < 3) return false;
+  if (state.fillHolesMode === 'all') return true;
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  hole.points.forEach((p) => {
+    if (p.x < minX) minX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y > maxY) maxY = p.y;
+  });
+  const w = Math.max(0, maxX - minX);
+  const h = Math.max(0, maxY - minY);
+  const threshold = Math.max(0.1, Number(state.fillHolesMaxSizeMM) || 15);
+
+  if (state.fillHolesMode === 'area') {
+    return (hole.absArea || 0) <= threshold;
+  }
+  return Math.max(w, h) <= threshold;
+}
+
+// Filtra los contornos de una lasca eliminando las islas pequeñas y/o rellenando los huecos internos seleccionados
 function filterLoopsByMinIslandSize(rawLoops) {
   if (!rawLoops || rawLoops.length === 0) {
-    return { loops: [], removedCount: 0 };
+    return { loops: [], removedCount: 0, filledHolesCount: 0 };
   }
-  if (!state.filterSmallIslands || state.minIslandSizeMM <= 0) {
-    return { loops: rawLoops.slice(), removedCount: 0 };
+  const filterIslandsActive = Boolean(state.filterSmallIslands && state.minIslandSizeMM > 0);
+  const fillHolesActive = Boolean(state.fillInternalHoles);
+  if (!filterIslandsActive && !fillHolesActive) {
+    return { loops: rawLoops.slice(), removedCount: 0, filledHolesCount: 0 };
   }
 
-  const outers = rawLoops.filter((l) => !l.isHole);
+  // Asegurar orden descendente por área para procesar primero los contornos exteriores padres
+  const outers = rawLoops.filter((l) => !l.isHole).slice().sort((a, b) => (b.absArea || 0) - (a.absArea || 0));
   const holes = rawLoops.filter((l) => l.isHole);
   const keptLoops = [];
+  const filledHolesList = [];
   let removedCount = 0;
+  let filledHolesCount = 0;
 
   outers.forEach((outer, oIdx) => {
+    // Si este contorno exterior está dentro de un hueco que ya fue rellenado, queda absorbido por la pieza maciza
+    if (filledHolesList.length > 0 && outer.points && outer.points.length > 0) {
+      const absorbedByFilledHole = filledHolesList.some((fh) =>
+        fh.absArea > outer.absArea && isPointInPolygon(outer.points[0], fh.points)
+      );
+      if (absorbedByFilledHole) {
+        return;
+      }
+    }
+
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     outer.points.forEach((p) => {
       if (p.x < minX) minX = p.x;
@@ -1179,15 +1223,16 @@ function filterLoopsByMinIslandSize(rawLoops) {
     const w = Math.max(0, maxX - minX);
     const h = Math.max(0, maxY - minY);
 
-    if (!doesIslandPassMinSizeFilter(w, h, outer.absArea)) {
+    if (filterIslandsActive && !doesIslandPassMinSizeFilter(w, h, outer.absArea)) {
       removedCount++;
       return;
     }
 
     keptLoops.push(outer);
 
-    // Conservar únicamente los huecos que pertenecen directamente a esta isla válida
+    // Evaluar los huecos que pertenecen directamente a esta isla válida
     holes.forEach((hole) => {
+      if (!hole.points || hole.points.length < 3) return;
       if (!isPointInPolygon(hole.points[0], outer.points)) return;
       let insideSmallerOuter = false;
       for (let k = 0; k < outers.length; k++) {
@@ -1199,17 +1244,23 @@ function filterLoopsByMinIslandSize(rawLoops) {
         }
       }
       if (!insideSmallerOuter) {
-        keptLoops.push(hole);
+        if (fillHolesActive && shouldFillInternalHole(hole)) {
+          filledHolesCount++;
+          filledHolesList.push(hole);
+        } else {
+          keptLoops.push(hole);
+        }
       }
     });
   });
 
-  return { loops: keptLoops, removedCount };
+  return { loops: keptLoops, removedCount, filledHolesCount };
 }
 
-// Reaplica el filtro de tamaño mínimo de isla sobre todas las lascas sin recalcular la intersección 3D
+// Reaplica el filtro de tamaño mínimo de isla y el relleno de huecos internos sobre todas las lascas sin recalcular la intersección 3D
 function applyIslandFilterToExistingSlices() {
   let totalRemoved = 0;
+  let totalFilledHoles = 0;
   state.slices.forEach((slice) => {
     const base = slice.rawLoops || slice.loops || [];
     const res = filterLoopsByMinIslandSize(base);
@@ -1218,6 +1269,7 @@ function applyIslandFilterToExistingSlices() {
     slice.unsplitLoops = res.loops.slice();
     slice.loops = res.loops;
     totalRemoved += res.removedCount;
+    totalFilledHoles += (res.filledHolesCount || 0);
   });
 
   if (state.constructionMode === 'puzzle3d') {
@@ -1236,6 +1288,7 @@ function applyIslandFilterToExistingSlices() {
   syncSlicerFrameUI();
 
   state.filteredIslandsCount = totalRemoved;
+  state.filledHolesCount = totalFilledHoles;
   updateFilteredIslandsUI();
 
   build3DSlicesMesh();
@@ -1289,10 +1342,77 @@ function updateFilteredIslandsUI() {
       badge.textContent = '✓ Ninguna isla es inferior a ' + state.minIslandSizeMM + ' ' + unitSuffix;
     }
   }
+
+  // Sincronizar UI de Rellenar Huecos Internos
+  const fhChk1 = document.getElementById('fillInternalHolesCheck');
+  const fhChk2 = document.getElementById('modalFillHolesCheck');
+  if (fhChk1) fhChk1.checked = Boolean(state.fillInternalHoles);
+  if (fhChk2) fhChk2.checked = Boolean(state.fillInternalHoles);
+
+  const fhBox = document.getElementById('fillInternalHolesBox');
+  if (fhBox) fhBox.classList.toggle('opacity-45', !state.fillInternalHoles);
+
+  const fhModeSel = document.getElementById('fillHolesModeSelect');
+  if (fhModeSel) fhModeSel.value = state.fillHolesMode || 'all';
+
+  const fhSizeRow = document.getElementById('fillHolesSizeRow');
+  if (fhSizeRow) fhSizeRow.classList.toggle('hidden', state.fillHolesMode === 'all');
+
+  const fhSizeLbl = document.getElementById('fillHolesSizeLabel');
+  if (fhSizeLbl) {
+    fhSizeLbl.textContent = state.fillHolesMode === 'area' ? 'Área máx. hueco (mm²):' : 'Tamaño máx. hueco (mm):';
+  }
+
+  const fhSizeInput = document.getElementById('fillHolesMaxSizeInput');
+  if (fhSizeInput) fhSizeInput.value = state.fillHolesMaxSizeMM;
+
+  const fhBadge = document.getElementById('filledHolesBadge');
+  if (fhBadge) {
+    if (!state.fillInternalHoles) {
+      fhBadge.className = 'text-[10px] text-slate-400 text-center pt-0.5';
+      fhBadge.textContent = 'Desactivado (se conservan los huecos internos)';
+    } else if (state.filledHolesCount > 0) {
+      const modeDesc = state.fillHolesMode === 'all'
+        ? 'todos los huecos'
+        : ('≤ ' + state.fillHolesMaxSizeMM + (state.fillHolesMode === 'area' ? ' mm²' : ' mm'));
+      fhBadge.className = 'text-[10px] text-cyan-300 font-semibold text-center pt-0.5';
+      fhBadge.textContent = '🧱 ' + state.filledHolesCount + ' hueco(s) interno(s) rellenado(s) (' + modeDesc + ')';
+    } else {
+      fhBadge.className = 'text-[10px] text-emerald-300 text-center pt-0.5';
+      fhBadge.textContent = '✓ Sin huecos internos que rellenar con este criterio';
+    }
+  }
 }
 
 function setFilterSmallIslands(enabled) {
   state.filterSmallIslands = Boolean(enabled);
+  applyIslandFilterToExistingSlices();
+}
+
+function setFillInternalHoles(enabled) {
+  state.fillInternalHoles = Boolean(enabled);
+  applyIslandFilterToExistingSlices();
+}
+
+function onFillHolesFilterChange() {
+  const modeEl = document.getElementById('fillHolesModeSelect');
+  const sizeEl = document.getElementById('fillHolesMaxSizeInput');
+  if (modeEl) state.fillHolesMode = modeEl.value;
+  if (sizeEl) {
+    const val = parseFloat(sizeEl.value);
+    if (Number.isFinite(val) && val > 0) {
+      state.fillHolesMaxSizeMM = val;
+    }
+  }
+  applyIslandFilterToExistingSlices();
+}
+
+function setFillHolesPreset(mode, maxSizeMM) {
+  state.fillInternalHoles = true;
+  state.fillHolesMode = mode || 'all';
+  if (typeof maxSizeMM === 'number' && maxSizeMM > 0) {
+    state.fillHolesMaxSizeMM = maxSizeMM;
+  }
   applyIslandFilterToExistingSlices();
 }
 

@@ -64,11 +64,15 @@ const state = {
   tabWidthMM: 1.0,             // Longitud sin cortar de cada micro-unión en mm (ej. 1.0 mm)
   tabApplyToHoles: false,      // true = aplica también micro-uniones a los huecos interiores
   tabShowMarkers: true,        // true = resalta visualmente los puentes de sujeción en el visor 2D
-  // Filtro de eliminación de islas pequeñas
+  // Filtro de eliminación de islas pequeñas y relleno de huecos internos
   filterSmallIslands: false,   // true = descarta islas inferiores al umbral indicado
   minIslandSizeMM: 10,         // Valor umbral en mm (o mm² si el criterio es área)
   minIslandCriteria: 'max_dim',// 'max_dim' | 'min_dim' | 'area'
   filteredIslandsCount: 0,     // Total de islas descartadas en el modelo actual
+  fillInternalHoles: false,    // true = rellena (elimina) los huecos interiores de cada lasca dejándolas macizas
+  fillHolesMode: 'all',        // 'all' (Todos los huecos internos) | 'max_dim' (Huecos menores que X mm) | 'area' (Huecos con área menor que X mm²)
+  fillHolesMaxSizeMM: 15,      // Umbral máximo de hueco a rellenar en mm (o mm² si fillHolesMode === 'area')
+  filledHolesCount: 0,         // Total de huecos internos rellenados en el modelo actual
   // Subdivisión Modular del Modelo en Partes / Conjuntos (Gran Formato)
   splitModelEnabled: false,    // true = divide la figura en conjuntos/bloques modulares (ej. bloques de 30x30 cm para armar figuras de 60x60 o 120x120 cm)
   splitMode: 'max_size',       // 'max_size' (según tamaño máx. de parte/tablero) | 'grid' (según cuadrícula manual Columnas x Filas)
