@@ -97,12 +97,19 @@ function setNestingEnabled(val) {
   if (state.nestingEnabled) {
     recomputeBoardNesting();
     state.activeBoardIndex = 0;
+    state.activeCarrierIndex = 0;
     const slider = document.getElementById('currentSliceSlider');
     if (slider) {
-      slider.max = Math.max(0, state.nestedBoards.length - 1);
+      slider.max = state.carrierEnabled
+        ? Math.max(0, state.nestedCarriers.length - 1)
+        : Math.max(0, state.nestedBoards.length - 1);
       slider.value = 0;
     }
   } else {
+    if (state.carrierEnabled) {
+      state.carrierEnabled = false;
+      if (typeof syncCarrierUIState === 'function') syncCarrierUIState();
+    }
     const slider = document.getElementById('currentSliceSlider');
     if (slider) {
       slider.max = Math.max(0, state.slices.length - 1);
@@ -1242,11 +1249,18 @@ function recomputeBoardNesting() {
     state.activeBoardIndex = Math.max(0, state.nestedBoards.length - 1);
   }
 
+  recomputeCarrierNesting();
+
   if (state.nestingEnabled) {
     const slider = document.getElementById('currentSliceSlider');
     if (slider) {
-      slider.max = Math.max(0, state.nestedBoards.length - 1);
-      slider.value = state.activeBoardIndex;
+      if (state.carrierEnabled) {
+        slider.max = Math.max(0, state.nestedCarriers.length - 1);
+        slider.value = state.activeCarrierIndex;
+      } else {
+        slider.max = Math.max(0, state.nestedBoards.length - 1);
+        slider.value = state.activeBoardIndex;
+      }
     }
   }
 
@@ -1285,7 +1299,23 @@ function recomputeBoardNesting() {
 
 function update2DInspectorHeader() {
   const includeLbl = document.getElementById('inspectorIncludeSliceLabel');
-  if (state.nestingEnabled) {
+  if (state.nestingEnabled && state.carrierEnabled) {
+    if (includeLbl) includeLbl.classList.add('hidden');
+    const totalC = state.nestedCarriers.length;
+    const c = state.nestedCarriers[state.activeCarrierIndex];
+    const f = getUnitFactor();
+    const dec = state.unit === 'm' ? 3 : 1;
+
+    document.getElementById('slice2DTitle').textContent =
+      totalC > 0 ? ('Soporte Mayor #' + (state.activeCarrierIndex + 1) + ' / ' + totalC) : 'Sin tableros que quepan en el soporte';
+    document.getElementById('slice2DCoord').textContent =
+      c ? (c.boardPlacements.length + ' tablero(s) · ' + c.totalIslands + ' piezas') : '0 tableros';
+    document.getElementById('slice2DStats').textContent =
+      'Soporte: ' + (state.carrierWidthMM / f).toFixed(dec) + ' × ' + (state.carrierHeightMM / f).toFixed(dec) + ' ' + state.unit +
+      ' | Sub-tableros: ' + (state.boardWidthMM / f).toFixed(dec) + ' × ' + (state.boardHeightMM / f).toFixed(dec) + ' ' + state.unit +
+      (c ? (' | Uso soporte: ' + c.efficiency.toFixed(1) + '%') : '') +
+      (state.unfitBoardsCount > 0 ? (' | ⚠️ ' + state.unfitBoardsCount + ' tablero(s) no caben') : '');
+  } else if (state.nestingEnabled) {
     if (includeLbl) includeLbl.classList.add('hidden');
     const totalB = state.nestedBoards.length;
     const b = state.nestedBoards[state.activeBoardIndex];
@@ -1336,7 +1366,12 @@ function update2DInspectorHeader() {
 }
 
 function on2DSliderInput(val) {
-  if (state.nestingEnabled) {
+  if (state.nestingEnabled && state.carrierEnabled) {
+    state.activeCarrierIndex = Math.max(0, Math.min(state.nestedCarriers.length - 1, val));
+    update2DInspectorHeader();
+    highlightActiveCardInStrip();
+    render2DSlice();
+  } else if (state.nestingEnabled) {
     state.activeBoardIndex = Math.max(0, Math.min(state.nestedBoards.length - 1, val));
     update2DInspectorHeader();
     highlightActiveCardInStrip();
@@ -1355,4 +1390,514 @@ function selectActiveBoard(bIdx) {
   update2DInspectorHeader();
   highlightActiveCardInStrip();
   render2DSlice();
+}
+
+// =========================================================================
+// 6. MOTOR DE DISTRIBUCIÓN DE TABLEROS EN SOPORTE MAYOR (PLANCHA MADRE)
+// =========================================================================
+
+function syncCarrierInputsUI() {
+  const f = getUnitFactor();
+  const decimals = state.unit === 'm' ? 3 : (state.unit === 'cm' ? 1 : 0);
+  const wInput = document.getElementById('carrierWidthInput');
+  const hInput = document.getElementById('carrierHeightInput');
+  if (wInput) wInput.value = Number((state.carrierWidthMM / f).toFixed(decimals));
+  if (hInput) hInput.value = Number((state.carrierHeightMM / f).toFixed(decimals));
+
+  const spInput = document.getElementById('carrierSpacingInput');
+  const mgInput = document.getElementById('carrierMarginInput');
+  if (spInput) spInput.value = state.carrierSpacingMM;
+  if (mgInput) mgInput.value = state.carrierMarginMM;
+
+  const rotChk = document.getElementById('carrierRotateCheck');
+  if (rotChk) rotChk.checked = Boolean(state.carrierAllowRotate);
+  const cutBChk = document.getElementById('carrierCutBoardBordersCheck') || document.getElementById('carrierCutBoardsCheck');
+  if (cutBChk) cutBChk.checked = Boolean(state.carrierCutBoardBorders);
+  const cutOChk = document.getElementById('carrierCutOuterBorderCheck') || document.getElementById('carrierCutOuterCheck');
+  if (cutOChk) cutOChk.checked = Boolean(state.carrierCutOuterBorder);
+  const lblChk = document.getElementById('carrierEngraveLabelsCheck');
+  if (lblChk) lblChk.checked = Boolean(state.carrierEngraveBoardLabels);
+
+  const modalSub = document.getElementById('modalCarrierInfoSub');
+  if (modalSub) {
+    modalSub.textContent = 'Distribuye los tableros de ' +
+      state.boardWidthMM.toFixed(0) + '×' + state.boardHeightMM.toFixed(0) +
+      ' mm en soportes mayores de ' +
+      state.carrierWidthMM.toFixed(0) + '×' + state.carrierHeightMM.toFixed(0) + ' mm';
+  }
+}
+
+function syncCarrierUIState() {
+  const c1 = document.getElementById('carrierEnabledCheck');
+  const c2 = document.getElementById('modalCarrierEnabledCheck');
+  const box = document.getElementById('carrierControlsBox');
+  const btnToggleCarrier = document.getElementById('btnToggleCarrierView');
+
+  if (c1) c1.checked = Boolean(state.carrierEnabled);
+  if (c2) c2.checked = Boolean(state.carrierEnabled);
+  if (box) box.classList.toggle('opacity-45', !state.carrierEnabled);
+
+  if (btnToggleCarrier) {
+    if (state.carrierEnabled) {
+      btnToggleCarrier.textContent = '📦 Soporte Mayor: ON';
+      btnToggleCarrier.className = 'text-[11px] px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold transition';
+    } else {
+      btnToggleCarrier.textContent = '📦 Soporte Mayor: OFF';
+      btnToggleCarrier.className = 'text-[11px] px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-semibold transition';
+    }
+  }
+}
+
+function setCarrierPresetMM(wMM, hMM) {
+  state.carrierWidthMM = wMM;
+  state.carrierHeightMM = hMM;
+  syncCarrierInputsUI();
+  if (!state.carrierEnabled) {
+    setCarrierEnabled(true);
+  } else {
+    recomputeCarrierNesting();
+    renderSliceStripUI();
+    update2DInspectorHeader();
+    render2DSlice();
+  }
+}
+
+function setCarrierEnabled(val) {
+  state.carrierEnabled = Boolean(val);
+  syncCarrierUIState();
+  syncCarrierInputsUI();
+
+  if (state.carrierEnabled && !state.nestingEnabled) {
+    // Activar automáticamente la distribución en tableros (Apartado 5) para poder anidar esos tableros en el soporte mayor
+    setNestingEnabled(true);
+    return;
+  }
+
+  reset2DView(false);
+
+  if (state.carrierEnabled) {
+    recomputeBoardNesting();
+    state.activeCarrierIndex = 0;
+    const slider = document.getElementById('currentSliceSlider');
+    if (slider) {
+      slider.max = Math.max(0, state.nestedCarriers.length - 1);
+      slider.value = 0;
+    }
+  } else {
+    const slider = document.getElementById('currentSliceSlider');
+    if (slider) {
+      slider.max = state.nestingEnabled
+        ? Math.max(0, state.nestedBoards.length - 1)
+        : Math.max(0, state.slices.length - 1);
+      slider.value = state.nestingEnabled ? state.activeBoardIndex : state.activeSliceIndex;
+    }
+    const badge = document.getElementById('carrierSummaryBadge');
+    if (badge) badge.textContent = 'Desactivado (vista y exportación por tablero individual)';
+  }
+
+  renderSliceStripUI();
+  update2DInspectorHeader();
+  render2DSlice();
+}
+
+function onCarrierSettingsChange() {
+  const f = getUnitFactor();
+  const wEl = document.getElementById('carrierWidthInput');
+  const hEl = document.getElementById('carrierHeightInput');
+  const spEl = document.getElementById('carrierSpacingInput');
+  const mgEl = document.getElementById('carrierMarginInput');
+  const rotEl = document.getElementById('carrierRotateCheck');
+  const cutBEl = document.getElementById('carrierCutBoardBordersCheck') || document.getElementById('carrierCutBoardsCheck');
+  const cutOEl = document.getElementById('carrierCutOuterBorderCheck') || document.getElementById('carrierCutOuterCheck');
+  const lblEl = document.getElementById('carrierEngraveLabelsCheck');
+
+  if (wEl) {
+    const wVal = parseFloat(wEl.value);
+    if (Number.isFinite(wVal) && wVal > 0) state.carrierWidthMM = Math.max(40, wVal * f);
+  }
+  if (hEl) {
+    const hVal = parseFloat(hEl.value);
+    if (Number.isFinite(hVal) && hVal > 0) state.carrierHeightMM = Math.max(40, hVal * f);
+  }
+  if (spEl) {
+    const spVal = parseFloat(spEl.value);
+    if (Number.isFinite(spVal) && spVal >= 0) state.carrierSpacingMM = spVal;
+  }
+  if (mgEl) {
+    const mgVal = parseFloat(mgEl.value);
+    if (Number.isFinite(mgVal) && mgVal >= 0) state.carrierMarginMM = mgVal;
+  }
+  if (rotEl) state.carrierAllowRotate = Boolean(rotEl.checked);
+  if (cutBEl) state.carrierCutBoardBorders = Boolean(cutBEl.checked);
+  if (cutOEl) state.carrierCutOuterBorder = Boolean(cutOEl.checked);
+  if (lblEl) state.carrierEngraveBoardLabels = Boolean(lblEl.checked);
+
+  syncCarrierInputsUI();
+  if (state.carrierEnabled) {
+    recomputeCarrierNesting();
+    renderSliceStripUI();
+    update2DInspectorHeader();
+    render2DSlice();
+  }
+}
+
+/**
+ * Empaqueta la lista de tableros (`boards`) dentro de uno o varios Soportes Mayores (`carrierW` × `carrierH` mm)
+ * empleando el algoritmo MaxRects 2D y transformando todas las islas, guías y marcos al sistema de coordenadas del soporte.
+ */
+function packBoardsIntoCarriers(boards, carrierW, carrierH, margin, spacing, allowRot) {
+  const usableW = Math.max(1, carrierW - margin * 2);
+  const usableH = Math.max(1, carrierH - margin * 2);
+  const carriers = [];
+  let unfitBoardsCount = 0;
+
+  const createNewCarrier = () => {
+    const c = {
+      carrierIndex: carriers.length,
+      width: carrierW,
+      height: carrierH,
+      margin: margin,
+      spacing: spacing,
+      freeRects: [{
+        x: margin,
+        y: margin,
+        w: usableW + spacing,
+        h: usableH + spacing
+      }],
+      boardPlacements: [],
+      totalIslands: 0,
+      usedBoardsArea: 0,
+      efficiency: 0
+    };
+    carriers.push(c);
+    return c;
+  };
+
+  const splitCarrierFreeRects = (freeRects, usedRect) => {
+    const nextFree = [];
+    for (let i = 0; i < freeRects.length; i++) {
+      const fr = freeRects[i];
+      if (
+        usedRect.x >= fr.x + fr.w ||
+        usedRect.x + usedRect.w <= fr.x ||
+        usedRect.y >= fr.y + fr.h ||
+        usedRect.y + usedRect.h <= fr.y
+      ) {
+        nextFree.push(fr);
+        continue;
+      }
+      if (usedRect.x > fr.x) {
+        nextFree.push({ x: fr.x, y: fr.y, w: usedRect.x - fr.x, h: fr.h });
+      }
+      if (usedRect.x + usedRect.w < fr.x + fr.w) {
+        nextFree.push({
+          x: usedRect.x + usedRect.w,
+          y: fr.y,
+          w: (fr.x + fr.w) - (usedRect.x + usedRect.w),
+          h: fr.h
+        });
+      }
+      if (usedRect.y > fr.y) {
+        nextFree.push({ x: fr.x, y: fr.y, w: fr.w, h: usedRect.y - fr.y });
+      }
+      if (usedRect.y + usedRect.h < fr.y + fr.h) {
+        nextFree.push({
+          x: fr.x,
+          y: usedRect.y + usedRect.h,
+          w: fr.w,
+          h: (fr.y + fr.h) - (usedRect.y + usedRect.h)
+        });
+      }
+    }
+
+    const pruned = [];
+    for (let i = 0; i < nextFree.length; i++) {
+      const a = nextFree[i];
+      if (a.w <= spacing + 0.5 || a.h <= spacing + 0.5) continue;
+      let contained = false;
+      for (let j = 0; j < nextFree.length; j++) {
+        if (i === j) continue;
+        const b = nextFree[j];
+        if (
+          a.x >= b.x - 1e-4 &&
+          a.y >= b.y - 1e-4 &&
+          a.x + a.w <= b.x + b.w + 1e-4 &&
+          a.y + a.h <= b.y + b.h + 1e-4
+        ) {
+          const areaA = a.w * a.h;
+          const areaB = b.w * b.h;
+          if (areaA < areaB - 1e-3 || (Math.abs(areaA - areaB) <= 1e-3 && i > j)) {
+            contained = true;
+            break;
+          }
+        }
+      }
+      if (!contained) pruned.push(a);
+    }
+    return pruned;
+  };
+
+  (boards || []).forEach((board) => {
+    const bw = board.width;
+    const bh = board.height;
+    const fitsNormal = (bw <= usableW + 1e-4 && bh <= usableH + 1e-4);
+    const fitsRot = allowRot && (bh <= usableW + 1e-4 && bw <= usableH + 1e-4);
+
+    if (!fitsNormal && !fitsRot) {
+      unfitBoardsCount++;
+      return;
+    }
+
+    const reqW0 = bw + spacing;
+    const reqH0 = bh + spacing;
+
+    let bestCarrier = null;
+    let bestX = 0, bestY = 0;
+    let bestRotated = false;
+    let bestShortSide = Infinity;
+    let bestLongSide = Infinity;
+
+    const tryFindOnCarrier = (carrier) => {
+      for (let i = 0; i < carrier.freeRects.length; i++) {
+        const fr = carrier.freeRects[i];
+        if (
+          fitsNormal &&
+          fr.w >= reqW0 - 1e-4 &&
+          fr.h >= reqH0 - 1e-4 &&
+          fr.x + bw <= carrierW - margin + 1e-3 &&
+          fr.y + bh <= carrierH - margin + 1e-3
+        ) {
+          const remW = fr.w - reqW0;
+          const remH = fr.h - reqH0;
+          const shortS = Math.min(remW, remH);
+          const longS = Math.max(remW, remH);
+          if (shortS < bestShortSide || (shortS === bestShortSide && longS < bestLongSide)) {
+            bestCarrier = carrier;
+            bestX = fr.x;
+            bestY = fr.y;
+            bestRotated = false;
+            bestShortSide = shortS;
+            bestLongSide = longS;
+          }
+        }
+        if (
+          fitsRot &&
+          fr.w >= reqH0 - 1e-4 &&
+          fr.h >= reqW0 - 1e-4 &&
+          fr.x + bh <= carrierW - margin + 1e-3 &&
+          fr.y + bw <= carrierH - margin + 1e-3
+        ) {
+          const remW = fr.w - reqH0;
+          const remH = fr.h - reqW0;
+          const shortS = Math.min(remW, remH);
+          const longS = Math.max(remW, remH);
+          if (shortS < bestShortSide || (shortS === bestShortSide && longS < bestLongSide)) {
+            bestCarrier = carrier;
+            bestX = fr.x;
+            bestY = fr.y;
+            bestRotated = true;
+            bestShortSide = shortS;
+            bestLongSide = longS;
+          }
+        }
+      }
+    };
+
+    for (let cIdx = 0; cIdx < carriers.length; cIdx++) {
+      tryFindOnCarrier(carriers[cIdx]);
+      if (bestCarrier) break;
+    }
+
+    if (!bestCarrier) {
+      const nc = createNewCarrier();
+      tryFindOnCarrier(nc);
+    }
+
+    if (!bestCarrier) {
+      unfitBoardsCount++;
+      return;
+    }
+
+    const placedW = bestRotated ? bh : bw;
+    const placedH = bestRotated ? bw : bh;
+    const usedRect = { x: bestX, y: bestY, w: placedW + spacing, h: placedH + spacing };
+    bestCarrier.freeRects = splitCarrierFreeRects(bestCarrier.freeRects, usedRect);
+    bestCarrier.usedBoardsArea += bw * bh;
+    bestCarrier.totalIslands += board.placements.length;
+
+    const transformBoardPt = (pt) => {
+      if (!bestRotated) {
+        return { x: bestX + pt.x, y: bestY + pt.y };
+      }
+      return { x: bestX + (bh - pt.y), y: bestY + pt.x };
+    };
+
+    const transformPtsArray = (pts) => {
+      if (!pts) return null;
+      const out = pts.map(transformBoardPt);
+      if (pts.isFrame) out.isFrame = true;
+      return out;
+    };
+
+    // Geometría de corte/grabado del borde de este sub-tablero dentro del soporte mayor
+    let boardFrameGeom = null;
+    if (state.slicerFrameEnabled && typeof get2DBoardFrameGeometry === 'function') {
+      const rawFg = get2DBoardFrameGeometry(0, 0, bw, bh, board.placements, true);
+      if (rawFg) {
+        const tfOuter = transformPtsArray(rawFg.outerCutPts);
+        if (tfOuter) tfOuter.isFrame = true;
+        const tfInner = transformPtsArray(rawFg.innerCutPts);
+        if (tfInner) tfInner.isFrame = true;
+        const tfKh = transformPtsArray(rawFg.keyholePts);
+        if (tfKh) tfKh.isFrame = true;
+        const tfEngrave = (rawFg.engraveLoops || []).map((el) => ({
+          points: transformPtsArray(el.points),
+          isHole: Boolean(el.isHole)
+        }));
+        boardFrameGeom = {
+          outerCutPts: tfOuter,
+          innerCutPts: tfInner,
+          keyholePts: tfKh,
+          engraveLoops: tfEngrave
+        };
+      }
+    } else if (state.carrierCutBoardBorders) {
+      const rectPts = [
+        { x: bestX, y: bestY },
+        { x: bestX + placedW, y: bestY },
+        { x: bestX + placedW, y: bestY + placedH },
+        { x: bestX, y: bestY + placedH }
+      ];
+      rectPts.isFrame = true;
+      boardFrameGeom = {
+        outerCutPts: rectPts,
+        innerCutPts: null,
+        keyholePts: null,
+        engraveLoops: []
+      };
+    }
+
+    const transformedPlacements = board.placements.map((pl) => {
+      const tfOuter = transformPtsArray(pl.outerPoints);
+      const tfHoles = (pl.holes || []).map((h) => ({
+        points: transformPtsArray(h.points),
+        absArea: h.absArea,
+        isFrame: Boolean(h.isFrame)
+      }));
+      const tfRods = (pl.rods || []).map(transformBoardPt);
+      const tfEngraves = (pl.engraveLoops || []).map((el) => ({
+        points: transformPtsArray(el.points),
+        isHole: Boolean(el.isHole)
+      }));
+      const tfUpper = (pl.upperPolys || []).map((poly) => poly.map(transformBoardPt));
+      const tfLower = (pl.lowerPolys || []).map((poly) => poly.map(transformBoardPt));
+
+      let tfTextLayout = null;
+      if (pl.textLayout) {
+        const tCenter = transformBoardPt({ x: pl.textLayout.x, y: pl.textLayout.y });
+        tfTextLayout = {
+          x: tCenter.x,
+          y: tCenter.y,
+          fontSizeMM: pl.textLayout.fontSizeMM,
+          lines: pl.textLayout.lines,
+          maxBoxW: bestRotated ? pl.textLayout.maxBoxH : pl.textLayout.maxBoxW,
+          maxBoxH: bestRotated ? pl.textLayout.maxBoxW : pl.textLayout.maxBoxH
+        };
+      }
+
+      return {
+        island: pl.island,
+        isFrame: Boolean(pl.isFrame),
+        outerPoints: tfOuter,
+        holes: tfHoles,
+        rods: tfRods,
+        engraveLoops: tfEngraves,
+        upperPolys: tfUpper,
+        lowerPolys: tfLower,
+        textLayout: tfTextLayout
+      };
+    });
+
+    bestCarrier.boardPlacements.push({
+      boardIndex: board.boardIndex,
+      board: board,
+      x: bestX,
+      y: bestY,
+      w: placedW,
+      h: placedH,
+      rotated: bestRotated,
+      boardFrameGeom: boardFrameGeom,
+      transformedPlacements: transformedPlacements
+    });
+  });
+
+  carriers.forEach((c) => {
+    c.efficiency = Math.min(100, (c.usedBoardsArea / Math.max(1, carrierW * carrierH)) * 100);
+  });
+
+  return { carriers, unfitBoardsCount };
+}
+
+function recomputeCarrierNesting() {
+  const res = packBoardsIntoCarriers(
+    state.nestedBoards || [],
+    state.carrierWidthMM,
+    state.carrierHeightMM,
+    state.carrierMarginMM,
+    state.carrierSpacingMM,
+    state.carrierAllowRotate
+  );
+
+  state.nestedCarriers = res.carriers;
+  state.unfitBoardsCount = res.unfitBoardsCount;
+
+  if (state.activeCarrierIndex >= state.nestedCarriers.length) {
+    state.activeCarrierIndex = Math.max(0, state.nestedCarriers.length - 1);
+  }
+
+  const badge = document.getElementById('carrierSummaryBadge');
+  if (badge) {
+    if (!state.carrierEnabled) {
+      badge.textContent = 'Desactivado (vista y exportación por tablero individual)';
+    } else if (state.nestedCarriers.length === 0 && state.unfitBoardsCount > 0) {
+      badge.innerHTML =
+        '<span class="text-rose-400 font-bold block">⚠️ El tamaño del tablero (' +
+        state.boardWidthMM.toFixed(0) + '×' + state.boardHeightMM.toFixed(0) +
+        ' mm) supera el área útil del Soporte Mayor (' +
+        state.carrierWidthMM.toFixed(0) + '×' + state.carrierHeightMM.toFixed(0) + ' mm)</span>';
+    } else if (state.nestedCarriers.length === 0) {
+      badge.textContent = '0 tableros generados para colocar en el soporte mayor';
+    } else {
+      const totalPackedBoards = state.nestedCarriers.reduce((acc, c) => acc + c.boardPlacements.length, 0);
+      const avgEff = state.nestedCarriers.reduce((acc, c) => acc + c.efficiency, 0) / state.nestedCarriers.length;
+      let html =
+        '🏗️ <strong>' + state.nestedCarriers.length + ' Soporte(s) Mayor(es)</strong> | ' +
+        totalPackedBoards + ' Tablero(s) alojados | Uso: ' + avgEff.toFixed(1) + '%';
+      if (state.unfitBoardsCount > 0) {
+        html += '<br><span class="text-amber-300 text-[10px]">⚠️ ' + state.unfitBoardsCount + ' tablero(s) no caben en el soporte mayor</span>';
+      }
+      badge.innerHTML = html;
+    }
+  }
+}
+
+function selectActiveCarrier(cIdx) {
+  if (state.nestedCarriers.length === 0) return;
+  state.activeCarrierIndex = Math.max(0, Math.min(state.nestedCarriers.length - 1, cIdx));
+  const slider = document.getElementById('currentSliceSlider');
+  if (slider) slider.value = state.activeCarrierIndex;
+  update2DInspectorHeader();
+  highlightActiveCardInStrip();
+  render2DSlice();
+}
+
+if (typeof window !== 'undefined') {
+  window.syncCarrierInputsUI = syncCarrierInputsUI;
+  window.syncCarrierUIState = syncCarrierUIState;
+  window.setCarrierPresetMM = setCarrierPresetMM;
+  window.setCarrierEnabled = setCarrierEnabled;
+  window.onCarrierSettingsChange = onCarrierSettingsChange;
+  window.packBoardsIntoCarriers = packBoardsIntoCarriers;
+  window.recomputeCarrierNesting = recomputeCarrierNesting;
+  window.selectActiveCarrier = selectActiveCarrier;
 }

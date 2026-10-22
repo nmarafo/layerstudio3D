@@ -265,8 +265,11 @@ function setDisplayUnit(u) {
   document.getElementById('unitLabelDims').textContent = u;
   const lblBoard = document.getElementById('unitLabelBoard');
   if (lblBoard) lblBoard.textContent = u;
+  const lblCarrier = document.getElementById('unitLabelCarrier');
+  if (lblCarrier) lblCarrier.textContent = u;
   syncDimensionInputsUI();
   syncBoardInputsUI();
+  if (typeof syncCarrierInputsUI === 'function') syncCarrierInputsUI();
   render2DSlice();
 }
 

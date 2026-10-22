@@ -97,6 +97,19 @@ const state = {
   unfitIslandsCount: 0,        // Islas cuyas dimensiones superan el tamaño total de un tablero
   clippedIslandsCount: 0,      // Islas que fueron recortadas para caber en el tablero
   activeBoardIndex: 0,
+  // Configuración de Distribución de Tableros en Soporte Mayor (Apartado 6: Plancha Madre / Cama Láser)
+  carrierEnabled: false,       // true = distribuye los tableros generados dentro de un soporte mayor configurable
+  carrierWidthMM: 1220,        // Ancho del soporte mayor en mm (ej. 1220 mm = 122 cm)
+  carrierHeightMM: 800,        // Alto del soporte mayor en mm (ej. 800 mm = 80 cm)
+  carrierSpacingMM: 8,         // Separación entre tableros dentro del soporte mayor en mm
+  carrierMarginMM: 10,         // Margen exterior del soporte mayor en mm
+  carrierAllowRotate: true,    // true = permite rotar tableros 90° para optimizar cabida en el soporte mayor
+  carrierCutBoardBorders: true,// true = corta el perímetro o marco configurable de cada sub-tablero (#ff0000)
+  carrierCutOuterBorder: false,// true = corta también el borde perimetral exterior del soporte mayor (#ff0000)
+  carrierEngraveBoardLabels: true, // true = graba la etiqueta de cada sub-tablero (TABLERO #1...)
+  nestedCarriers: [],          // [{ carrierIndex, width, height, margin, spacing, boardPlacements: [...], totalIslands, efficiency }]
+  unfitBoardsCount: 0,         // Tableros cuyas dimensiones superan el soporte mayor
+  activeCarrierIndex: 0,
   assemblyGuideTab: 'all',     // 'all' | 'cutting' | 'assembly'
   guideShowIllustrations: true,// true = muestra diagramas vectoriales automáticos en la guía de montaje
   assembledSlicesDone: {},     // Registro de pasos marcados como montados { [sliceIndex]: boolean }

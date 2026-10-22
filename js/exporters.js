@@ -647,6 +647,412 @@ function generateBoardDXF(board) {
   return dxf.join('\n');
 }
 
+// Genera el archivo .SVG de un Soporte Mayor (Apartado 6) con todos los tableros anidados en su interior
+function generateCarrierSVG(carrier) {
+  const svgW = carrier.width;
+  const svgH = carrier.height;
+  const toX = (x) => Number(x).toFixed(4);
+  const toY = (y) => (svgH - Number(y)).toFixed(4);
+  const strokeMm = Math.max(0.15, Math.min(svgW, svgH) * 0.0014).toFixed(4);
+  const rodRadius = (state.rodDiameter / 2).toFixed(4);
+
+  let compoundPath = '';
+  const outerPaths = [];
+  const holePaths = [];
+  const rodCircles = [];
+  let carrierEngravePath = '';
+  let upperGuidePath = '';
+  let lowerGuidePath = '';
+  const islandLabels = [];
+  const boardHeaderLabels = [];
+
+  if (state.carrierCutOuterBorder) {
+    const outerCarrierRect = [
+      { x: 0, y: 0 },
+      { x: svgW, y: 0 },
+      { x: svgW, y: svgH },
+      { x: 0, y: svgH }
+    ];
+    outerCarrierRect.isFrame = true;
+    const dCarrierCut = buildSvgCutPathD(outerCarrierRect, false, toX, toY, true);
+    if (dCarrierCut) {
+      outerPaths.push({ id: 'borde_exterior_soporte_mayor', d: dCarrierCut });
+    }
+  }
+
+  carrier.boardPlacements.forEach((bPl) => {
+    const bTag = 'tab_' + (bPl.boardIndex + 1);
+
+    // Borde de corte o marco configurable de cada sub-tablero dentro del Soporte Mayor (sin micro-uniones)
+    if (state.carrierCutBoardBorders) {
+      if (bPl.boardFrameGeom) {
+        const fg = bPl.boardFrameGeom;
+        if (fg.outerCutPts && fg.outerCutPts.length >= 3) {
+          const dOutF = buildSvgCutPathD(fg.outerCutPts, false, toX, toY, true);
+          if (dOutF) outerPaths.push({ id: bTag + '_marco_exterior', d: dOutF });
+        }
+        if (fg.innerCutPts && fg.innerCutPts.length >= 3) {
+          const dInF = buildSvgCutPathD(fg.innerCutPts, true, toX, toY, true);
+          if (dInF) holePaths.push(dInF);
+        }
+        if (fg.keyholePts && fg.keyholePts.length >= 3) {
+          const dKh = buildSvgCutPathD(fg.keyholePts, true, toX, toY, true);
+          if (dKh) holePaths.push(dKh);
+        }
+        if (fg.engraveLoops && fg.engraveLoops.length > 0) {
+          fg.engraveLoops.forEach((el) => {
+            if (!el.points || el.points.length < 3) return;
+            carrierEngravePath += 'M ' + el.points.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z ';
+          });
+        }
+      } else {
+        const rectPts = [
+          { x: bPl.x, y: bPl.y },
+          { x: bPl.x + bPl.w, y: bPl.y },
+          { x: bPl.x + bPl.w, y: bPl.y + bPl.h },
+          { x: bPl.x, y: bPl.y + bPl.h }
+        ];
+        rectPts.isFrame = true;
+        const dRect = buildSvgCutPathD(rectPts, false, toX, toY, true);
+        if (dRect) outerPaths.push({ id: bTag + '_borde_tablero', d: dRect });
+      }
+    } else if (bPl.boardFrameGeom && bPl.boardFrameGeom.engraveLoops) {
+      bPl.boardFrameGeom.engraveLoops.forEach((el) => {
+        if (!el.points || el.points.length < 3) return;
+        carrierEngravePath += 'M ' + el.points.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z ';
+      });
+    }
+
+    if (state.carrierEngraveBoardLabels) {
+      const padLbl = Math.max(2.5, (bPl.board.margin || 4) * 0.55);
+      boardHeaderLabels.push({
+        x: toX(bPl.x + padLbl),
+        y: toY(bPl.y + bPl.h - padLbl),
+        text: 'TABLERO #' + (bPl.boardIndex + 1) + ' (' + bPl.w.toFixed(0) + 'x' + bPl.h.toFixed(0) + 'mm)'
+      });
+    }
+
+    bPl.transformedPlacements.forEach((pl, pIdx) => {
+      const pts = pl.outerPoints;
+      if (!pts || pts.length < 3) return;
+      let dOutClosed = 'M ' + toX(pts[0].x) + ' ' + toY(pts[0].y);
+      for (let i = 1; i < pts.length; i++) {
+        dOutClosed += ' L ' + toX(pts[i].x) + ' ' + toY(pts[i].y);
+      }
+      dOutClosed += ' Z';
+      compoundPath += dOutClosed + ' ';
+
+      const dOutCut = buildSvgCutPathD(pts, false, toX, toY, Boolean(pl.isFrame || (pl.island && pl.island.isFrame)));
+      if (dOutCut) {
+        outerPaths.push({ id: bTag + '_isla_' + (pIdx + 1) + '_lasca_' + (pl.island.sliceIndex + 1), d: dOutCut });
+      }
+
+      pl.holes.forEach((h) => {
+        if (!h.points || h.points.length < 3) return;
+        let dHoleClosed = 'M ' + toX(h.points[0].x) + ' ' + toY(h.points[0].y);
+        for (let i = 1; i < h.points.length; i++) {
+          dHoleClosed += ' L ' + toX(h.points[i].x) + ' ' + toY(h.points[i].y);
+        }
+        dHoleClosed += ' Z';
+        compoundPath += dHoleClosed + ' ';
+
+        const dHoleCut = buildSvgCutPathD(h.points, true, toX, toY, Boolean(h.isFrame));
+        if (dHoleCut) holePaths.push(dHoleCut);
+      });
+
+      pl.rods.forEach((r) => {
+        rodCircles.push({ cx: toX(r.x), cy: toY(r.y) });
+      });
+
+      if (pl.engraveLoops && pl.engraveLoops.length > 0) {
+        pl.engraveLoops.forEach((el) => {
+          if (!el.points || el.points.length < 3) return;
+          carrierEngravePath += 'M ' + el.points.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z ';
+        });
+      }
+
+      if (state.includeNextSliceGuide && pl.upperPolys.length > 0) {
+        pl.upperPolys.forEach((poly) => {
+          if (poly.length < 2) return;
+          upperGuidePath += 'M ' + toX(poly[0].x) + ' ' + toY(poly[0].y);
+          for (let i = 1; i < poly.length; i++) {
+            upperGuidePath += ' L ' + toX(poly[i].x) + ' ' + toY(poly[i].y);
+          }
+          upperGuidePath += ' ';
+        });
+      }
+
+      if (state.includePrevSliceGuide && pl.lowerPolys.length > 0) {
+        pl.lowerPolys.forEach((poly) => {
+          if (poly.length < 2) return;
+          lowerGuidePath += 'M ' + toX(poly[0].x) + ' ' + toY(poly[0].y);
+          for (let i = 1; i < poly.length; i++) {
+            lowerGuidePath += ' L ' + toX(poly[i].x) + ' ' + toY(poly[i].y);
+          }
+          lowerGuidePath += ' ';
+        });
+      }
+
+      const tl = pl.textLayout;
+      if (tl && tl.lines && tl.lines.length > 0 && tl.fontSizeMM > 0.04) {
+        const fontSize = tl.fontSizeMM.toFixed(3);
+        const lineGap = tl.fontSizeMM * 1.12;
+        const n = tl.lines.length;
+        tl.lines.forEach((lineStr, lIdx) => {
+          const lineY = tl.y + ((n - 1) * 0.5 - lIdx) * lineGap;
+          islandLabels.push({
+            x: toX(tl.x),
+            y: toY(lineY),
+            size: fontSize,
+            text: lineStr
+          });
+        });
+      }
+    });
+  });
+
+  const xmlHeader = '<' + '?xml version="1.0" encoding="UTF-8" standalone="no"?' + '>';
+  const lines = [
+    xmlHeader,
+    '<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="' + svgW.toFixed(3) + 'mm" height="' + svgH.toFixed(3) + 'mm" viewBox="0 0 ' + svgW.toFixed(4) + ' ' + svgH.toFixed(4) + '" style="background:#ffffff;max-width:100vw;max-height:95vh;">',
+    '  <title>' + escapeXmlAttr('Soporte Mayor #' + (carrier.carrierIndex + 1) + ' - ' + svgW.toFixed(1) + 'x' + svgH.toFixed(1) + 'mm') + '</title>',
+    '  <desc>' + escapeXmlAttr('Soporte Mayor #' + (carrier.carrierIndex + 1) + ' | Dimensiones: ' + svgW.toFixed(1) + 'x' + svgH.toFixed(1) + 'mm | Tableros: ' + carrier.boardPlacements.length + ' | Islas: ' + carrier.totalIslands + ' | Aprovechamiento: ' + carrier.efficiency.toFixed(1) + '%') + '</desc>'
+  ];
+
+  if (compoundPath.trim().length > 0) {
+    lines.push('  <g id="VISTA_PREVIA_SOPORTE_MAYOR">');
+    lines.push('    <path d="' + compoundPath.trim() + '" fill="#0ea5e9" fill-opacity="0.14" fill-rule="evenodd" stroke="none" />');
+    lines.push('  </g>');
+  }
+
+  lines.push('  <g id="CORTE_EXTERIOR" fill="none" stroke="#ff0000" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+  outerPaths.forEach((item, i) => {
+    lines.push('    <path id="' + escapeXmlAttr(item.id || ('soporte_ext_' + (i + 1))) + '" d="' + item.d + '" vector-effect="non-scaling-stroke" />');
+  });
+  lines.push('  </g>');
+
+  if (holePaths.length > 0 || rodCircles.length > 0) {
+    lines.push('  <g id="CORTE_INTERIOR_HUECOS" fill="none" stroke="#0055ff" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    holePaths.forEach((d, i) => {
+      lines.push('    <path id="soporte_hueco_' + (i + 1) + '" d="' + d + '" vector-effect="non-scaling-stroke" />');
+    });
+    rodCircles.forEach((c, i) => {
+      lines.push('    <circle id="soporte_varilla_' + (i + 1) + '" cx="' + c.cx + '" cy="' + c.cy + '" r="' + rodRadius + '" fill="#ffffff" vector-effect="non-scaling-stroke" />');
+    });
+    lines.push('  </g>');
+  }
+
+  if (carrierEngravePath.trim().length > 0) {
+    lines.push('  <g id="GRABADO_VECTORIAL_SOPORTE" fill="#008800" fill-opacity="0.22" fill-rule="evenodd" stroke="#008800" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    lines.push('    <path id="grabado_soporte_trazos" d="' + carrierEngravePath.trim() + '" vector-effect="non-scaling-stroke" />');
+    lines.push('  </g>');
+  }
+
+  if (lowerGuidePath.trim().length > 0) {
+    const lowerDashAttr = getSvgDashAttr(state.lowerGuideStyle);
+    lines.push('  <g id="GUIA_INFERIOR_SOPORTE" fill="none" stroke="#9900ff" stroke-width="' + strokeMm + '"' + lowerDashAttr + ' stroke-linecap="round" stroke-linejoin="round">');
+    lines.push('    <path id="guia_inf_soporte_trazos" d="' + lowerGuidePath.trim() + '" vector-effect="non-scaling-stroke" />');
+    lines.push('  </g>');
+  }
+
+  if (upperGuidePath.trim().length > 0) {
+    const upperDashAttr = getSvgDashAttr(state.upperGuideStyle);
+    lines.push('  <g id="GUIA_SUPERIOR_SOPORTE" fill="none" stroke="#ff8800" stroke-width="' + strokeMm + '"' + upperDashAttr + ' stroke-linecap="round" stroke-linejoin="round">');
+    lines.push('    <path id="guia_sup_soporte_trazos" d="' + upperGuidePath.trim() + '" vector-effect="non-scaling-stroke" />');
+    lines.push('  </g>');
+  }
+
+  if (islandLabels.length > 0 || boardHeaderLabels.length > 0 || state.includeLabels) {
+    lines.push('  <g id="GRABADO_ETIQUETAS_SOPORTE">');
+    boardHeaderLabels.forEach((bl, i) => {
+      lines.push('    <text id="grabado_tablero_hdr_' + (i + 1) + '" x="' + bl.x + '" y="' + bl.y + '" font-family="monospace, sans-serif" font-weight="bold" font-size="3.400" fill="#008800">' + escapeXmlAttr(bl.text) + '</text>');
+    });
+    islandLabels.forEach((lbl, i) => {
+      lines.push('    <text id="grabado_isla_soporte_' + (i + 1) + '" x="' + lbl.x + '" y="' + lbl.y + '" text-anchor="middle" dominant-baseline="central" font-family="monospace, sans-serif" font-weight="bold" font-size="' + lbl.size + '" fill="#008800">' + escapeXmlAttr(lbl.text) + '</text>');
+    });
+    if (state.includeLabels) {
+      const headerText = escapeXmlAttr('SOPORTE MAYOR #' + (carrier.carrierIndex + 1) + ' [' + svgW.toFixed(0) + 'x' + svgH.toFixed(0) + 'mm | Tableros: ' + carrier.boardPlacements.length + ' | Islas: ' + carrier.totalIslands + ' | Uso: ' + carrier.efficiency.toFixed(1) + '%]');
+      lines.push('    <text x="' + Math.max(2, carrier.margin).toFixed(3) + '" y="' + (svgH - Math.max(1.5, carrier.margin * 0.4)).toFixed(3) + '" font-family="monospace, sans-serif" font-size="3.600" fill="#008800">' + headerText + '</text>');
+    }
+    lines.push('  </g>');
+  }
+
+  lines.push('</svg>');
+  return lines.join('\n');
+}
+
+// Genera el archivo .DXF de un Soporte Mayor (Apartado 6) con todos los tableros e islas anidadas
+function generateCarrierDXF(carrier) {
+  const dxf = ['0', 'SECTION', '2', 'ENTITIES'];
+
+  if (state.carrierCutOuterBorder) {
+    const outerCarrierRect = [
+      { x: 0, y: 0 },
+      { x: carrier.width, y: 0 },
+      { x: carrier.width, y: carrier.height },
+      { x: 0, y: carrier.height }
+    ];
+    pushLoopLinesWithTabsDXF(dxf, outerCarrierRect, false, 'CORTE_EXTERIOR', '1', 0, 0, true);
+  }
+
+  carrier.boardPlacements.forEach((bPl) => {
+    if (state.carrierCutBoardBorders) {
+      if (bPl.boardFrameGeom) {
+        const fg = bPl.boardFrameGeom;
+        if (fg.outerCutPts && fg.outerCutPts.length >= 3) {
+          pushLoopLinesWithTabsDXF(dxf, fg.outerCutPts, false, 'CORTE_EXTERIOR', '1', 0, 0, true);
+        }
+        if (fg.innerCutPts && fg.innerCutPts.length >= 3) {
+          pushLoopLinesWithTabsDXF(dxf, fg.innerCutPts, true, 'CORTE_INTERIOR', '5', 0, 0, true);
+        }
+        if (fg.keyholePts && fg.keyholePts.length >= 3) {
+          pushLoopLinesWithTabsDXF(dxf, fg.keyholePts, true, 'CORTE_INTERIOR', '5', 0, 0, true);
+        }
+        if (fg.engraveLoops && fg.engraveLoops.length > 0) {
+          fg.engraveLoops.forEach((el) => {
+            if (!el.points || el.points.length < 3) return;
+            for (let i = 0, n = el.points.length; i < n; i++) {
+              const p1 = el.points[i];
+              const p2 = el.points[(i + 1) % n];
+              dxf.push(
+                '0', 'LINE',
+                '8', 'GRABADO_VECTORIAL',
+                '62', '3',
+                '10', p1.x.toFixed(4),
+                '20', p1.y.toFixed(4),
+                '30', '0.0',
+                '11', p2.x.toFixed(4),
+                '21', p2.y.toFixed(4),
+                '31', '0.0'
+              );
+            }
+          });
+        }
+      } else {
+        const rectPts = [
+          { x: bPl.x, y: bPl.y },
+          { x: bPl.x + bPl.w, y: bPl.y },
+          { x: bPl.x + bPl.w, y: bPl.y + bPl.h },
+          { x: bPl.x, y: bPl.y + bPl.h }
+        ];
+        pushLoopLinesWithTabsDXF(dxf, rectPts, false, 'CORTE_EXTERIOR', '1', 0, 0, true);
+      }
+    }
+
+    if (state.carrierEngraveBoardLabels) {
+      const padLbl = Math.max(2.5, (bPl.board.margin || 4) * 0.55);
+      dxf.push(
+        '0', 'TEXT',
+        '8', 'GRABADO_ETIQUETA',
+        '62', '3',
+        '10', (bPl.x + padLbl).toFixed(4),
+        '20', (bPl.y + bPl.h - padLbl - 3.2).toFixed(4),
+        '30', '0.0',
+        '40', '3.2000',
+        '1', 'TABLERO #' + (bPl.boardIndex + 1)
+      );
+    }
+
+    bPl.transformedPlacements.forEach((pl) => {
+      pushLoopLinesWithTabsDXF(dxf, pl.outerPoints, false, 'CORTE_EXTERIOR', '1', 0, 0, Boolean(pl.isFrame || (pl.island && pl.island.isFrame)));
+      pl.holes.forEach((h) => pushLoopLinesWithTabsDXF(dxf, h.points, true, 'CORTE_INTERIOR', '5', 0, 0, Boolean(h.isFrame)));
+
+      if (pl.engraveLoops && pl.engraveLoops.length > 0) {
+        pl.engraveLoops.forEach((el) => {
+          if (!el.points || el.points.length < 3) return;
+          for (let i = 0, n = el.points.length; i < n; i++) {
+            const p1 = el.points[i];
+            const p2 = el.points[(i + 1) % n];
+            dxf.push(
+              '0', 'LINE',
+              '8', 'GRABADO_VECTORIAL',
+              '62', '3',
+              '10', p1.x.toFixed(4),
+              '20', p1.y.toFixed(4),
+              '30', '0.0',
+              '11', p2.x.toFixed(4),
+              '21', p2.y.toFixed(4),
+              '31', '0.0'
+            );
+          }
+        });
+      }
+
+      if (state.includePrevSliceGuide && pl.lowerPolys.length > 0) {
+        pl.lowerPolys.forEach((poly) => {
+          for (let i = 0; i < poly.length - 1; i++) {
+            dxf.push(
+              '0', 'LINE',
+              '8', 'GUIA_LASCA_INFERIOR',
+              '62', '6',
+              '10', poly[i].x.toFixed(4),
+              '20', poly[i].y.toFixed(4),
+              '30', '0.0',
+              '11', poly[i + 1].x.toFixed(4),
+              '21', poly[i + 1].y.toFixed(4),
+              '31', '0.0'
+            );
+          }
+        });
+      }
+
+      if (state.includeNextSliceGuide && pl.upperPolys.length > 0) {
+        pl.upperPolys.forEach((poly) => {
+          for (let i = 0; i < poly.length - 1; i++) {
+            dxf.push(
+              '0', 'LINE',
+              '8', 'GUIA_LASCA_SUPERIOR',
+              '62', '30',
+              '10', poly[i].x.toFixed(4),
+              '20', poly[i].y.toFixed(4),
+              '30', '0.0',
+              '11', poly[i + 1].x.toFixed(4),
+              '21', poly[i + 1].y.toFixed(4),
+              '31', '0.0'
+            );
+          }
+        });
+      }
+
+      pl.rods.forEach((r) => {
+        dxf.push(
+          '0', 'CIRCLE',
+          '8', 'VARILLAS_GUIA',
+          '62', '5',
+          '10', r.x.toFixed(4),
+          '20', r.y.toFixed(4),
+          '30', '0.0',
+          '40', (state.rodDiameter / 2).toFixed(4)
+        );
+      });
+
+      const tl = pl.textLayout;
+      if (tl && tl.lines && tl.lines.length > 0 && tl.fontSizeMM > 0.04) {
+        const textH = tl.fontSizeMM;
+        const lineGap = textH * 1.12;
+        const n = tl.lines.length;
+        tl.lines.forEach((lineStr, lIdx) => {
+          const lineY = tl.y + ((n - 1) * 0.5 - lIdx) * lineGap;
+          const halfW = (lineStr.length * textH * 0.6) * 0.5;
+          dxf.push(
+            '0', 'TEXT',
+            '8', 'GRABADO_ETIQUETA',
+            '62', '3',
+            '10', (tl.x - halfW).toFixed(4),
+            '20', (lineY - textH * 0.35).toFixed(4),
+            '30', '0.0',
+            '40', textH.toFixed(4),
+            '1', lineStr
+          );
+        });
+      }
+    });
+  });
+
+  dxf.push('0', 'ENDSEC', '0', 'EOF');
+  return dxf.join('\n');
+}
+
 function generateSliceDXF(slice, idx) {
   const upperSlice = typeof idx === 'number' ? getAdjacentSlice(idx, 'next') : null;
   const lowerSlice = typeof idx === 'number' ? getAdjacentSlice(idx, 'prev') : null;
@@ -821,6 +1227,23 @@ if (typeof window !== 'undefined') {
 }
 
 function downloadCurrentSlice(format) {
+  if (state.carrierEnabled && (format === 'svg' || format === 'dxf')) {
+    const carrier = state.nestedCarriers[state.activeCarrierIndex];
+    if (!carrier) return;
+    const cNum = String(carrier.carrierIndex + 1).padStart(3, '0');
+    const baseCarrierName = state.modelName + '_soporte_mayor_' + cNum + '_' + carrier.width.toFixed(0) + 'x' + carrier.height.toFixed(0) + 'mm';
+    if (format === 'svg') {
+      const svgContent = generateCarrierSVG(carrier);
+      const blob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
+      triggerBrowserDownload(blob, baseCarrierName + '.svg');
+    } else {
+      const dxfContent = generateCarrierDXF(carrier);
+      const blob = new Blob([dxfContent], { type: 'application/dxf;charset=utf-8' });
+      triggerBrowserDownload(blob, baseCarrierName + '.dxf');
+    }
+    return;
+  }
+
   if (state.nestingEnabled && (format === 'svg' || format === 'dxf')) {
     const board = state.nestedBoards[state.activeBoardIndex];
     if (!board) return;
@@ -876,6 +1299,8 @@ function openExportModal() {
   if (lblChk) lblChk.checked = state.includeLabels;
   const nestChk = document.getElementById('modalNestingEnabledCheck');
   if (nestChk) nestChk.checked = state.nestingEnabled;
+  const carrierChk = document.getElementById('modalCarrierEnabledCheck');
+  if (carrierChk) carrierChk.checked = state.carrierEnabled;
   const numChk = document.getElementById('modalNestEngraveNumCheck');
   if (numChk) numChk.checked = state.nestEngraveSliceNum;
   const guideChk = document.getElementById('modalNestEngraveGuideCheck');
@@ -891,6 +1316,8 @@ function openExportModal() {
   const subOpts = document.getElementById('modalNestingSubOptions');
   if (subOpts) subOpts.classList.toggle('hidden', !state.nestingEnabled);
   syncBoardInputsUI();
+  if (typeof syncCarrierInputsUI === 'function') syncCarrierInputsUI();
+  if (typeof syncCarrierUIState === 'function') syncCarrierUIState();
   const modal = document.getElementById('exportModal');
   if (modal) {
     modal.classList.remove('hidden');
@@ -1068,6 +1495,29 @@ async function executeZipExport() {
       if (folderBoardsSVG) folderBoardsSVG.file(bName + '.svg', generateBoardSVG(board));
       if (folderBoardsDXF) folderBoardsDXF.file(bName + '.dxf', generateBoardDXF(board));
     });
+
+    // Si la distribución en Soporte Mayor (Apartado 6) está activa, empaquetamos también los tableros en soportes mayores
+    if (state.carrierEnabled && typeof packBoardsIntoCarriers === 'function') {
+      const carrierRes = packBoardsIntoCarriers(
+        boardsForExport,
+        state.carrierWidthMM,
+        state.carrierHeightMM,
+        state.carrierMarginMM,
+        state.carrierSpacingMM,
+        state.carrierAllowRotate
+      );
+      const carriersForExport = carrierRes.carriers || [];
+      if (carriersForExport.length > 0) {
+        const folderCarriersSVG = wantSVG ? zip.folder('SVG_Soportes_Mayores') : null;
+        const folderCarriersDXF = wantDXF ? zip.folder('DXF_Soportes_Mayores') : null;
+        carriersForExport.forEach((carrier) => {
+          const cNum = String(carrier.carrierIndex + 1).padStart(3, '0');
+          const cName = 'soporte_mayor_' + cNum + '_' + carrier.width.toFixed(0) + 'x' + carrier.height.toFixed(0) + 'mm';
+          if (folderCarriersSVG) folderCarriersSVG.file(cName + '.svg', generateCarrierSVG(carrier));
+          if (folderCarriersDXF) folderCarriersDXF.file(cName + '.dxf', generateCarrierDXF(carrier));
+        });
+      }
+    }
   }
 
   // Si la Subdivisión Modular 3D está activa, generamos también una carpeta organizada por Conjunto (Conjunto_A1, Conjunto_A2, etc.)
@@ -1166,6 +1616,15 @@ function exportProjectFile() {
     nestClipOversized: state.nestClipOversized,
     nestEngraveSliceNum: state.nestEngraveSliceNum,
     nestEngraveGuideType: state.nestEngraveGuideType,
+    carrierEnabled: state.carrierEnabled,
+    carrierWidthMM: state.carrierWidthMM,
+    carrierHeightMM: state.carrierHeightMM,
+    carrierSpacingMM: state.carrierSpacingMM,
+    carrierMarginMM: state.carrierMarginMM,
+    carrierAllowRotate: state.carrierAllowRotate,
+    carrierCutBoardBorders: state.carrierCutBoardBorders,
+    carrierCutOuterBorder: state.carrierCutOuterBorder,
+    carrierEngraveBoardLabels: state.carrierEngraveBoardLabels,
     rodCount: state.rodCount,
     rodDiameter: state.rodDiameter,
     slicerFrameEnabled: state.slicerFrameEnabled,
@@ -1303,7 +1762,20 @@ function importProjectFile(file) {
       }
       if (typeof data.nestEngraveSliceNum === 'boolean') setNestEngraveNum(data.nestEngraveSliceNum);
       if (typeof data.nestEngraveGuideType === 'boolean') setNestEngraveGuideType(data.nestEngraveGuideType);
+      if (typeof data.carrierWidthMM === 'number') state.carrierWidthMM = data.carrierWidthMM;
+      if (typeof data.carrierHeightMM === 'number') state.carrierHeightMM = data.carrierHeightMM;
+      if (typeof data.carrierSpacingMM === 'number') state.carrierSpacingMM = data.carrierSpacingMM;
+      if (typeof data.carrierMarginMM === 'number') state.carrierMarginMM = data.carrierMarginMM;
+      if (typeof data.carrierAllowRotate === 'boolean') state.carrierAllowRotate = data.carrierAllowRotate;
+      if (typeof data.carrierCutBoardBorders === 'boolean') state.carrierCutBoardBorders = data.carrierCutBoardBorders;
+      if (typeof data.carrierCutOuterBorder === 'boolean') state.carrierCutOuterBorder = data.carrierCutOuterBorder;
+      if (typeof data.carrierEngraveBoardLabels === 'boolean') state.carrierEngraveBoardLabels = data.carrierEngraveBoardLabels;
       if (typeof data.nestingEnabled === 'boolean') setNestingEnabled(data.nestingEnabled);
+      if (typeof data.carrierEnabled === 'boolean' && typeof setCarrierEnabled === 'function') {
+        setCarrierEnabled(data.carrierEnabled);
+      }
+      if (typeof syncCarrierInputsUI === 'function') syncCarrierInputsUI();
+      if (typeof syncCarrierUIState === 'function') syncCarrierUIState();
 
       const rodCountEl = document.getElementById('rodCountSelect');
       if (rodCountEl) rodCountEl.value = String(state.rodCount);

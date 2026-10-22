@@ -205,6 +205,19 @@ const state = {
   unfitIslandsCount: 0,        // Islas cuyas dimensiones superan el tamaño total de un tablero
   clippedIslandsCount: 0,      // Islas que fueron recortadas para caber en el tablero
   activeBoardIndex: 0,
+  // Configuración de Distribución de Tableros en Soporte Mayor (Apartado 6: Plancha Madre / Cama Láser)
+  carrierEnabled: false,       // true = distribuye los tableros generados dentro de un soporte mayor configurable
+  carrierWidthMM: 1220,        // Ancho del soporte mayor en mm (ej. 1220 mm = 122 cm)
+  carrierHeightMM: 800,        // Alto del soporte mayor en mm (ej. 800 mm = 80 cm)
+  carrierSpacingMM: 8,         // Separación entre tableros dentro del soporte mayor en mm
+  carrierMarginMM: 10,         // Margen exterior del soporte mayor en mm
+  carrierAllowRotate: true,    // true = permite rotar tableros 90° para optimizar cabida en el soporte mayor
+  carrierCutBoardBorders: true,// true = corta el perímetro o marco configurable de cada sub-tablero (#ff0000)
+  carrierCutOuterBorder: false,// true = corta también el borde perimetral exterior del soporte mayor (#ff0000)
+  carrierEngraveBoardLabels: true, // true = graba la etiqueta de cada sub-tablero (TABLERO #1...)
+  nestedCarriers: [],          // [{ carrierIndex, width, height, margin, spacing, boardPlacements: [...], totalIslands, efficiency }]
+  unfitBoardsCount: 0,         // Tableros cuyas dimensiones superan el soporte mayor
+  activeCarrierIndex: 0,
   assemblyGuideTab: 'all',     // 'all' | 'cutting' | 'assembly'
   guideShowIllustrations: true,// true = muestra diagramas vectoriales automáticos en la guía de montaje
   assembledSlicesDone: {},     // Registro de pasos marcados como montados { [sliceIndex]: boolean }
@@ -501,8 +514,11 @@ function setDisplayUnit(u) {
   document.getElementById('unitLabelDims').textContent = u;
   const lblBoard = document.getElementById('unitLabelBoard');
   if (lblBoard) lblBoard.textContent = u;
+  const lblCarrier = document.getElementById('unitLabelCarrier');
+  if (lblCarrier) lblCarrier.textContent = u;
   syncDimensionInputsUI();
   syncBoardInputsUI();
+  if (typeof syncCarrierInputsUI === 'function') syncCarrierInputsUI();
   render2DSlice();
 }
 
@@ -3546,12 +3562,19 @@ function setNestingEnabled(val) {
   if (state.nestingEnabled) {
     recomputeBoardNesting();
     state.activeBoardIndex = 0;
+    state.activeCarrierIndex = 0;
     const slider = document.getElementById('currentSliceSlider');
     if (slider) {
-      slider.max = Math.max(0, state.nestedBoards.length - 1);
+      slider.max = state.carrierEnabled
+        ? Math.max(0, state.nestedCarriers.length - 1)
+        : Math.max(0, state.nestedBoards.length - 1);
       slider.value = 0;
     }
   } else {
+    if (state.carrierEnabled) {
+      state.carrierEnabled = false;
+      if (typeof syncCarrierUIState === 'function') syncCarrierUIState();
+    }
     const slider = document.getElementById('currentSliceSlider');
     if (slider) {
       slider.max = Math.max(0, state.slices.length - 1);
@@ -4691,11 +4714,18 @@ function recomputeBoardNesting() {
     state.activeBoardIndex = Math.max(0, state.nestedBoards.length - 1);
   }
 
+  recomputeCarrierNesting();
+
   if (state.nestingEnabled) {
     const slider = document.getElementById('currentSliceSlider');
     if (slider) {
-      slider.max = Math.max(0, state.nestedBoards.length - 1);
-      slider.value = state.activeBoardIndex;
+      if (state.carrierEnabled) {
+        slider.max = Math.max(0, state.nestedCarriers.length - 1);
+        slider.value = state.activeCarrierIndex;
+      } else {
+        slider.max = Math.max(0, state.nestedBoards.length - 1);
+        slider.value = state.activeBoardIndex;
+      }
     }
   }
 
@@ -4734,7 +4764,23 @@ function recomputeBoardNesting() {
 
 function update2DInspectorHeader() {
   const includeLbl = document.getElementById('inspectorIncludeSliceLabel');
-  if (state.nestingEnabled) {
+  if (state.nestingEnabled && state.carrierEnabled) {
+    if (includeLbl) includeLbl.classList.add('hidden');
+    const totalC = state.nestedCarriers.length;
+    const c = state.nestedCarriers[state.activeCarrierIndex];
+    const f = getUnitFactor();
+    const dec = state.unit === 'm' ? 3 : 1;
+
+    document.getElementById('slice2DTitle').textContent =
+      totalC > 0 ? ('Soporte Mayor #' + (state.activeCarrierIndex + 1) + ' / ' + totalC) : 'Sin tableros que quepan en el soporte';
+    document.getElementById('slice2DCoord').textContent =
+      c ? (c.boardPlacements.length + ' tablero(s) · ' + c.totalIslands + ' piezas') : '0 tableros';
+    document.getElementById('slice2DStats').textContent =
+      'Soporte: ' + (state.carrierWidthMM / f).toFixed(dec) + ' × ' + (state.carrierHeightMM / f).toFixed(dec) + ' ' + state.unit +
+      ' | Sub-tableros: ' + (state.boardWidthMM / f).toFixed(dec) + ' × ' + (state.boardHeightMM / f).toFixed(dec) + ' ' + state.unit +
+      (c ? (' | Uso soporte: ' + c.efficiency.toFixed(1) + '%') : '') +
+      (state.unfitBoardsCount > 0 ? (' | ⚠️ ' + state.unfitBoardsCount + ' tablero(s) no caben') : '');
+  } else if (state.nestingEnabled) {
     if (includeLbl) includeLbl.classList.add('hidden');
     const totalB = state.nestedBoards.length;
     const b = state.nestedBoards[state.activeBoardIndex];
@@ -4785,7 +4831,12 @@ function update2DInspectorHeader() {
 }
 
 function on2DSliderInput(val) {
-  if (state.nestingEnabled) {
+  if (state.nestingEnabled && state.carrierEnabled) {
+    state.activeCarrierIndex = Math.max(0, Math.min(state.nestedCarriers.length - 1, val));
+    update2DInspectorHeader();
+    highlightActiveCardInStrip();
+    render2DSlice();
+  } else if (state.nestingEnabled) {
     state.activeBoardIndex = Math.max(0, Math.min(state.nestedBoards.length - 1, val));
     update2DInspectorHeader();
     highlightActiveCardInStrip();
@@ -4804,6 +4855,516 @@ function selectActiveBoard(bIdx) {
   update2DInspectorHeader();
   highlightActiveCardInStrip();
   render2DSlice();
+}
+
+// =========================================================================
+// 6. MOTOR DE DISTRIBUCIÓN DE TABLEROS EN SOPORTE MAYOR (PLANCHA MADRE)
+// =========================================================================
+
+function syncCarrierInputsUI() {
+  const f = getUnitFactor();
+  const decimals = state.unit === 'm' ? 3 : (state.unit === 'cm' ? 1 : 0);
+  const wInput = document.getElementById('carrierWidthInput');
+  const hInput = document.getElementById('carrierHeightInput');
+  if (wInput) wInput.value = Number((state.carrierWidthMM / f).toFixed(decimals));
+  if (hInput) hInput.value = Number((state.carrierHeightMM / f).toFixed(decimals));
+
+  const spInput = document.getElementById('carrierSpacingInput');
+  const mgInput = document.getElementById('carrierMarginInput');
+  if (spInput) spInput.value = state.carrierSpacingMM;
+  if (mgInput) mgInput.value = state.carrierMarginMM;
+
+  const rotChk = document.getElementById('carrierRotateCheck');
+  if (rotChk) rotChk.checked = Boolean(state.carrierAllowRotate);
+  const cutBChk = document.getElementById('carrierCutBoardBordersCheck') || document.getElementById('carrierCutBoardsCheck');
+  if (cutBChk) cutBChk.checked = Boolean(state.carrierCutBoardBorders);
+  const cutOChk = document.getElementById('carrierCutOuterBorderCheck') || document.getElementById('carrierCutOuterCheck');
+  if (cutOChk) cutOChk.checked = Boolean(state.carrierCutOuterBorder);
+  const lblChk = document.getElementById('carrierEngraveLabelsCheck');
+  if (lblChk) lblChk.checked = Boolean(state.carrierEngraveBoardLabels);
+
+  const modalSub = document.getElementById('modalCarrierInfoSub');
+  if (modalSub) {
+    modalSub.textContent = 'Distribuye los tableros de ' +
+      state.boardWidthMM.toFixed(0) + '×' + state.boardHeightMM.toFixed(0) +
+      ' mm en soportes mayores de ' +
+      state.carrierWidthMM.toFixed(0) + '×' + state.carrierHeightMM.toFixed(0) + ' mm';
+  }
+}
+
+function syncCarrierUIState() {
+  const c1 = document.getElementById('carrierEnabledCheck');
+  const c2 = document.getElementById('modalCarrierEnabledCheck');
+  const box = document.getElementById('carrierControlsBox');
+  const btnToggleCarrier = document.getElementById('btnToggleCarrierView');
+
+  if (c1) c1.checked = Boolean(state.carrierEnabled);
+  if (c2) c2.checked = Boolean(state.carrierEnabled);
+  if (box) box.classList.toggle('opacity-45', !state.carrierEnabled);
+
+  if (btnToggleCarrier) {
+    if (state.carrierEnabled) {
+      btnToggleCarrier.textContent = '📦 Soporte Mayor: ON';
+      btnToggleCarrier.className = 'text-[11px] px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold transition';
+    } else {
+      btnToggleCarrier.textContent = '📦 Soporte Mayor: OFF';
+      btnToggleCarrier.className = 'text-[11px] px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-semibold transition';
+    }
+  }
+}
+
+function setCarrierPresetMM(wMM, hMM) {
+  state.carrierWidthMM = wMM;
+  state.carrierHeightMM = hMM;
+  syncCarrierInputsUI();
+  if (!state.carrierEnabled) {
+    setCarrierEnabled(true);
+  } else {
+    recomputeCarrierNesting();
+    renderSliceStripUI();
+    update2DInspectorHeader();
+    render2DSlice();
+  }
+}
+
+function setCarrierEnabled(val) {
+  state.carrierEnabled = Boolean(val);
+  syncCarrierUIState();
+  syncCarrierInputsUI();
+
+  if (state.carrierEnabled && !state.nestingEnabled) {
+    // Activar automáticamente la distribución en tableros (Apartado 5) para poder anidar esos tableros en el soporte mayor
+    setNestingEnabled(true);
+    return;
+  }
+
+  reset2DView(false);
+
+  if (state.carrierEnabled) {
+    recomputeBoardNesting();
+    state.activeCarrierIndex = 0;
+    const slider = document.getElementById('currentSliceSlider');
+    if (slider) {
+      slider.max = Math.max(0, state.nestedCarriers.length - 1);
+      slider.value = 0;
+    }
+  } else {
+    const slider = document.getElementById('currentSliceSlider');
+    if (slider) {
+      slider.max = state.nestingEnabled
+        ? Math.max(0, state.nestedBoards.length - 1)
+        : Math.max(0, state.slices.length - 1);
+      slider.value = state.nestingEnabled ? state.activeBoardIndex : state.activeSliceIndex;
+    }
+    const badge = document.getElementById('carrierSummaryBadge');
+    if (badge) badge.textContent = 'Desactivado (vista y exportación por tablero individual)';
+  }
+
+  renderSliceStripUI();
+  update2DInspectorHeader();
+  render2DSlice();
+}
+
+function onCarrierSettingsChange() {
+  const f = getUnitFactor();
+  const wEl = document.getElementById('carrierWidthInput');
+  const hEl = document.getElementById('carrierHeightInput');
+  const spEl = document.getElementById('carrierSpacingInput');
+  const mgEl = document.getElementById('carrierMarginInput');
+  const rotEl = document.getElementById('carrierRotateCheck');
+  const cutBEl = document.getElementById('carrierCutBoardBordersCheck') || document.getElementById('carrierCutBoardsCheck');
+  const cutOEl = document.getElementById('carrierCutOuterBorderCheck') || document.getElementById('carrierCutOuterCheck');
+  const lblEl = document.getElementById('carrierEngraveLabelsCheck');
+
+  if (wEl) {
+    const wVal = parseFloat(wEl.value);
+    if (Number.isFinite(wVal) && wVal > 0) state.carrierWidthMM = Math.max(40, wVal * f);
+  }
+  if (hEl) {
+    const hVal = parseFloat(hEl.value);
+    if (Number.isFinite(hVal) && hVal > 0) state.carrierHeightMM = Math.max(40, hVal * f);
+  }
+  if (spEl) {
+    const spVal = parseFloat(spEl.value);
+    if (Number.isFinite(spVal) && spVal >= 0) state.carrierSpacingMM = spVal;
+  }
+  if (mgEl) {
+    const mgVal = parseFloat(mgEl.value);
+    if (Number.isFinite(mgVal) && mgVal >= 0) state.carrierMarginMM = mgVal;
+  }
+  if (rotEl) state.carrierAllowRotate = Boolean(rotEl.checked);
+  if (cutBEl) state.carrierCutBoardBorders = Boolean(cutBEl.checked);
+  if (cutOEl) state.carrierCutOuterBorder = Boolean(cutOEl.checked);
+  if (lblEl) state.carrierEngraveBoardLabels = Boolean(lblEl.checked);
+
+  syncCarrierInputsUI();
+  if (state.carrierEnabled) {
+    recomputeCarrierNesting();
+    renderSliceStripUI();
+    update2DInspectorHeader();
+    render2DSlice();
+  }
+}
+
+/**
+ * Empaqueta la lista de tableros (`boards`) dentro de uno o varios Soportes Mayores (`carrierW` × `carrierH` mm)
+ * empleando el algoritmo MaxRects 2D y transformando todas las islas, guías y marcos al sistema de coordenadas del soporte.
+ */
+function packBoardsIntoCarriers(boards, carrierW, carrierH, margin, spacing, allowRot) {
+  const usableW = Math.max(1, carrierW - margin * 2);
+  const usableH = Math.max(1, carrierH - margin * 2);
+  const carriers = [];
+  let unfitBoardsCount = 0;
+
+  const createNewCarrier = () => {
+    const c = {
+      carrierIndex: carriers.length,
+      width: carrierW,
+      height: carrierH,
+      margin: margin,
+      spacing: spacing,
+      freeRects: [{
+        x: margin,
+        y: margin,
+        w: usableW + spacing,
+        h: usableH + spacing
+      }],
+      boardPlacements: [],
+      totalIslands: 0,
+      usedBoardsArea: 0,
+      efficiency: 0
+    };
+    carriers.push(c);
+    return c;
+  };
+
+  const splitCarrierFreeRects = (freeRects, usedRect) => {
+    const nextFree = [];
+    for (let i = 0; i < freeRects.length; i++) {
+      const fr = freeRects[i];
+      if (
+        usedRect.x >= fr.x + fr.w ||
+        usedRect.x + usedRect.w <= fr.x ||
+        usedRect.y >= fr.y + fr.h ||
+        usedRect.y + usedRect.h <= fr.y
+      ) {
+        nextFree.push(fr);
+        continue;
+      }
+      if (usedRect.x > fr.x) {
+        nextFree.push({ x: fr.x, y: fr.y, w: usedRect.x - fr.x, h: fr.h });
+      }
+      if (usedRect.x + usedRect.w < fr.x + fr.w) {
+        nextFree.push({
+          x: usedRect.x + usedRect.w,
+          y: fr.y,
+          w: (fr.x + fr.w) - (usedRect.x + usedRect.w),
+          h: fr.h
+        });
+      }
+      if (usedRect.y > fr.y) {
+        nextFree.push({ x: fr.x, y: fr.y, w: fr.w, h: usedRect.y - fr.y });
+      }
+      if (usedRect.y + usedRect.h < fr.y + fr.h) {
+        nextFree.push({
+          x: fr.x,
+          y: usedRect.y + usedRect.h,
+          w: fr.w,
+          h: (fr.y + fr.h) - (usedRect.y + usedRect.h)
+        });
+      }
+    }
+
+    const pruned = [];
+    for (let i = 0; i < nextFree.length; i++) {
+      const a = nextFree[i];
+      if (a.w <= spacing + 0.5 || a.h <= spacing + 0.5) continue;
+      let contained = false;
+      for (let j = 0; j < nextFree.length; j++) {
+        if (i === j) continue;
+        const b = nextFree[j];
+        if (
+          a.x >= b.x - 1e-4 &&
+          a.y >= b.y - 1e-4 &&
+          a.x + a.w <= b.x + b.w + 1e-4 &&
+          a.y + a.h <= b.y + b.h + 1e-4
+        ) {
+          const areaA = a.w * a.h;
+          const areaB = b.w * b.h;
+          if (areaA < areaB - 1e-3 || (Math.abs(areaA - areaB) <= 1e-3 && i > j)) {
+            contained = true;
+            break;
+          }
+        }
+      }
+      if (!contained) pruned.push(a);
+    }
+    return pruned;
+  };
+
+  (boards || []).forEach((board) => {
+    const bw = board.width;
+    const bh = board.height;
+    const fitsNormal = (bw <= usableW + 1e-4 && bh <= usableH + 1e-4);
+    const fitsRot = allowRot && (bh <= usableW + 1e-4 && bw <= usableH + 1e-4);
+
+    if (!fitsNormal && !fitsRot) {
+      unfitBoardsCount++;
+      return;
+    }
+
+    const reqW0 = bw + spacing;
+    const reqH0 = bh + spacing;
+
+    let bestCarrier = null;
+    let bestX = 0, bestY = 0;
+    let bestRotated = false;
+    let bestShortSide = Infinity;
+    let bestLongSide = Infinity;
+
+    const tryFindOnCarrier = (carrier) => {
+      for (let i = 0; i < carrier.freeRects.length; i++) {
+        const fr = carrier.freeRects[i];
+        if (
+          fitsNormal &&
+          fr.w >= reqW0 - 1e-4 &&
+          fr.h >= reqH0 - 1e-4 &&
+          fr.x + bw <= carrierW - margin + 1e-3 &&
+          fr.y + bh <= carrierH - margin + 1e-3
+        ) {
+          const remW = fr.w - reqW0;
+          const remH = fr.h - reqH0;
+          const shortS = Math.min(remW, remH);
+          const longS = Math.max(remW, remH);
+          if (shortS < bestShortSide || (shortS === bestShortSide && longS < bestLongSide)) {
+            bestCarrier = carrier;
+            bestX = fr.x;
+            bestY = fr.y;
+            bestRotated = false;
+            bestShortSide = shortS;
+            bestLongSide = longS;
+          }
+        }
+        if (
+          fitsRot &&
+          fr.w >= reqH0 - 1e-4 &&
+          fr.h >= reqW0 - 1e-4 &&
+          fr.x + bh <= carrierW - margin + 1e-3 &&
+          fr.y + bw <= carrierH - margin + 1e-3
+        ) {
+          const remW = fr.w - reqH0;
+          const remH = fr.h - reqW0;
+          const shortS = Math.min(remW, remH);
+          const longS = Math.max(remW, remH);
+          if (shortS < bestShortSide || (shortS === bestShortSide && longS < bestLongSide)) {
+            bestCarrier = carrier;
+            bestX = fr.x;
+            bestY = fr.y;
+            bestRotated = true;
+            bestShortSide = shortS;
+            bestLongSide = longS;
+          }
+        }
+      }
+    };
+
+    for (let cIdx = 0; cIdx < carriers.length; cIdx++) {
+      tryFindOnCarrier(carriers[cIdx]);
+      if (bestCarrier) break;
+    }
+
+    if (!bestCarrier) {
+      const nc = createNewCarrier();
+      tryFindOnCarrier(nc);
+    }
+
+    if (!bestCarrier) {
+      unfitBoardsCount++;
+      return;
+    }
+
+    const placedW = bestRotated ? bh : bw;
+    const placedH = bestRotated ? bw : bh;
+    const usedRect = { x: bestX, y: bestY, w: placedW + spacing, h: placedH + spacing };
+    bestCarrier.freeRects = splitCarrierFreeRects(bestCarrier.freeRects, usedRect);
+    bestCarrier.usedBoardsArea += bw * bh;
+    bestCarrier.totalIslands += board.placements.length;
+
+    const transformBoardPt = (pt) => {
+      if (!bestRotated) {
+        return { x: bestX + pt.x, y: bestY + pt.y };
+      }
+      return { x: bestX + (bh - pt.y), y: bestY + pt.x };
+    };
+
+    const transformPtsArray = (pts) => {
+      if (!pts) return null;
+      const out = pts.map(transformBoardPt);
+      if (pts.isFrame) out.isFrame = true;
+      return out;
+    };
+
+    // Geometría de corte/grabado del borde de este sub-tablero dentro del soporte mayor
+    let boardFrameGeom = null;
+    if (state.slicerFrameEnabled && typeof get2DBoardFrameGeometry === 'function') {
+      const rawFg = get2DBoardFrameGeometry(0, 0, bw, bh, board.placements, true);
+      if (rawFg) {
+        const tfOuter = transformPtsArray(rawFg.outerCutPts);
+        if (tfOuter) tfOuter.isFrame = true;
+        const tfInner = transformPtsArray(rawFg.innerCutPts);
+        if (tfInner) tfInner.isFrame = true;
+        const tfKh = transformPtsArray(rawFg.keyholePts);
+        if (tfKh) tfKh.isFrame = true;
+        const tfEngrave = (rawFg.engraveLoops || []).map((el) => ({
+          points: transformPtsArray(el.points),
+          isHole: Boolean(el.isHole)
+        }));
+        boardFrameGeom = {
+          outerCutPts: tfOuter,
+          innerCutPts: tfInner,
+          keyholePts: tfKh,
+          engraveLoops: tfEngrave
+        };
+      }
+    } else if (state.carrierCutBoardBorders) {
+      const rectPts = [
+        { x: bestX, y: bestY },
+        { x: bestX + placedW, y: bestY },
+        { x: bestX + placedW, y: bestY + placedH },
+        { x: bestX, y: bestY + placedH }
+      ];
+      rectPts.isFrame = true;
+      boardFrameGeom = {
+        outerCutPts: rectPts,
+        innerCutPts: null,
+        keyholePts: null,
+        engraveLoops: []
+      };
+    }
+
+    const transformedPlacements = board.placements.map((pl) => {
+      const tfOuter = transformPtsArray(pl.outerPoints);
+      const tfHoles = (pl.holes || []).map((h) => ({
+        points: transformPtsArray(h.points),
+        absArea: h.absArea,
+        isFrame: Boolean(h.isFrame)
+      }));
+      const tfRods = (pl.rods || []).map(transformBoardPt);
+      const tfEngraves = (pl.engraveLoops || []).map((el) => ({
+        points: transformPtsArray(el.points),
+        isHole: Boolean(el.isHole)
+      }));
+      const tfUpper = (pl.upperPolys || []).map((poly) => poly.map(transformBoardPt));
+      const tfLower = (pl.lowerPolys || []).map((poly) => poly.map(transformBoardPt));
+
+      let tfTextLayout = null;
+      if (pl.textLayout) {
+        const tCenter = transformBoardPt({ x: pl.textLayout.x, y: pl.textLayout.y });
+        tfTextLayout = {
+          x: tCenter.x,
+          y: tCenter.y,
+          fontSizeMM: pl.textLayout.fontSizeMM,
+          lines: pl.textLayout.lines,
+          maxBoxW: bestRotated ? pl.textLayout.maxBoxH : pl.textLayout.maxBoxW,
+          maxBoxH: bestRotated ? pl.textLayout.maxBoxW : pl.textLayout.maxBoxH
+        };
+      }
+
+      return {
+        island: pl.island,
+        isFrame: Boolean(pl.isFrame),
+        outerPoints: tfOuter,
+        holes: tfHoles,
+        rods: tfRods,
+        engraveLoops: tfEngraves,
+        upperPolys: tfUpper,
+        lowerPolys: tfLower,
+        textLayout: tfTextLayout
+      };
+    });
+
+    bestCarrier.boardPlacements.push({
+      boardIndex: board.boardIndex,
+      board: board,
+      x: bestX,
+      y: bestY,
+      w: placedW,
+      h: placedH,
+      rotated: bestRotated,
+      boardFrameGeom: boardFrameGeom,
+      transformedPlacements: transformedPlacements
+    });
+  });
+
+  carriers.forEach((c) => {
+    c.efficiency = Math.min(100, (c.usedBoardsArea / Math.max(1, carrierW * carrierH)) * 100);
+  });
+
+  return { carriers, unfitBoardsCount };
+}
+
+function recomputeCarrierNesting() {
+  const res = packBoardsIntoCarriers(
+    state.nestedBoards || [],
+    state.carrierWidthMM,
+    state.carrierHeightMM,
+    state.carrierMarginMM,
+    state.carrierSpacingMM,
+    state.carrierAllowRotate
+  );
+
+  state.nestedCarriers = res.carriers;
+  state.unfitBoardsCount = res.unfitBoardsCount;
+
+  if (state.activeCarrierIndex >= state.nestedCarriers.length) {
+    state.activeCarrierIndex = Math.max(0, state.nestedCarriers.length - 1);
+  }
+
+  const badge = document.getElementById('carrierSummaryBadge');
+  if (badge) {
+    if (!state.carrierEnabled) {
+      badge.textContent = 'Desactivado (vista y exportación por tablero individual)';
+    } else if (state.nestedCarriers.length === 0 && state.unfitBoardsCount > 0) {
+      badge.innerHTML =
+        '<span class="text-rose-400 font-bold block">⚠️ El tamaño del tablero (' +
+        state.boardWidthMM.toFixed(0) + '×' + state.boardHeightMM.toFixed(0) +
+        ' mm) supera el área útil del Soporte Mayor (' +
+        state.carrierWidthMM.toFixed(0) + '×' + state.carrierHeightMM.toFixed(0) + ' mm)</span>';
+    } else if (state.nestedCarriers.length === 0) {
+      badge.textContent = '0 tableros generados para colocar en el soporte mayor';
+    } else {
+      const totalPackedBoards = state.nestedCarriers.reduce((acc, c) => acc + c.boardPlacements.length, 0);
+      const avgEff = state.nestedCarriers.reduce((acc, c) => acc + c.efficiency, 0) / state.nestedCarriers.length;
+      let html =
+        '🏗️ <strong>' + state.nestedCarriers.length + ' Soporte(s) Mayor(es)</strong> | ' +
+        totalPackedBoards + ' Tablero(s) alojados | Uso: ' + avgEff.toFixed(1) + '%';
+      if (state.unfitBoardsCount > 0) {
+        html += '<br><span class="text-amber-300 text-[10px]">⚠️ ' + state.unfitBoardsCount + ' tablero(s) no caben en el soporte mayor</span>';
+      }
+      badge.innerHTML = html;
+    }
+  }
+}
+
+function selectActiveCarrier(cIdx) {
+  if (state.nestedCarriers.length === 0) return;
+  state.activeCarrierIndex = Math.max(0, Math.min(state.nestedCarriers.length - 1, cIdx));
+  const slider = document.getElementById('currentSliceSlider');
+  if (slider) slider.value = state.activeCarrierIndex;
+  update2DInspectorHeader();
+  highlightActiveCardInStrip();
+  render2DSlice();
+}
+
+if (typeof window !== 'undefined') {
+  window.syncCarrierInputsUI = syncCarrierInputsUI;
+  window.syncCarrierUIState = syncCarrierUIState;
+  window.setCarrierPresetMM = setCarrierPresetMM;
+  window.setCarrierEnabled = setCarrierEnabled;
+  window.onCarrierSettingsChange = onCarrierSettingsChange;
+  window.packBoardsIntoCarriers = packBoardsIntoCarriers;
+  window.recomputeCarrierNesting = recomputeCarrierNesting;
+  window.selectActiveCarrier = selectActiveCarrier;
 }
 
 </script>
@@ -6927,6 +7488,48 @@ function setupCanvas2DInteraction() {
     state.view2D.isDragging = false;
     try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
 
+    if (!state.view2D.hasMoved && state.carrierEnabled && state.nestedCarriers.length > 0) {
+      const carrier = state.nestedCarriers[state.activeCarrierIndex];
+      if (!carrier) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+
+      const pad = 36;
+      const baseScale = Math.min((canvas.width - pad * 2) / carrier.width, (canvas.height - pad * 2) / carrier.height);
+      const scale = baseScale * state.view2D.zoom;
+      const centerX = canvas.width / 2 + state.view2D.panX;
+      const centerY = canvas.height / 2 + state.view2D.panY;
+
+      const cx = (px - centerX) / scale + carrier.width / 2;
+      const cy = (centerY - py) / scale + carrier.height / 2;
+
+      let hitSliceIdx = -1;
+      let hitBoardIdx = -1;
+      let minArea = Infinity;
+      carrier.boardPlacements.forEach((bPl) => {
+        bPl.transformedPlacements.forEach((pl) => {
+          if (isPointInIslandMaterial({ x: cx, y: cy }, pl.outerPoints, pl.holes)) {
+            if (pl.island.outerArea < minArea) {
+              minArea = pl.island.outerArea;
+              hitSliceIdx = pl.island.sliceIndex;
+              hitBoardIdx = bPl.boardIndex;
+            }
+          }
+        });
+      });
+
+      if (hitSliceIdx !== -1) {
+        state.activeSliceIndex = hitSliceIdx;
+        if (hitBoardIdx !== -1) state.activeBoardIndex = hitBoardIdx;
+        update3DSlicesTransforms();
+        highlightActiveCardInStrip();
+        render2DSlice();
+      }
+      return;
+    }
+
     if (!state.view2D.hasMoved && state.nestingEnabled && state.nestedBoards.length > 0) {
       const board = state.nestedBoards[state.activeBoardIndex];
       if (!board) return;
@@ -7068,7 +7671,18 @@ function getAlignmentHoles2D(slice) {
 function selectActiveSlice(idx) {
   if (state.slices.length === 0) return;
   state.activeSliceIndex = Math.max(0, Math.min(state.slices.length - 1, idx));
-  if (!state.nestingEnabled) {
+  if (state.carrierEnabled && state.nestedCarriers.length > 0) {
+    const foundCarrierIdx = state.nestedCarriers.findIndex((c) =>
+      c.boardPlacements.some((bPl) =>
+        bPl.transformedPlacements.some((pl) => pl.island.sliceIndex === state.activeSliceIndex)
+      )
+    );
+    if (foundCarrierIdx !== -1) {
+      state.activeCarrierIndex = foundCarrierIdx;
+      const sliderEl = document.getElementById('currentSliceSlider');
+      if (sliderEl) sliderEl.value = state.activeCarrierIndex;
+    }
+  } else if (!state.nestingEnabled) {
     document.getElementById('currentSliceSlider').value = state.activeSliceIndex;
   } else {
     // Si estamos en vista de tablero, saltar al tablero donde se encuentra esta lasca
@@ -7377,6 +7991,199 @@ function render2DBoard(ctx, canvas) {
   });
 }
 
+// Renderiza un Soporte Mayor (Apartado 6) conteniendo múltiples tableros completos en el Inspector 2D
+function render2DCarrier(ctx, canvas) {
+  const carrier = state.nestedCarriers[state.activeCarrierIndex];
+  if (!carrier || carrier.boardPlacements.length === 0) {
+    ctx.fillStyle = '#f87171';
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'center';
+    const msg = state.unfitBoardsCount > 0
+      ? 'Los tableros (' + state.unfitBoardsCount + ') superan las dimensiones del Soporte Mayor actual. Aumente el tamaño del soporte.'
+      : 'No hay tableros generados para distribuir en el Soporte Mayor';
+    ctx.fillText(msg, canvas.width / 2, canvas.height / 2);
+    return;
+  }
+
+  const pad = 36;
+  const baseScale = Math.min((canvas.width - pad * 2) / carrier.width, (canvas.height - pad * 2) / carrier.height);
+  const scale = baseScale * state.view2D.zoom;
+  const centerX = canvas.width / 2 + state.view2D.panX;
+  const centerY = canvas.height / 2 + state.view2D.panY;
+  const toScreenX = (x) => centerX + (x - carrier.width / 2) * scale;
+  const toScreenY = (y) => centerY - (y - carrier.height / 2) * scale;
+
+  const cx = toScreenX(0);
+  const cy = toScreenY(carrier.height);
+  const cw = carrier.width * scale;
+  const ch = carrier.height * scale;
+
+  // Fondo y borde del Soporte Mayor físico
+  ctx.save();
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+  ctx.fillRect(cx, cy, cw, ch);
+  ctx.strokeStyle = state.carrierCutOuterBorder ? '#f43f5e' : '#f59e0b';
+  ctx.lineWidth = state.carrierCutOuterBorder ? 2.2 : 1.9;
+  ctx.strokeRect(cx, cy, cw, ch);
+
+  // Margen útil interior del Soporte Mayor
+  if (carrier.margin > 0) {
+    const mx = toScreenX(carrier.margin);
+    const my = toScreenY(carrier.height - carrier.margin);
+    const mw = (carrier.width - carrier.margin * 2) * scale;
+    const mh = (carrier.height - carrier.margin * 2) * scale;
+    ctx.strokeStyle = 'rgba(251, 191, 36, 0.24)';
+    ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 1;
+    ctx.strokeRect(mx, my, mw, mh);
+  }
+  ctx.restore();
+
+  // Dibujar cada tablero anidado dentro del Soporte Mayor
+  carrier.boardPlacements.forEach((bPl) => {
+    const bx = toScreenX(bPl.x);
+    const by = toScreenY(bPl.y + bPl.h);
+    const bw = bPl.w * scale;
+    const bh = bPl.h * scale;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(30, 41, 59, 0.58)';
+    ctx.fillRect(bx, by, bw, bh);
+
+    if (state.carrierCutBoardBorders) {
+      if (bPl.boardFrameGeom) {
+        draw2DBoardFrameOnCanvas(ctx, bPl.boardFrameGeom, toScreenX, toScreenY);
+      } else {
+        ctx.strokeStyle = '#f43f5e';
+        ctx.lineWidth = 1.9;
+        ctx.strokeRect(bx, by, bw, bh);
+      }
+    } else {
+      ctx.strokeStyle = 'rgba(16, 185, 129, 0.55)';
+      ctx.setLineDash([5, 3]);
+      ctx.lineWidth = 1.2;
+      ctx.strokeRect(bx, by, bw, bh);
+      ctx.setLineDash([]);
+      if (bPl.boardFrameGeom) {
+        draw2DBoardFrameOnCanvas(ctx, bPl.boardFrameGeom, toScreenX, toScreenY);
+      }
+    }
+
+    // Etiqueta del número de tablero dentro del Soporte Mayor
+    if (state.carrierEngraveBoardLabels) {
+      const labelFontPx = Math.max(8, Math.min(13, Math.min(bw, bh) * 0.055));
+      ctx.font = 'bold ' + labelFontPx.toFixed(1) + 'px monospace';
+      ctx.fillStyle = '#34d399';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      const labelTxt = 'TABLERO #' + (bPl.boardIndex + 1) + (bPl.rotated ? ' ↻90°' : '');
+      ctx.fillText(labelTxt, bx + 5, by + 4);
+    }
+    ctx.restore();
+
+    // Dibujar todas las islas del tablero ya transformadas a las coordenadas del Soporte Mayor
+    bPl.transformedPlacements.forEach((pl) => {
+      const isCurrentSlice = pl.island.sliceIndex === state.activeSliceIndex;
+
+      ctx.save();
+      ctx.beginPath();
+      pl.outerPoints.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+        else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+      });
+      ctx.closePath();
+      pl.holes.forEach((h) => {
+        h.points.forEach((pt, i) => {
+          if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+          else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+        });
+        ctx.closePath();
+      });
+      ctx.fillStyle = isCurrentSlice ? 'rgba(244, 63, 94, 0.26)' : 'rgba(14, 165, 233, 0.16)';
+      ctx.fill('evenodd');
+      ctx.restore();
+
+      drawContourWithTabsOnCanvas(
+        ctx,
+        pl.outerPoints,
+        false,
+        isCurrentSlice ? '#fb7185' : '#f43f5e',
+        isCurrentSlice ? 2.2 : 1.5,
+        toScreenX,
+        toScreenY,
+        Boolean(pl.isFrame || (pl.island && pl.island.isFrame))
+      );
+
+      pl.holes.forEach((h) => {
+        drawContourWithTabsOnCanvas(ctx, h.points, true, '#38bdf8', 1.3, toScreenX, toScreenY, Boolean(h.isFrame));
+      });
+
+      if (pl.engraveLoops && pl.engraveLoops.length > 0) {
+        ctx.save();
+        ctx.beginPath();
+        pl.engraveLoops.forEach((el) => {
+          if (!el.points || el.points.length < 3) return;
+          el.points.forEach((pt, i) => {
+            if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+            else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+          });
+          ctx.closePath();
+        });
+        ctx.fillStyle = 'rgba(16, 185, 129, 0.30)';
+        ctx.fill('evenodd');
+        ctx.strokeStyle = '#10b981';
+        ctx.lineWidth = 1.1;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      if (state.includePrevSliceGuide && pl.lowerPolys.length > 0) {
+        ctx.save();
+        ctx.setLineDash(getCanvasDashPattern(state.lowerGuideStyle));
+        ctx.beginPath();
+        pl.lowerPolys.forEach((poly) => {
+          poly.forEach((pt, i) => {
+            if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+            else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+          });
+        });
+        ctx.strokeStyle = '#d946ef';
+        ctx.lineWidth = 1.25;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      if (state.includeNextSliceGuide && pl.upperPolys.length > 0) {
+        ctx.save();
+        ctx.setLineDash(getCanvasDashPattern(state.upperGuideStyle));
+        ctx.beginPath();
+        pl.upperPolys.forEach((poly) => {
+          poly.forEach((pt, i) => {
+            if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+            else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+          });
+        });
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 1.25;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      pl.rods.forEach((r) => {
+        ctx.beginPath();
+        ctx.arc(toScreenX(r.x), toScreenY(r.y), (state.rodDiameter / 2) * scale, 0, Math.PI * 2);
+        ctx.fillStyle = '#090d16';
+        ctx.fill();
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      });
+
+      drawAdaptiveIslandTextOnCanvas(ctx, pl.textLayout, toScreenX, toScreenY, scale);
+    });
+  });
+}
+
 function render2DSlice() {
   const canvas = document.getElementById('canvas2D');
   if (!canvas) return;
@@ -7385,6 +8192,11 @@ function render2DSlice() {
   canvas.height = rect.height || 380;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (state.carrierEnabled) {
+    render2DCarrier(ctx, canvas);
+    return;
+  }
 
   if (state.nestingEnabled) {
     render2DBoard(ctx, canvas);
@@ -7666,7 +8478,10 @@ function render2DSlice() {
 }
 
 function stepSlice(delta) {
-  if (state.nestingEnabled) {
+  if (state.carrierEnabled) {
+    if (state.nestedCarriers.length === 0) return;
+    selectActiveCarrier(state.activeCarrierIndex + delta);
+  } else if (state.nestingEnabled) {
     if (state.nestedBoards.length === 0) return;
     selectActiveBoard(state.activeBoardIndex + delta);
   } else {
@@ -7680,7 +8495,9 @@ function togglePlaySlices() {
   if (state.isPlaying) {
     btn.textContent = '⏸ Pausa';
     state.playTimer = setInterval(() => {
-      if (state.nestingEnabled && state.nestedBoards.length > 0) {
+      if (state.carrierEnabled && state.nestedCarriers.length > 0) {
+        selectActiveCarrier((state.activeCarrierIndex + 1) % state.nestedCarriers.length);
+      } else if (state.nestingEnabled && state.nestedBoards.length > 0) {
         selectActiveBoard((state.activeBoardIndex + 1) % state.nestedBoards.length);
       } else {
         const next = (state.activeSliceIndex + 1) % state.slices.length;
@@ -7697,6 +8514,38 @@ function renderSliceStripUI() {
   const container = document.getElementById('sliceStripContainer');
   const titleEl = document.getElementById('bottomStripTitle');
   container.innerHTML = '';
+
+  if (state.carrierEnabled) {
+    if (titleEl) {
+      titleEl.textContent = 'Soportes Mayores Generados (' + state.nestedCarriers.length + ') — Cada soporte agrupa múltiples tableros completos (clic para inspeccionar)';
+    }
+    state.nestedCarriers.forEach((carrier, cIdx) => {
+      const card = document.createElement('div');
+      card.id = 'carrierCard_' + cIdx;
+      card.className = 'slice-card shrink-0 w-40 h-16 rounded-lg border border-amber-500/40 bg-slate-800/75 p-1.5 flex flex-col justify-between cursor-pointer transition';
+      card.onclick = () => selectActiveCarrier(cIdx);
+
+      const topRow = document.createElement('div');
+      topRow.className = 'flex items-center justify-between text-[10px]';
+      topRow.innerHTML =
+        '<span class="font-bold text-amber-300">Soporte #' + (cIdx + 1) + '</span>' +
+        '<span class="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[9px] font-mono">' +
+        carrier.boardPlacements.length + ' tab</span>';
+
+      const bottomRow = document.createElement('div');
+      bottomRow.className = 'flex items-center justify-between text-[9px] text-slate-400 font-mono';
+      bottomRow.innerHTML =
+        '<span>' + carrier.totalIslands + ' islas</span>' +
+        '<span class="text-emerald-300">' + carrier.efficiency.toFixed(0) + '% uso</span>';
+
+      card.appendChild(topRow);
+      card.appendChild(bottomRow);
+      container.appendChild(card);
+    });
+    updateSelectedCountBadge();
+    highlightActiveCardInStrip();
+    return;
+  }
 
   if (state.nestingEnabled) {
     if (titleEl) {
@@ -7787,6 +8636,13 @@ function renderSliceStripUI() {
 }
 
 function highlightActiveCardInStrip() {
+  if (state.carrierEnabled) {
+    state.nestedCarriers.forEach((_, cIdx) => {
+      const c = document.getElementById('carrierCard_' + cIdx);
+      if (c) c.classList.toggle('active', cIdx === state.activeCarrierIndex);
+    });
+    return;
+  }
   if (state.nestingEnabled) {
     state.nestedBoards.forEach((_, bIdx) => {
       const c = document.getElementById('boardCard_' + bIdx);
@@ -8483,6 +9339,412 @@ function generateBoardDXF(board) {
   return dxf.join('\n');
 }
 
+// Genera el archivo .SVG de un Soporte Mayor (Apartado 6) con todos los tableros anidados en su interior
+function generateCarrierSVG(carrier) {
+  const svgW = carrier.width;
+  const svgH = carrier.height;
+  const toX = (x) => Number(x).toFixed(4);
+  const toY = (y) => (svgH - Number(y)).toFixed(4);
+  const strokeMm = Math.max(0.15, Math.min(svgW, svgH) * 0.0014).toFixed(4);
+  const rodRadius = (state.rodDiameter / 2).toFixed(4);
+
+  let compoundPath = '';
+  const outerPaths = [];
+  const holePaths = [];
+  const rodCircles = [];
+  let carrierEngravePath = '';
+  let upperGuidePath = '';
+  let lowerGuidePath = '';
+  const islandLabels = [];
+  const boardHeaderLabels = [];
+
+  if (state.carrierCutOuterBorder) {
+    const outerCarrierRect = [
+      { x: 0, y: 0 },
+      { x: svgW, y: 0 },
+      { x: svgW, y: svgH },
+      { x: 0, y: svgH }
+    ];
+    outerCarrierRect.isFrame = true;
+    const dCarrierCut = buildSvgCutPathD(outerCarrierRect, false, toX, toY, true);
+    if (dCarrierCut) {
+      outerPaths.push({ id: 'borde_exterior_soporte_mayor', d: dCarrierCut });
+    }
+  }
+
+  carrier.boardPlacements.forEach((bPl) => {
+    const bTag = 'tab_' + (bPl.boardIndex + 1);
+
+    // Borde de corte o marco configurable de cada sub-tablero dentro del Soporte Mayor (sin micro-uniones)
+    if (state.carrierCutBoardBorders) {
+      if (bPl.boardFrameGeom) {
+        const fg = bPl.boardFrameGeom;
+        if (fg.outerCutPts && fg.outerCutPts.length >= 3) {
+          const dOutF = buildSvgCutPathD(fg.outerCutPts, false, toX, toY, true);
+          if (dOutF) outerPaths.push({ id: bTag + '_marco_exterior', d: dOutF });
+        }
+        if (fg.innerCutPts && fg.innerCutPts.length >= 3) {
+          const dInF = buildSvgCutPathD(fg.innerCutPts, true, toX, toY, true);
+          if (dInF) holePaths.push(dInF);
+        }
+        if (fg.keyholePts && fg.keyholePts.length >= 3) {
+          const dKh = buildSvgCutPathD(fg.keyholePts, true, toX, toY, true);
+          if (dKh) holePaths.push(dKh);
+        }
+        if (fg.engraveLoops && fg.engraveLoops.length > 0) {
+          fg.engraveLoops.forEach((el) => {
+            if (!el.points || el.points.length < 3) return;
+            carrierEngravePath += 'M ' + el.points.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z ';
+          });
+        }
+      } else {
+        const rectPts = [
+          { x: bPl.x, y: bPl.y },
+          { x: bPl.x + bPl.w, y: bPl.y },
+          { x: bPl.x + bPl.w, y: bPl.y + bPl.h },
+          { x: bPl.x, y: bPl.y + bPl.h }
+        ];
+        rectPts.isFrame = true;
+        const dRect = buildSvgCutPathD(rectPts, false, toX, toY, true);
+        if (dRect) outerPaths.push({ id: bTag + '_borde_tablero', d: dRect });
+      }
+    } else if (bPl.boardFrameGeom && bPl.boardFrameGeom.engraveLoops) {
+      bPl.boardFrameGeom.engraveLoops.forEach((el) => {
+        if (!el.points || el.points.length < 3) return;
+        carrierEngravePath += 'M ' + el.points.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z ';
+      });
+    }
+
+    if (state.carrierEngraveBoardLabels) {
+      const padLbl = Math.max(2.5, (bPl.board.margin || 4) * 0.55);
+      boardHeaderLabels.push({
+        x: toX(bPl.x + padLbl),
+        y: toY(bPl.y + bPl.h - padLbl),
+        text: 'TABLERO #' + (bPl.boardIndex + 1) + ' (' + bPl.w.toFixed(0) + 'x' + bPl.h.toFixed(0) + 'mm)'
+      });
+    }
+
+    bPl.transformedPlacements.forEach((pl, pIdx) => {
+      const pts = pl.outerPoints;
+      if (!pts || pts.length < 3) return;
+      let dOutClosed = 'M ' + toX(pts[0].x) + ' ' + toY(pts[0].y);
+      for (let i = 1; i < pts.length; i++) {
+        dOutClosed += ' L ' + toX(pts[i].x) + ' ' + toY(pts[i].y);
+      }
+      dOutClosed += ' Z';
+      compoundPath += dOutClosed + ' ';
+
+      const dOutCut = buildSvgCutPathD(pts, false, toX, toY, Boolean(pl.isFrame || (pl.island && pl.island.isFrame)));
+      if (dOutCut) {
+        outerPaths.push({ id: bTag + '_isla_' + (pIdx + 1) + '_lasca_' + (pl.island.sliceIndex + 1), d: dOutCut });
+      }
+
+      pl.holes.forEach((h) => {
+        if (!h.points || h.points.length < 3) return;
+        let dHoleClosed = 'M ' + toX(h.points[0].x) + ' ' + toY(h.points[0].y);
+        for (let i = 1; i < h.points.length; i++) {
+          dHoleClosed += ' L ' + toX(h.points[i].x) + ' ' + toY(h.points[i].y);
+        }
+        dHoleClosed += ' Z';
+        compoundPath += dHoleClosed + ' ';
+
+        const dHoleCut = buildSvgCutPathD(h.points, true, toX, toY, Boolean(h.isFrame));
+        if (dHoleCut) holePaths.push(dHoleCut);
+      });
+
+      pl.rods.forEach((r) => {
+        rodCircles.push({ cx: toX(r.x), cy: toY(r.y) });
+      });
+
+      if (pl.engraveLoops && pl.engraveLoops.length > 0) {
+        pl.engraveLoops.forEach((el) => {
+          if (!el.points || el.points.length < 3) return;
+          carrierEngravePath += 'M ' + el.points.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z ';
+        });
+      }
+
+      if (state.includeNextSliceGuide && pl.upperPolys.length > 0) {
+        pl.upperPolys.forEach((poly) => {
+          if (poly.length < 2) return;
+          upperGuidePath += 'M ' + toX(poly[0].x) + ' ' + toY(poly[0].y);
+          for (let i = 1; i < poly.length; i++) {
+            upperGuidePath += ' L ' + toX(poly[i].x) + ' ' + toY(poly[i].y);
+          }
+          upperGuidePath += ' ';
+        });
+      }
+
+      if (state.includePrevSliceGuide && pl.lowerPolys.length > 0) {
+        pl.lowerPolys.forEach((poly) => {
+          if (poly.length < 2) return;
+          lowerGuidePath += 'M ' + toX(poly[0].x) + ' ' + toY(poly[0].y);
+          for (let i = 1; i < poly.length; i++) {
+            lowerGuidePath += ' L ' + toX(poly[i].x) + ' ' + toY(poly[i].y);
+          }
+          lowerGuidePath += ' ';
+        });
+      }
+
+      const tl = pl.textLayout;
+      if (tl && tl.lines && tl.lines.length > 0 && tl.fontSizeMM > 0.04) {
+        const fontSize = tl.fontSizeMM.toFixed(3);
+        const lineGap = tl.fontSizeMM * 1.12;
+        const n = tl.lines.length;
+        tl.lines.forEach((lineStr, lIdx) => {
+          const lineY = tl.y + ((n - 1) * 0.5 - lIdx) * lineGap;
+          islandLabels.push({
+            x: toX(tl.x),
+            y: toY(lineY),
+            size: fontSize,
+            text: lineStr
+          });
+        });
+      }
+    });
+  });
+
+  const xmlHeader = '<' + '?xml version="1.0" encoding="UTF-8" standalone="no"?' + '>';
+  const lines = [
+    xmlHeader,
+    '<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="' + svgW.toFixed(3) + 'mm" height="' + svgH.toFixed(3) + 'mm" viewBox="0 0 ' + svgW.toFixed(4) + ' ' + svgH.toFixed(4) + '" style="background:#ffffff;max-width:100vw;max-height:95vh;">',
+    '  <title>' + escapeXmlAttr('Soporte Mayor #' + (carrier.carrierIndex + 1) + ' - ' + svgW.toFixed(1) + 'x' + svgH.toFixed(1) + 'mm') + '</title>',
+    '  <desc>' + escapeXmlAttr('Soporte Mayor #' + (carrier.carrierIndex + 1) + ' | Dimensiones: ' + svgW.toFixed(1) + 'x' + svgH.toFixed(1) + 'mm | Tableros: ' + carrier.boardPlacements.length + ' | Islas: ' + carrier.totalIslands + ' | Aprovechamiento: ' + carrier.efficiency.toFixed(1) + '%') + '</desc>'
+  ];
+
+  if (compoundPath.trim().length > 0) {
+    lines.push('  <g id="VISTA_PREVIA_SOPORTE_MAYOR">');
+    lines.push('    <path d="' + compoundPath.trim() + '" fill="#0ea5e9" fill-opacity="0.14" fill-rule="evenodd" stroke="none" />');
+    lines.push('  </g>');
+  }
+
+  lines.push('  <g id="CORTE_EXTERIOR" fill="none" stroke="#ff0000" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+  outerPaths.forEach((item, i) => {
+    lines.push('    <path id="' + escapeXmlAttr(item.id || ('soporte_ext_' + (i + 1))) + '" d="' + item.d + '" vector-effect="non-scaling-stroke" />');
+  });
+  lines.push('  </g>');
+
+  if (holePaths.length > 0 || rodCircles.length > 0) {
+    lines.push('  <g id="CORTE_INTERIOR_HUECOS" fill="none" stroke="#0055ff" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    holePaths.forEach((d, i) => {
+      lines.push('    <path id="soporte_hueco_' + (i + 1) + '" d="' + d + '" vector-effect="non-scaling-stroke" />');
+    });
+    rodCircles.forEach((c, i) => {
+      lines.push('    <circle id="soporte_varilla_' + (i + 1) + '" cx="' + c.cx + '" cy="' + c.cy + '" r="' + rodRadius + '" fill="#ffffff" vector-effect="non-scaling-stroke" />');
+    });
+    lines.push('  </g>');
+  }
+
+  if (carrierEngravePath.trim().length > 0) {
+    lines.push('  <g id="GRABADO_VECTORIAL_SOPORTE" fill="#008800" fill-opacity="0.22" fill-rule="evenodd" stroke="#008800" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    lines.push('    <path id="grabado_soporte_trazos" d="' + carrierEngravePath.trim() + '" vector-effect="non-scaling-stroke" />');
+    lines.push('  </g>');
+  }
+
+  if (lowerGuidePath.trim().length > 0) {
+    const lowerDashAttr = getSvgDashAttr(state.lowerGuideStyle);
+    lines.push('  <g id="GUIA_INFERIOR_SOPORTE" fill="none" stroke="#9900ff" stroke-width="' + strokeMm + '"' + lowerDashAttr + ' stroke-linecap="round" stroke-linejoin="round">');
+    lines.push('    <path id="guia_inf_soporte_trazos" d="' + lowerGuidePath.trim() + '" vector-effect="non-scaling-stroke" />');
+    lines.push('  </g>');
+  }
+
+  if (upperGuidePath.trim().length > 0) {
+    const upperDashAttr = getSvgDashAttr(state.upperGuideStyle);
+    lines.push('  <g id="GUIA_SUPERIOR_SOPORTE" fill="none" stroke="#ff8800" stroke-width="' + strokeMm + '"' + upperDashAttr + ' stroke-linecap="round" stroke-linejoin="round">');
+    lines.push('    <path id="guia_sup_soporte_trazos" d="' + upperGuidePath.trim() + '" vector-effect="non-scaling-stroke" />');
+    lines.push('  </g>');
+  }
+
+  if (islandLabels.length > 0 || boardHeaderLabels.length > 0 || state.includeLabels) {
+    lines.push('  <g id="GRABADO_ETIQUETAS_SOPORTE">');
+    boardHeaderLabels.forEach((bl, i) => {
+      lines.push('    <text id="grabado_tablero_hdr_' + (i + 1) + '" x="' + bl.x + '" y="' + bl.y + '" font-family="monospace, sans-serif" font-weight="bold" font-size="3.400" fill="#008800">' + escapeXmlAttr(bl.text) + '</text>');
+    });
+    islandLabels.forEach((lbl, i) => {
+      lines.push('    <text id="grabado_isla_soporte_' + (i + 1) + '" x="' + lbl.x + '" y="' + lbl.y + '" text-anchor="middle" dominant-baseline="central" font-family="monospace, sans-serif" font-weight="bold" font-size="' + lbl.size + '" fill="#008800">' + escapeXmlAttr(lbl.text) + '</text>');
+    });
+    if (state.includeLabels) {
+      const headerText = escapeXmlAttr('SOPORTE MAYOR #' + (carrier.carrierIndex + 1) + ' [' + svgW.toFixed(0) + 'x' + svgH.toFixed(0) + 'mm | Tableros: ' + carrier.boardPlacements.length + ' | Islas: ' + carrier.totalIslands + ' | Uso: ' + carrier.efficiency.toFixed(1) + '%]');
+      lines.push('    <text x="' + Math.max(2, carrier.margin).toFixed(3) + '" y="' + (svgH - Math.max(1.5, carrier.margin * 0.4)).toFixed(3) + '" font-family="monospace, sans-serif" font-size="3.600" fill="#008800">' + headerText + '</text>');
+    }
+    lines.push('  </g>');
+  }
+
+  lines.push('</svg>');
+  return lines.join('\n');
+}
+
+// Genera el archivo .DXF de un Soporte Mayor (Apartado 6) con todos los tableros e islas anidadas
+function generateCarrierDXF(carrier) {
+  const dxf = ['0', 'SECTION', '2', 'ENTITIES'];
+
+  if (state.carrierCutOuterBorder) {
+    const outerCarrierRect = [
+      { x: 0, y: 0 },
+      { x: carrier.width, y: 0 },
+      { x: carrier.width, y: carrier.height },
+      { x: 0, y: carrier.height }
+    ];
+    pushLoopLinesWithTabsDXF(dxf, outerCarrierRect, false, 'CORTE_EXTERIOR', '1', 0, 0, true);
+  }
+
+  carrier.boardPlacements.forEach((bPl) => {
+    if (state.carrierCutBoardBorders) {
+      if (bPl.boardFrameGeom) {
+        const fg = bPl.boardFrameGeom;
+        if (fg.outerCutPts && fg.outerCutPts.length >= 3) {
+          pushLoopLinesWithTabsDXF(dxf, fg.outerCutPts, false, 'CORTE_EXTERIOR', '1', 0, 0, true);
+        }
+        if (fg.innerCutPts && fg.innerCutPts.length >= 3) {
+          pushLoopLinesWithTabsDXF(dxf, fg.innerCutPts, true, 'CORTE_INTERIOR', '5', 0, 0, true);
+        }
+        if (fg.keyholePts && fg.keyholePts.length >= 3) {
+          pushLoopLinesWithTabsDXF(dxf, fg.keyholePts, true, 'CORTE_INTERIOR', '5', 0, 0, true);
+        }
+        if (fg.engraveLoops && fg.engraveLoops.length > 0) {
+          fg.engraveLoops.forEach((el) => {
+            if (!el.points || el.points.length < 3) return;
+            for (let i = 0, n = el.points.length; i < n; i++) {
+              const p1 = el.points[i];
+              const p2 = el.points[(i + 1) % n];
+              dxf.push(
+                '0', 'LINE',
+                '8', 'GRABADO_VECTORIAL',
+                '62', '3',
+                '10', p1.x.toFixed(4),
+                '20', p1.y.toFixed(4),
+                '30', '0.0',
+                '11', p2.x.toFixed(4),
+                '21', p2.y.toFixed(4),
+                '31', '0.0'
+              );
+            }
+          });
+        }
+      } else {
+        const rectPts = [
+          { x: bPl.x, y: bPl.y },
+          { x: bPl.x + bPl.w, y: bPl.y },
+          { x: bPl.x + bPl.w, y: bPl.y + bPl.h },
+          { x: bPl.x, y: bPl.y + bPl.h }
+        ];
+        pushLoopLinesWithTabsDXF(dxf, rectPts, false, 'CORTE_EXTERIOR', '1', 0, 0, true);
+      }
+    }
+
+    if (state.carrierEngraveBoardLabels) {
+      const padLbl = Math.max(2.5, (bPl.board.margin || 4) * 0.55);
+      dxf.push(
+        '0', 'TEXT',
+        '8', 'GRABADO_ETIQUETA',
+        '62', '3',
+        '10', (bPl.x + padLbl).toFixed(4),
+        '20', (bPl.y + bPl.h - padLbl - 3.2).toFixed(4),
+        '30', '0.0',
+        '40', '3.2000',
+        '1', 'TABLERO #' + (bPl.boardIndex + 1)
+      );
+    }
+
+    bPl.transformedPlacements.forEach((pl) => {
+      pushLoopLinesWithTabsDXF(dxf, pl.outerPoints, false, 'CORTE_EXTERIOR', '1', 0, 0, Boolean(pl.isFrame || (pl.island && pl.island.isFrame)));
+      pl.holes.forEach((h) => pushLoopLinesWithTabsDXF(dxf, h.points, true, 'CORTE_INTERIOR', '5', 0, 0, Boolean(h.isFrame)));
+
+      if (pl.engraveLoops && pl.engraveLoops.length > 0) {
+        pl.engraveLoops.forEach((el) => {
+          if (!el.points || el.points.length < 3) return;
+          for (let i = 0, n = el.points.length; i < n; i++) {
+            const p1 = el.points[i];
+            const p2 = el.points[(i + 1) % n];
+            dxf.push(
+              '0', 'LINE',
+              '8', 'GRABADO_VECTORIAL',
+              '62', '3',
+              '10', p1.x.toFixed(4),
+              '20', p1.y.toFixed(4),
+              '30', '0.0',
+              '11', p2.x.toFixed(4),
+              '21', p2.y.toFixed(4),
+              '31', '0.0'
+            );
+          }
+        });
+      }
+
+      if (state.includePrevSliceGuide && pl.lowerPolys.length > 0) {
+        pl.lowerPolys.forEach((poly) => {
+          for (let i = 0; i < poly.length - 1; i++) {
+            dxf.push(
+              '0', 'LINE',
+              '8', 'GUIA_LASCA_INFERIOR',
+              '62', '6',
+              '10', poly[i].x.toFixed(4),
+              '20', poly[i].y.toFixed(4),
+              '30', '0.0',
+              '11', poly[i + 1].x.toFixed(4),
+              '21', poly[i + 1].y.toFixed(4),
+              '31', '0.0'
+            );
+          }
+        });
+      }
+
+      if (state.includeNextSliceGuide && pl.upperPolys.length > 0) {
+        pl.upperPolys.forEach((poly) => {
+          for (let i = 0; i < poly.length - 1; i++) {
+            dxf.push(
+              '0', 'LINE',
+              '8', 'GUIA_LASCA_SUPERIOR',
+              '62', '30',
+              '10', poly[i].x.toFixed(4),
+              '20', poly[i].y.toFixed(4),
+              '30', '0.0',
+              '11', poly[i + 1].x.toFixed(4),
+              '21', poly[i + 1].y.toFixed(4),
+              '31', '0.0'
+            );
+          }
+        });
+      }
+
+      pl.rods.forEach((r) => {
+        dxf.push(
+          '0', 'CIRCLE',
+          '8', 'VARILLAS_GUIA',
+          '62', '5',
+          '10', r.x.toFixed(4),
+          '20', r.y.toFixed(4),
+          '30', '0.0',
+          '40', (state.rodDiameter / 2).toFixed(4)
+        );
+      });
+
+      const tl = pl.textLayout;
+      if (tl && tl.lines && tl.lines.length > 0 && tl.fontSizeMM > 0.04) {
+        const textH = tl.fontSizeMM;
+        const lineGap = textH * 1.12;
+        const n = tl.lines.length;
+        tl.lines.forEach((lineStr, lIdx) => {
+          const lineY = tl.y + ((n - 1) * 0.5 - lIdx) * lineGap;
+          const halfW = (lineStr.length * textH * 0.6) * 0.5;
+          dxf.push(
+            '0', 'TEXT',
+            '8', 'GRABADO_ETIQUETA',
+            '62', '3',
+            '10', (tl.x - halfW).toFixed(4),
+            '20', (lineY - textH * 0.35).toFixed(4),
+            '30', '0.0',
+            '40', textH.toFixed(4),
+            '1', lineStr
+          );
+        });
+      }
+    });
+  });
+
+  dxf.push('0', 'ENDSEC', '0', 'EOF');
+  return dxf.join('\n');
+}
+
 function generateSliceDXF(slice, idx) {
   const upperSlice = typeof idx === 'number' ? getAdjacentSlice(idx, 'next') : null;
   const lowerSlice = typeof idx === 'number' ? getAdjacentSlice(idx, 'prev') : null;
@@ -8657,6 +9919,23 @@ if (typeof window !== 'undefined') {
 }
 
 function downloadCurrentSlice(format) {
+  if (state.carrierEnabled && (format === 'svg' || format === 'dxf')) {
+    const carrier = state.nestedCarriers[state.activeCarrierIndex];
+    if (!carrier) return;
+    const cNum = String(carrier.carrierIndex + 1).padStart(3, '0');
+    const baseCarrierName = state.modelName + '_soporte_mayor_' + cNum + '_' + carrier.width.toFixed(0) + 'x' + carrier.height.toFixed(0) + 'mm';
+    if (format === 'svg') {
+      const svgContent = generateCarrierSVG(carrier);
+      const blob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
+      triggerBrowserDownload(blob, baseCarrierName + '.svg');
+    } else {
+      const dxfContent = generateCarrierDXF(carrier);
+      const blob = new Blob([dxfContent], { type: 'application/dxf;charset=utf-8' });
+      triggerBrowserDownload(blob, baseCarrierName + '.dxf');
+    }
+    return;
+  }
+
   if (state.nestingEnabled && (format === 'svg' || format === 'dxf')) {
     const board = state.nestedBoards[state.activeBoardIndex];
     if (!board) return;
@@ -8712,6 +9991,8 @@ function openExportModal() {
   if (lblChk) lblChk.checked = state.includeLabels;
   const nestChk = document.getElementById('modalNestingEnabledCheck');
   if (nestChk) nestChk.checked = state.nestingEnabled;
+  const carrierChk = document.getElementById('modalCarrierEnabledCheck');
+  if (carrierChk) carrierChk.checked = state.carrierEnabled;
   const numChk = document.getElementById('modalNestEngraveNumCheck');
   if (numChk) numChk.checked = state.nestEngraveSliceNum;
   const guideChk = document.getElementById('modalNestEngraveGuideCheck');
@@ -8727,6 +10008,8 @@ function openExportModal() {
   const subOpts = document.getElementById('modalNestingSubOptions');
   if (subOpts) subOpts.classList.toggle('hidden', !state.nestingEnabled);
   syncBoardInputsUI();
+  if (typeof syncCarrierInputsUI === 'function') syncCarrierInputsUI();
+  if (typeof syncCarrierUIState === 'function') syncCarrierUIState();
   const modal = document.getElementById('exportModal');
   if (modal) {
     modal.classList.remove('hidden');
@@ -8904,6 +10187,29 @@ async function executeZipExport() {
       if (folderBoardsSVG) folderBoardsSVG.file(bName + '.svg', generateBoardSVG(board));
       if (folderBoardsDXF) folderBoardsDXF.file(bName + '.dxf', generateBoardDXF(board));
     });
+
+    // Si la distribución en Soporte Mayor (Apartado 6) está activa, empaquetamos también los tableros en soportes mayores
+    if (state.carrierEnabled && typeof packBoardsIntoCarriers === 'function') {
+      const carrierRes = packBoardsIntoCarriers(
+        boardsForExport,
+        state.carrierWidthMM,
+        state.carrierHeightMM,
+        state.carrierMarginMM,
+        state.carrierSpacingMM,
+        state.carrierAllowRotate
+      );
+      const carriersForExport = carrierRes.carriers || [];
+      if (carriersForExport.length > 0) {
+        const folderCarriersSVG = wantSVG ? zip.folder('SVG_Soportes_Mayores') : null;
+        const folderCarriersDXF = wantDXF ? zip.folder('DXF_Soportes_Mayores') : null;
+        carriersForExport.forEach((carrier) => {
+          const cNum = String(carrier.carrierIndex + 1).padStart(3, '0');
+          const cName = 'soporte_mayor_' + cNum + '_' + carrier.width.toFixed(0) + 'x' + carrier.height.toFixed(0) + 'mm';
+          if (folderCarriersSVG) folderCarriersSVG.file(cName + '.svg', generateCarrierSVG(carrier));
+          if (folderCarriersDXF) folderCarriersDXF.file(cName + '.dxf', generateCarrierDXF(carrier));
+        });
+      }
+    }
   }
 
   // Si la Subdivisión Modular 3D está activa, generamos también una carpeta organizada por Conjunto (Conjunto_A1, Conjunto_A2, etc.)
@@ -9002,6 +10308,15 @@ function exportProjectFile() {
     nestClipOversized: state.nestClipOversized,
     nestEngraveSliceNum: state.nestEngraveSliceNum,
     nestEngraveGuideType: state.nestEngraveGuideType,
+    carrierEnabled: state.carrierEnabled,
+    carrierWidthMM: state.carrierWidthMM,
+    carrierHeightMM: state.carrierHeightMM,
+    carrierSpacingMM: state.carrierSpacingMM,
+    carrierMarginMM: state.carrierMarginMM,
+    carrierAllowRotate: state.carrierAllowRotate,
+    carrierCutBoardBorders: state.carrierCutBoardBorders,
+    carrierCutOuterBorder: state.carrierCutOuterBorder,
+    carrierEngraveBoardLabels: state.carrierEngraveBoardLabels,
     rodCount: state.rodCount,
     rodDiameter: state.rodDiameter,
     slicerFrameEnabled: state.slicerFrameEnabled,
@@ -9139,7 +10454,20 @@ function importProjectFile(file) {
       }
       if (typeof data.nestEngraveSliceNum === 'boolean') setNestEngraveNum(data.nestEngraveSliceNum);
       if (typeof data.nestEngraveGuideType === 'boolean') setNestEngraveGuideType(data.nestEngraveGuideType);
+      if (typeof data.carrierWidthMM === 'number') state.carrierWidthMM = data.carrierWidthMM;
+      if (typeof data.carrierHeightMM === 'number') state.carrierHeightMM = data.carrierHeightMM;
+      if (typeof data.carrierSpacingMM === 'number') state.carrierSpacingMM = data.carrierSpacingMM;
+      if (typeof data.carrierMarginMM === 'number') state.carrierMarginMM = data.carrierMarginMM;
+      if (typeof data.carrierAllowRotate === 'boolean') state.carrierAllowRotate = data.carrierAllowRotate;
+      if (typeof data.carrierCutBoardBorders === 'boolean') state.carrierCutBoardBorders = data.carrierCutBoardBorders;
+      if (typeof data.carrierCutOuterBorder === 'boolean') state.carrierCutOuterBorder = data.carrierCutOuterBorder;
+      if (typeof data.carrierEngraveBoardLabels === 'boolean') state.carrierEngraveBoardLabels = data.carrierEngraveBoardLabels;
       if (typeof data.nestingEnabled === 'boolean') setNestingEnabled(data.nestingEnabled);
+      if (typeof data.carrierEnabled === 'boolean' && typeof setCarrierEnabled === 'function') {
+        setCarrierEnabled(data.carrierEnabled);
+      }
+      if (typeof syncCarrierInputsUI === 'function') syncCarrierInputsUI();
+      if (typeof syncCarrierUIState === 'function') syncCarrierUIState();
 
       const rodCountEl = document.getElementById('rodCountSelect');
       if (rodCountEl) rodCountEl.value = String(state.rodCount);
@@ -13676,6 +15004,77 @@ if (typeof window !== 'undefined') {
         </div>
       </div>
 
+      <!-- 6. DISTRIBUCIÓN EN SOPORTE MAYOR (EMPAQUETADO DE TABLEROS EN PLANCHA MADRE) -->
+      <div class="bg-slate-800/50 border border-amber-500/40 rounded-xl p-3 space-y-2.5">
+        <div class="flex items-center justify-between">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-amber-400">6. Distribución en Soporte Mayor</h2>
+          <label class="flex items-center gap-1.5 text-xs font-semibold text-amber-300 cursor-pointer">
+            <input type="checkbox" id="carrierEnabledCheck" onchange="setCarrierEnabled(this.checked)" class="accent-amber-500 w-3.5 h-3.5" />
+            <span>Activar</span>
+          </label>
+        </div>
+
+        <div id="carrierControlsBox" class="space-y-2.5 opacity-45 transition">
+          <p class="text-[10px] text-slate-400 leading-snug">
+            Distribuye los tableros del apartado 5 dentro de una plancha o soporte mayor configurable para cortarlos de una sola vez.
+          </p>
+
+          <!-- Dimensiones y presets rápidos del Soporte Mayor -->
+          <div>
+            <label class="text-[10px] text-slate-400 block mb-1">Tamaño del Soporte Mayor (<span id="unitLabelCarrier">mm</span>)</label>
+            <div class="grid grid-cols-2 gap-1.5">
+              <div>
+                <span class="text-[10px] text-slate-300 block mb-0.5">Ancho</span>
+                <input type="number" id="carrierWidthInput" value="1220" min="0.1" step="any" onkeydown="if(event.key==='Enter') onCarrierSettingsChange()" onchange="onCarrierSettingsChange()" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white" />
+              </div>
+              <div>
+                <span class="text-[10px] text-slate-300 block mb-0.5">Alto</span>
+                <input type="number" id="carrierHeightInput" value="800" min="0.1" step="any" onkeydown="if(event.key==='Enter') onCarrierSettingsChange()" onchange="onCarrierSettingsChange()" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white" />
+              </div>
+            </div>
+            <div class="flex gap-1 mt-1.5">
+              <button onclick="setCarrierPresetMM(900, 600)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[9px] text-slate-300">90×60cm</button>
+              <button onclick="setCarrierPresetMM(1220, 800)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[9px] text-slate-300">122×80cm</button>
+              <button onclick="setCarrierPresetMM(1600, 1000)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[9px] text-slate-300">160×100cm</button>
+              <button onclick="setCarrierPresetMM(2440, 1220)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[9px] text-slate-300">244×122cm</button>
+            </div>
+          </div>
+
+          <!-- Espaciado y opciones de corte en Soporte Mayor -->
+          <div class="pt-1.5 border-t border-slate-700/60 space-y-1.5">
+            <div class="flex items-center justify-between text-[11px]">
+              <span class="text-slate-300">Separación entre tableros (mm):</span>
+              <input type="number" id="carrierSpacingInput" value="8" min="0" max="100" step="1" onchange="onCarrierSettingsChange()" class="w-14 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-white" />
+            </div>
+            <div class="flex items-center justify-between text-[11px]">
+              <span class="text-slate-300">Margen exterior soporte (mm):</span>
+              <input type="number" id="carrierMarginInput" value="10" min="0" max="100" step="1" onchange="onCarrierSettingsChange()" class="w-14 bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-white" />
+            </div>
+            <label class="flex items-center justify-between text-[11px] text-slate-300 cursor-pointer">
+              <span>Rotar tableros 90° para optimizar</span>
+              <input type="checkbox" id="carrierRotateCheck" checked onchange="onCarrierSettingsChange()" class="accent-amber-500" />
+            </label>
+            <label class="flex items-center justify-between text-[11px] text-rose-300 font-medium cursor-pointer" title="Corta en rojo (#ff0000) el perímetro o marco configurable de cada sub-tablero dentro del soporte mayor (sin micro-uniones)">
+              <span>✂️ Cortar borde / marco de cada tablero</span>
+              <input type="checkbox" id="carrierCutBoardBordersCheck" checked onchange="onCarrierSettingsChange()" class="accent-rose-500" />
+            </label>
+            <label class="flex items-center justify-between text-[11px] text-slate-300 cursor-pointer" title="Añade también un trazo de corte rojo alrededor del perímetro exterior del Soporte Mayor">
+              <span>✂️ Cortar perímetro del Soporte Mayor</span>
+              <input type="checkbox" id="carrierCutOuterBorderCheck" onchange="onCarrierSettingsChange()" class="accent-amber-500" />
+            </label>
+            <label class="flex items-center justify-between text-[11px] text-emerald-300 cursor-pointer" title="Graba el identificador TABLERO #1, TABLERO #2... en cada sub-tablero">
+              <span>🏷️ Grabar etiqueta de cada Tablero</span>
+              <input type="checkbox" id="carrierEngraveLabelsCheck" checked onchange="onCarrierSettingsChange()" class="accent-emerald-500" />
+            </label>
+          </div>
+
+          <!-- Resumen de Soportes Mayores -->
+          <div id="carrierSummaryBadge" class="text-[11px] text-slate-400 bg-slate-900/60 border border-slate-700 rounded-lg p-2 font-medium text-center">
+            Desactivado (exportación por tablero individual)
+          </div>
+        </div>
+      </div>
+
     </aside>
 
     <!-- ÁREA CENTRAL: VISOR 3D + INSPECTOR 2D -->
@@ -13708,6 +15107,9 @@ if (typeof window !== 'undefined') {
             <div class="flex items-center gap-1.5 flex-wrap">
               <button onclick="setNestingEnabled(!state.nestingEnabled)" id="btnToggleBoardView" class="text-[11px] px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-semibold transition" title="Alternar entre vista de pieza individual y distribución en tablero">
                 🧩 Distribuir en Tablero: OFF
+              </button>
+              <button onclick="setCarrierEnabled(!state.carrierEnabled)" id="btnToggleCarrierView" class="text-[11px] px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-semibold transition" title="Alternar distribución de los tableros en un Soporte Mayor configurable (Apartado 6)">
+                📦 Soporte Mayor: OFF
               </button>
               <button onclick="openBoardInfoModal()" id="btnInspectorBoardInfo" class="hidden text-[11px] px-2.5 py-1 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border border-sky-500/40 font-semibold transition items-center gap-1" title="Ver listado detallado de piezas contenidas en este tablero">
                 <span>ℹ️ Piezas</span>
@@ -13899,10 +15301,17 @@ if (typeof window !== 'undefined') {
           </div>
           <label class="flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs cursor-pointer">
             <div>
-              <span class="font-semibold text-emerald-300 block">🧩 Agrupar piezas en Tableros (Nesting)</span>
+              <span class="font-semibold text-emerald-300 block">🧩 Agrupar piezas en Tableros (Apartado 5)</span>
               <span id="modalBoardInfoSub" class="text-[10px] text-slate-400">Empaqueta automáticamente en tableros de 600×400 mm</span>
             </div>
             <input type="checkbox" id="modalNestingEnabledCheck" onchange="setNestingEnabled(this.checked)" class="accent-emerald-500 w-4 h-4" />
+          </label>
+          <label class="flex items-center justify-between p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs cursor-pointer">
+            <div>
+              <span class="font-semibold text-amber-300 block">📦 Distribuir Tableros en Soporte Mayor (Apartado 6)</span>
+              <span id="modalCarrierInfoSub" class="text-[10px] text-slate-400">Agrupa los tableros en soportes mayores de 1220×800 mm</span>
+            </div>
+            <input type="checkbox" id="modalCarrierEnabledCheck" onchange="setCarrierEnabled(this.checked)" class="accent-amber-500 w-4 h-4" />
           </label>
         </div>
       </div>

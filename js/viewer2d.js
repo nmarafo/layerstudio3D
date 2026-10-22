@@ -102,6 +102,48 @@ function setupCanvas2DInteraction() {
     state.view2D.isDragging = false;
     try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
 
+    if (!state.view2D.hasMoved && state.carrierEnabled && state.nestedCarriers.length > 0) {
+      const carrier = state.nestedCarriers[state.activeCarrierIndex];
+      if (!carrier) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+
+      const pad = 36;
+      const baseScale = Math.min((canvas.width - pad * 2) / carrier.width, (canvas.height - pad * 2) / carrier.height);
+      const scale = baseScale * state.view2D.zoom;
+      const centerX = canvas.width / 2 + state.view2D.panX;
+      const centerY = canvas.height / 2 + state.view2D.panY;
+
+      const cx = (px - centerX) / scale + carrier.width / 2;
+      const cy = (centerY - py) / scale + carrier.height / 2;
+
+      let hitSliceIdx = -1;
+      let hitBoardIdx = -1;
+      let minArea = Infinity;
+      carrier.boardPlacements.forEach((bPl) => {
+        bPl.transformedPlacements.forEach((pl) => {
+          if (isPointInIslandMaterial({ x: cx, y: cy }, pl.outerPoints, pl.holes)) {
+            if (pl.island.outerArea < minArea) {
+              minArea = pl.island.outerArea;
+              hitSliceIdx = pl.island.sliceIndex;
+              hitBoardIdx = bPl.boardIndex;
+            }
+          }
+        });
+      });
+
+      if (hitSliceIdx !== -1) {
+        state.activeSliceIndex = hitSliceIdx;
+        if (hitBoardIdx !== -1) state.activeBoardIndex = hitBoardIdx;
+        update3DSlicesTransforms();
+        highlightActiveCardInStrip();
+        render2DSlice();
+      }
+      return;
+    }
+
     if (!state.view2D.hasMoved && state.nestingEnabled && state.nestedBoards.length > 0) {
       const board = state.nestedBoards[state.activeBoardIndex];
       if (!board) return;
@@ -243,7 +285,18 @@ function getAlignmentHoles2D(slice) {
 function selectActiveSlice(idx) {
   if (state.slices.length === 0) return;
   state.activeSliceIndex = Math.max(0, Math.min(state.slices.length - 1, idx));
-  if (!state.nestingEnabled) {
+  if (state.carrierEnabled && state.nestedCarriers.length > 0) {
+    const foundCarrierIdx = state.nestedCarriers.findIndex((c) =>
+      c.boardPlacements.some((bPl) =>
+        bPl.transformedPlacements.some((pl) => pl.island.sliceIndex === state.activeSliceIndex)
+      )
+    );
+    if (foundCarrierIdx !== -1) {
+      state.activeCarrierIndex = foundCarrierIdx;
+      const sliderEl = document.getElementById('currentSliceSlider');
+      if (sliderEl) sliderEl.value = state.activeCarrierIndex;
+    }
+  } else if (!state.nestingEnabled) {
     document.getElementById('currentSliceSlider').value = state.activeSliceIndex;
   } else {
     // Si estamos en vista de tablero, saltar al tablero donde se encuentra esta lasca
@@ -552,6 +605,199 @@ function render2DBoard(ctx, canvas) {
   });
 }
 
+// Renderiza un Soporte Mayor (Apartado 6) conteniendo múltiples tableros completos en el Inspector 2D
+function render2DCarrier(ctx, canvas) {
+  const carrier = state.nestedCarriers[state.activeCarrierIndex];
+  if (!carrier || carrier.boardPlacements.length === 0) {
+    ctx.fillStyle = '#f87171';
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'center';
+    const msg = state.unfitBoardsCount > 0
+      ? 'Los tableros (' + state.unfitBoardsCount + ') superan las dimensiones del Soporte Mayor actual. Aumente el tamaño del soporte.'
+      : 'No hay tableros generados para distribuir en el Soporte Mayor';
+    ctx.fillText(msg, canvas.width / 2, canvas.height / 2);
+    return;
+  }
+
+  const pad = 36;
+  const baseScale = Math.min((canvas.width - pad * 2) / carrier.width, (canvas.height - pad * 2) / carrier.height);
+  const scale = baseScale * state.view2D.zoom;
+  const centerX = canvas.width / 2 + state.view2D.panX;
+  const centerY = canvas.height / 2 + state.view2D.panY;
+  const toScreenX = (x) => centerX + (x - carrier.width / 2) * scale;
+  const toScreenY = (y) => centerY - (y - carrier.height / 2) * scale;
+
+  const cx = toScreenX(0);
+  const cy = toScreenY(carrier.height);
+  const cw = carrier.width * scale;
+  const ch = carrier.height * scale;
+
+  // Fondo y borde del Soporte Mayor físico
+  ctx.save();
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+  ctx.fillRect(cx, cy, cw, ch);
+  ctx.strokeStyle = state.carrierCutOuterBorder ? '#f43f5e' : '#f59e0b';
+  ctx.lineWidth = state.carrierCutOuterBorder ? 2.2 : 1.9;
+  ctx.strokeRect(cx, cy, cw, ch);
+
+  // Margen útil interior del Soporte Mayor
+  if (carrier.margin > 0) {
+    const mx = toScreenX(carrier.margin);
+    const my = toScreenY(carrier.height - carrier.margin);
+    const mw = (carrier.width - carrier.margin * 2) * scale;
+    const mh = (carrier.height - carrier.margin * 2) * scale;
+    ctx.strokeStyle = 'rgba(251, 191, 36, 0.24)';
+    ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 1;
+    ctx.strokeRect(mx, my, mw, mh);
+  }
+  ctx.restore();
+
+  // Dibujar cada tablero anidado dentro del Soporte Mayor
+  carrier.boardPlacements.forEach((bPl) => {
+    const bx = toScreenX(bPl.x);
+    const by = toScreenY(bPl.y + bPl.h);
+    const bw = bPl.w * scale;
+    const bh = bPl.h * scale;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(30, 41, 59, 0.58)';
+    ctx.fillRect(bx, by, bw, bh);
+
+    if (state.carrierCutBoardBorders) {
+      if (bPl.boardFrameGeom) {
+        draw2DBoardFrameOnCanvas(ctx, bPl.boardFrameGeom, toScreenX, toScreenY);
+      } else {
+        ctx.strokeStyle = '#f43f5e';
+        ctx.lineWidth = 1.9;
+        ctx.strokeRect(bx, by, bw, bh);
+      }
+    } else {
+      ctx.strokeStyle = 'rgba(16, 185, 129, 0.55)';
+      ctx.setLineDash([5, 3]);
+      ctx.lineWidth = 1.2;
+      ctx.strokeRect(bx, by, bw, bh);
+      ctx.setLineDash([]);
+      if (bPl.boardFrameGeom) {
+        draw2DBoardFrameOnCanvas(ctx, bPl.boardFrameGeom, toScreenX, toScreenY);
+      }
+    }
+
+    // Etiqueta del número de tablero dentro del Soporte Mayor
+    if (state.carrierEngraveBoardLabels) {
+      const labelFontPx = Math.max(8, Math.min(13, Math.min(bw, bh) * 0.055));
+      ctx.font = 'bold ' + labelFontPx.toFixed(1) + 'px monospace';
+      ctx.fillStyle = '#34d399';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      const labelTxt = 'TABLERO #' + (bPl.boardIndex + 1) + (bPl.rotated ? ' ↻90°' : '');
+      ctx.fillText(labelTxt, bx + 5, by + 4);
+    }
+    ctx.restore();
+
+    // Dibujar todas las islas del tablero ya transformadas a las coordenadas del Soporte Mayor
+    bPl.transformedPlacements.forEach((pl) => {
+      const isCurrentSlice = pl.island.sliceIndex === state.activeSliceIndex;
+
+      ctx.save();
+      ctx.beginPath();
+      pl.outerPoints.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+        else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+      });
+      ctx.closePath();
+      pl.holes.forEach((h) => {
+        h.points.forEach((pt, i) => {
+          if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+          else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+        });
+        ctx.closePath();
+      });
+      ctx.fillStyle = isCurrentSlice ? 'rgba(244, 63, 94, 0.26)' : 'rgba(14, 165, 233, 0.16)';
+      ctx.fill('evenodd');
+      ctx.restore();
+
+      drawContourWithTabsOnCanvas(
+        ctx,
+        pl.outerPoints,
+        false,
+        isCurrentSlice ? '#fb7185' : '#f43f5e',
+        isCurrentSlice ? 2.2 : 1.5,
+        toScreenX,
+        toScreenY,
+        Boolean(pl.isFrame || (pl.island && pl.island.isFrame))
+      );
+
+      pl.holes.forEach((h) => {
+        drawContourWithTabsOnCanvas(ctx, h.points, true, '#38bdf8', 1.3, toScreenX, toScreenY, Boolean(h.isFrame));
+      });
+
+      if (pl.engraveLoops && pl.engraveLoops.length > 0) {
+        ctx.save();
+        ctx.beginPath();
+        pl.engraveLoops.forEach((el) => {
+          if (!el.points || el.points.length < 3) return;
+          el.points.forEach((pt, i) => {
+            if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+            else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+          });
+          ctx.closePath();
+        });
+        ctx.fillStyle = 'rgba(16, 185, 129, 0.30)';
+        ctx.fill('evenodd');
+        ctx.strokeStyle = '#10b981';
+        ctx.lineWidth = 1.1;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      if (state.includePrevSliceGuide && pl.lowerPolys.length > 0) {
+        ctx.save();
+        ctx.setLineDash(getCanvasDashPattern(state.lowerGuideStyle));
+        ctx.beginPath();
+        pl.lowerPolys.forEach((poly) => {
+          poly.forEach((pt, i) => {
+            if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+            else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+          });
+        });
+        ctx.strokeStyle = '#d946ef';
+        ctx.lineWidth = 1.25;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      if (state.includeNextSliceGuide && pl.upperPolys.length > 0) {
+        ctx.save();
+        ctx.setLineDash(getCanvasDashPattern(state.upperGuideStyle));
+        ctx.beginPath();
+        pl.upperPolys.forEach((poly) => {
+          poly.forEach((pt, i) => {
+            if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+            else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+          });
+        });
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 1.25;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      pl.rods.forEach((r) => {
+        ctx.beginPath();
+        ctx.arc(toScreenX(r.x), toScreenY(r.y), (state.rodDiameter / 2) * scale, 0, Math.PI * 2);
+        ctx.fillStyle = '#090d16';
+        ctx.fill();
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      });
+
+      drawAdaptiveIslandTextOnCanvas(ctx, pl.textLayout, toScreenX, toScreenY, scale);
+    });
+  });
+}
+
 function render2DSlice() {
   const canvas = document.getElementById('canvas2D');
   if (!canvas) return;
@@ -560,6 +806,11 @@ function render2DSlice() {
   canvas.height = rect.height || 380;
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (state.carrierEnabled) {
+    render2DCarrier(ctx, canvas);
+    return;
+  }
 
   if (state.nestingEnabled) {
     render2DBoard(ctx, canvas);
@@ -841,7 +1092,10 @@ function render2DSlice() {
 }
 
 function stepSlice(delta) {
-  if (state.nestingEnabled) {
+  if (state.carrierEnabled) {
+    if (state.nestedCarriers.length === 0) return;
+    selectActiveCarrier(state.activeCarrierIndex + delta);
+  } else if (state.nestingEnabled) {
     if (state.nestedBoards.length === 0) return;
     selectActiveBoard(state.activeBoardIndex + delta);
   } else {
@@ -855,7 +1109,9 @@ function togglePlaySlices() {
   if (state.isPlaying) {
     btn.textContent = '⏸ Pausa';
     state.playTimer = setInterval(() => {
-      if (state.nestingEnabled && state.nestedBoards.length > 0) {
+      if (state.carrierEnabled && state.nestedCarriers.length > 0) {
+        selectActiveCarrier((state.activeCarrierIndex + 1) % state.nestedCarriers.length);
+      } else if (state.nestingEnabled && state.nestedBoards.length > 0) {
         selectActiveBoard((state.activeBoardIndex + 1) % state.nestedBoards.length);
       } else {
         const next = (state.activeSliceIndex + 1) % state.slices.length;
@@ -872,6 +1128,38 @@ function renderSliceStripUI() {
   const container = document.getElementById('sliceStripContainer');
   const titleEl = document.getElementById('bottomStripTitle');
   container.innerHTML = '';
+
+  if (state.carrierEnabled) {
+    if (titleEl) {
+      titleEl.textContent = 'Soportes Mayores Generados (' + state.nestedCarriers.length + ') — Cada soporte agrupa múltiples tableros completos (clic para inspeccionar)';
+    }
+    state.nestedCarriers.forEach((carrier, cIdx) => {
+      const card = document.createElement('div');
+      card.id = 'carrierCard_' + cIdx;
+      card.className = 'slice-card shrink-0 w-40 h-16 rounded-lg border border-amber-500/40 bg-slate-800/75 p-1.5 flex flex-col justify-between cursor-pointer transition';
+      card.onclick = () => selectActiveCarrier(cIdx);
+
+      const topRow = document.createElement('div');
+      topRow.className = 'flex items-center justify-between text-[10px]';
+      topRow.innerHTML =
+        '<span class="font-bold text-amber-300">Soporte #' + (cIdx + 1) + '</span>' +
+        '<span class="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[9px] font-mono">' +
+        carrier.boardPlacements.length + ' tab</span>';
+
+      const bottomRow = document.createElement('div');
+      bottomRow.className = 'flex items-center justify-between text-[9px] text-slate-400 font-mono';
+      bottomRow.innerHTML =
+        '<span>' + carrier.totalIslands + ' islas</span>' +
+        '<span class="text-emerald-300">' + carrier.efficiency.toFixed(0) + '% uso</span>';
+
+      card.appendChild(topRow);
+      card.appendChild(bottomRow);
+      container.appendChild(card);
+    });
+    updateSelectedCountBadge();
+    highlightActiveCardInStrip();
+    return;
+  }
 
   if (state.nestingEnabled) {
     if (titleEl) {
@@ -962,6 +1250,13 @@ function renderSliceStripUI() {
 }
 
 function highlightActiveCardInStrip() {
+  if (state.carrierEnabled) {
+    state.nestedCarriers.forEach((_, cIdx) => {
+      const c = document.getElementById('carrierCard_' + cIdx);
+      if (c) c.classList.toggle('active', cIdx === state.activeCarrierIndex);
+    });
+    return;
+  }
   if (state.nestingEnabled) {
     state.nestedBoards.forEach((_, bIdx) => {
       const c = document.getElementById('boardCard_' + bIdx);
