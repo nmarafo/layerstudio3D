@@ -26,10 +26,11 @@ const state = {
   mode: 'count', // 'count' | 'thickness'
   sliceCount: 24,
   thickness: 5,
-  // Configuración de Modalidad Puzzle 3D (Costillas ortogonales con ranuras de encaje sin pegamento)
-  puzzleAxes: 'xy',            // 'xy' (encaje en Z) | 'xz' (encaje en Y) | 'yz' (encaje en X)
+  // Configuración de Modalidad Puzzle 3D (Costillas ortogonales en 2 o 3 ejes con ranuras de encaje sin pegamento)
+  puzzleAxes: 'xy',            // 'xy' (encaje en Z) | 'xz' (encaje en Y) | 'yz' (encaje en X) | 'xyz' (3 ejes simultáneos X×Y×Z)
   puzzleCountA: 7,             // Nº de costillas en el 1º eje (Serie A)
   puzzleCountB: 7,             // Nº de costillas en el 2º eje (Serie B)
+  puzzleCountC: 5,             // Nº de costillas en el 3º eje (Serie C, cuando puzzleAxes === 'xyz')
   puzzleMaterialThicknessMM: 5.0, // Grosor del tablero/poliexpan en mm
   puzzleSlotClearanceMM: 0.0,  // Holgura/tolerancia de encaje en mm (ancho ranura = grosor + holgura)
   puzzleTotalSlotsCount: 0,    // Total de ranuras de encaje generadas

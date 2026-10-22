@@ -1196,7 +1196,9 @@ function renderSliceStripUI() {
 
   if (titleEl) {
     titleEl.textContent = state.constructionMode === 'puzzle3d'
-      ? 'Costillas del Puzzle 3D (Serie A ⊔ en azul + Serie B ⊓ en ámbar — clic para inspeccionar ranuras)'
+      ? (state.puzzleAxes === 'xyz'
+        ? 'Costillas del Puzzle 3D en 3 Ejes (Serie A en azul + Serie B en ámbar + Serie C en verde — clic para inspeccionar ranuras)'
+        : 'Costillas del Puzzle 3D (Serie A ⊔ en azul + Serie B ⊓ en ámbar — clic para inspeccionar ranuras)')
       : 'Secuencia de Lascas (clic para inspeccionar, casilla para incluir/excluir de exportación)';
   }
 
@@ -1213,7 +1215,7 @@ function renderSliceStripUI() {
     const codeLabel = slice.puzzleCode ? slice.puzzleCode : ('#' + (idx + 1));
     const codeColor = slice.puzzleSeries === 'A'
       ? 'text-sky-300'
-      : (slice.puzzleSeries === 'B' ? 'text-amber-300' : 'text-slate-200');
+      : (slice.puzzleSeries === 'B' ? 'text-amber-300' : (slice.puzzleSeries === 'C' ? 'text-emerald-300' : 'text-slate-200'));
     topRow.innerHTML = '<span class="font-bold ' + codeColor + '">' + codeLabel + '</span>';
 
     const chk = document.createElement('input');
