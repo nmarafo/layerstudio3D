@@ -889,8 +889,8 @@ function isPointInLoopsSolid(pt, loops) {
   return (count % 2) === 1;
 }
 
-// Encadena segmentos con coincidencia exacta en los vértices de corte booleano
-function chainExactBooleanSegments(segments) {
+// Encadena segmentos dirigidos ({ from, to }) con coincidencia exacta en los vértices de corte booleano
+function chainDirectedBooleanSegments(segments) {
   const used = new Uint8Array(segments.length);
   const tolSq = 1e-6; // 0.001 mm
   const loops = [];
@@ -904,38 +904,44 @@ function chainExactBooleanSegments(segments) {
   for (let i = 0; i < segments.length; i++) {
     if (used[i]) continue;
     used[i] = 1;
-    const poly = [segments[i][0], segments[i][1]];
+    const poly = [segments[i].from, segments[i].to];
 
     let extended = true;
     while (extended) {
       extended = false;
       const tail = poly[poly.length - 1];
+      if (poly.length >= 4 && distSq(poly[0], tail) <= tolSq) {
+        break;
+      }
+
       let bestIdx = -1;
-      let bestEnd = 0;
-      let bestD = tolSq;
+      let bestD = tolSq * 4;
 
       for (let j = 0; j < segments.length; j++) {
         if (used[j]) continue;
-        const d0 = distSq(tail, segments[j][0]);
-        if (d0 < bestD) { bestD = d0; bestIdx = j; bestEnd = 0; }
-        const d1 = distSq(tail, segments[j][1]);
-        if (d1 < bestD) { bestD = d1; bestIdx = j; bestEnd = 1; }
+        // Priorizar coincidencia exacta de referencia de vértice compartido
+        if (segments[j].from === tail) {
+          bestIdx = j;
+          bestD = 0;
+          break;
+        }
+        const d0 = distSq(tail, segments[j].from);
+        if (d0 < bestD) {
+          bestD = d0;
+          bestIdx = j;
+        }
       }
 
       if (bestIdx !== -1) {
         used[bestIdx] = 1;
-        poly.push(bestEnd === 0 ? segments[bestIdx][1] : segments[bestIdx][0]);
+        poly.push(segments[bestIdx].to);
         extended = true;
-        if (distSq(poly[0], poly[poly.length - 1]) <= tolSq && poly.length >= 4) {
-          break;
-        }
       }
     }
 
-    if (poly.length >= 3) {
-      if (distSq(poly[0], poly[poly.length - 1]) <= tolSq * 4) {
-        poly.pop();
-      }
+    // Conservar únicamente lazos cerrados válidos para evitar cuerdas diagonales espurias en la triangulación
+    if (poly.length >= 4 && distSq(poly[0], poly[poly.length - 1]) <= tolSq * 9) {
+      poly.pop();
       if (poly.length >= 3) {
         loops.push(poly);
       }
@@ -944,24 +950,49 @@ function chainExactBooleanSegments(segments) {
   return loops;
 }
 
+// Consolida puntos de corte muy próximos en una arista reutilizando el mismo objeto vértice
+function consolidateEdgeSplits(splits) {
+  splits.sort((x, y) => x.t - y.t);
+  const clean = [splits[0]];
+  for (let k = 1; k < splits.length; k++) {
+    const prev = clean[clean.length - 1];
+    if (splits[k].t - prev.t < 1e-7) {
+      splits[k].pt = prev.pt;
+    } else {
+      clean.push(splits[k]);
+    }
+  }
+  return clean;
+}
+
 // Resta booleana 2D exacta de un rectángulo alineado a los ejes [minX, maxX] x [minY, maxY] sobre los contornos de una lasca
 function subtractSingleRectFromLoops(loops, rect) {
   if (!loops || loops.length === 0) return [];
   const rx0 = rect.minX, rx1 = rect.maxX, ry0 = rect.minY, ry1 = rect.maxY;
-  const eps = 1e-6;
+  if (!(rx1 > rx0 + 1e-5 && ry1 > ry0 + 1e-5)) return loops;
+  const eps = 1e-5;
 
-  // Perturbar ligeramente cualquier vértice del polígono que caiga exactamente sobre las rectas del rectángulo
-  const nudgeVal = (v, lineVal) => (Math.abs(v - lineVal) < eps ? (v >= lineVal ? lineVal + eps : lineVal - eps) : v);
-  const nudgedLoops = loops.map((l) => ({
-    points: l.points.map((p) => ({
-      x: nudgeVal(nudgeVal(p.x, rx0), rx1),
-      y: nudgeVal(nudgeVal(p.y, ry0), ry1)
-    })),
-    isHole: l.isHole,
-    absArea: l.absArea
-  }));
+  // Asegurar que cada lazo de entrada tenga orientación canónica (CCW exterior, CW hueco)
+  const nudgedLoops = loops.map((l) => {
+    const pts = l.points.map((p) => {
+      const nudgeVal = (v, lineVal) => (Math.abs(v - lineVal) < eps ? (v >= lineVal ? lineVal + eps : lineVal - eps) : v);
+      return {
+        x: nudgeVal(nudgeVal(p.x, rx0), rx1),
+        y: nudgeVal(nudgeVal(p.y, ry0), ry1)
+      };
+    });
+    const sArea = computeSignedArea(pts);
+    if ((!l.isHole && sArea < 0) || (l.isHole && sArea > 0)) {
+      pts.reverse();
+    }
+    return {
+      points: pts,
+      isHole: Boolean(l.isHole),
+      absArea: Math.abs(sArea)
+    };
+  });
 
-  // Recolectar aristas del polígono
+  // Recolectar aristas dirigidas del polígono (el material sólido queda a la izquierda de cada arista)
   const polyEdges = [];
   nudgedLoops.forEach((l) => {
     const pts = l.points;
@@ -974,16 +1005,17 @@ function subtractSingleRectFromLoops(loops, rect) {
     }
   });
 
-  // Las 4 aristas del rectángulo de ranura
+  // Las 4 aristas del rectángulo de ranura recorridas en sentido HORARIO (CW)
+  // para que el interior del sólido restante quede a la izquierda de cada arista de corte
   const c00 = { x: rx0, y: ry0 };
-  const c10 = { x: rx1, y: ry0 };
-  const c11 = { x: rx1, y: ry1 };
   const c01 = { x: rx0, y: ry1 };
+  const c11 = { x: rx1, y: ry1 };
+  const c10 = { x: rx1, y: ry0 };
   const rectEdges = [
-    { a: c00, b: c10, splits: [{ t: 0, pt: c00 }, { t: 1, pt: c10 }] },
-    { a: c10, b: c11, splits: [{ t: 0, pt: c10 }, { t: 1, pt: c11 }] },
-    { a: c11, b: c01, splits: [{ t: 0, pt: c11 }, { t: 1, pt: c01 }] },
-    { a: c01, b: c00, splits: [{ t: 0, pt: c01 }, { t: 1, pt: c00 }] }
+    { a: c00, b: c01, splits: [{ t: 0, pt: c00 }, { t: 1, pt: c01 }] },
+    { a: c01, b: c11, splits: [{ t: 0, pt: c01 }, { t: 1, pt: c11 }] },
+    { a: c11, b: c10, splits: [{ t: 0, pt: c11 }, { t: 1, pt: c10 }] },
+    { a: c10, b: c00, splits: [{ t: 0, pt: c10 }, { t: 1, pt: c00 }] }
   ];
 
   // Intersecar cada arista del polígono con las 4 aristas del rectángulo compartiendo el objeto vértice exacto
@@ -1008,7 +1040,7 @@ function subtractSingleRectFromLoops(loops, rect) {
       const tP = (qpX * sY - qpY * sX) / denom;
       const tR = (qpX * rY - qpY * rX) / denom;
 
-      if (tP > 0 && tP < 1 && tR > 0 && tR < 1) {
+      if (tP >= 0 && tP <= 1 && tR >= 0 && tR <= 1) {
         const sharedPt = {
           x: pe.a.x + tP * rX,
           y: pe.a.y + tP * rY
@@ -1025,38 +1057,51 @@ function subtractSingleRectFromLoops(loops, rect) {
     pt.y > ry0 + 1e-7 && pt.y < ry1 - 1e-7
   );
 
-  // 1. Conservar los subsegmentos del polígono original que quedan FUERA del rectángulo de ranura
+  // 1. Conservar los subsegmentos dirigidos del polígono original que quedan FUERA del rectángulo de ranura
   for (let i = 0; i < polyEdges.length; i++) {
-    const splits = polyEdges[i].splits;
-    splits.sort((x, y) => x.t - y.t);
+    const splits = consolidateEdgeSplits(polyEdges[i].splits);
     for (let k = 0; k < splits.length - 1; k++) {
-      if (splits[k + 1].t - splits[k].t < 1e-7) continue;
       const p0 = splits[k].pt;
       const p1 = splits[k + 1].pt;
+      if (p0 === p1) continue;
       const mid = { x: (p0.x + p1.x) * 0.5, y: (p0.y + p1.y) * 0.5 };
       if (!isStrictlyInsideRect(mid)) {
-        outSegments.push([p0, p1]);
+        outSegments.push({ from: p0, to: p1 });
       }
     }
   }
 
-  // 2. Conservar los subsegmentos del borde de la ranura que caen DENTRO del material sólido de la lasca
+  // 2. Conservar los subsegmentos dirigidos del borde de la ranura que caen DENTRO del material sólido de la lasca
   for (let j = 0; j < 4; j++) {
-    const splits = rectEdges[j].splits;
-    splits.sort((x, y) => x.t - y.t);
+    const splits = consolidateEdgeSplits(rectEdges[j].splits);
     for (let k = 0; k < splits.length - 1; k++) {
-      if (splits[k + 1].t - splits[k].t < 1e-7) continue;
       const p0 = splits[k].pt;
       const p1 = splits[k + 1].pt;
+      if (p0 === p1) continue;
       const mid = { x: (p0.x + p1.x) * 0.5, y: (p0.y + p1.y) * 0.5 };
       if (isPointInLoopsSolid(mid, nudgedLoops)) {
-        outSegments.push([p0, p1]);
+        outSegments.push({ from: p0, to: p1 });
       }
     }
   }
 
-  const rawChained = chainExactBooleanSegments(outSegments);
+  const rawChained = chainDirectedBooleanSegments(outSegments);
   return classifyLoopsOuterAndHoles(rawChained);
+}
+
+// Recorta un conjunto de contornos al rango interior [uMin, uMax] a lo largo del eje uAxis ('x' o 'y')
+function clipLoopsToAxisRange(loops, uAxis, uMin, uMax) {
+  if (!loops || loops.length === 0 || !(uMax > uMin)) return loops;
+  const INF = 1e5;
+  let clipped = loops;
+  if (uAxis === 'x') {
+    clipped = subtractSingleRectFromLoops(clipped, { minX: -INF, maxX: uMin, minY: -INF, maxY: INF });
+    clipped = subtractSingleRectFromLoops(clipped, { minX: uMax, maxX: INF, minY: -INF, maxY: INF });
+  } else {
+    clipped = subtractSingleRectFromLoops(clipped, { minX: -INF, maxX: INF, minY: -INF, maxY: uMin });
+    clipped = subtractSingleRectFromLoops(clipped, { minX: -INF, maxX: INF, minY: uMax, maxY: INF });
+  }
+  return clipped;
 }
 
 // Talla todas las ranuras de encaje a media madera entre las costillas de la Serie A y las de la Serie B
@@ -1066,14 +1111,38 @@ function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB) {
   const infoA = getPuzzleSlice2DAxes(axisA, axisB);
   const infoB = getPuzzleSlice2DAxes(axisB, axisA);
 
-  slicesA.forEach((s) => {
-    if (!s.baseLoops) s.baseLoops = s.loops || [];
+  // Cuando una serie tiene 3 o más láminas, la 1.ª y la última lámina actúan como tapas exteriores cerradas:
+  // - No reciben ranuras que las atraviesen.
+  // - Las costillas del otro eje se recortan para no sobresalir más allá de la cara interior de dichas tapas.
+  const hasCapsA = slicesA.length >= 3;
+  const hasCapsB = slicesB.length >= 3;
+  const capMargin = Math.max(0.2, state.puzzleMaterialThicknessMM * 0.5);
+  const uClipMinForB = hasCapsA ? (slicesA[0].coord + capMargin) : -Infinity;
+  const uClipMaxForB = hasCapsA ? (slicesA[slicesA.length - 1].coord - capMargin) : Infinity;
+  const uClipMinForA = hasCapsB ? (slicesB[0].coord + capMargin) : -Infinity;
+  const uClipMaxForA = hasCapsB ? (slicesB[slicesB.length - 1].coord - capMargin) : Infinity;
+
+  slicesA.forEach((s, idxA) => {
+    const rawBase = s.rawBaseLoops || s.baseLoops || s.loops || [];
+    s.rawBaseLoops = rawBase;
+    const isOuterCapA = hasCapsA && (idxA === 0 || idxA === slicesA.length - 1);
+    s.isOuterCap = isOuterCapA;
+    s.baseLoops = (!isOuterCapA && hasCapsB && uClipMaxForA > uClipMinForA)
+      ? clipLoopsToAxisRange(rawBase, infoA.uAxis, uClipMinForA, uClipMaxForA)
+      : rawBase.slice();
     s.slots = [];
     s.puzzleSlots = s.slots;
     s.slotRects = [];
   });
-  slicesB.forEach((s) => {
-    if (!s.baseLoops) s.baseLoops = s.loops || [];
+
+  slicesB.forEach((s, idxB) => {
+    const rawBase = s.rawBaseLoops || s.baseLoops || s.loops || [];
+    s.rawBaseLoops = rawBase;
+    const isOuterCapB = hasCapsB && (idxB === 0 || idxB === slicesB.length - 1);
+    s.isOuterCap = isOuterCapB;
+    s.baseLoops = (hasCapsA && uClipMaxForB > uClipMinForB)
+      ? clipLoopsToAxisRange(rawBase, infoB.uAxis, uClipMinForB, uClipMaxForB)
+      : rawBase.slice();
     s.slots = [];
     s.puzzleSlots = s.slots;
     s.slotRects = [];
@@ -1082,10 +1151,14 @@ function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB) {
   let totalSlots = 0;
 
   for (let i = 0; i < slicesA.length; i++) {
+    // No ranurar la 1.ª ni la última lámina de la Serie A (quedan como fachadas exteriores limpias)
+    if (hasCapsA && (i === 0 || i === slicesA.length - 1)) continue;
     const sA = slicesA[i];
     if (!sA.baseLoops || sA.baseLoops.length === 0) continue;
 
     for (let j = 0; j < slicesB.length; j++) {
+      // No ranurar la 1.ª ni la última lámina de la Serie B si existen tapas exteriores en B
+      if (hasCapsB && (j === 0 || j === slicesB.length - 1)) continue;
       const sB = slicesB[j];
       if (!sB.baseLoops || sB.baseLoops.length === 0) continue;
 
@@ -1103,13 +1176,39 @@ function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB) {
         const vMid = (vMin + vMax) * 0.5;
         const relief = Math.min(0.2, span * 0.02);
 
-        // Extensión exterior segura para abrir completamente la boca de la ranura incluso en bordes inclinados
-        const safeMaxVA = (k + 1 < commonIntervals.length)
-          ? (vMax + commonIntervals[k + 1][0]) * 0.5
-          : (vMax + Math.max(12, slotW * 3));
-        const safeMinVB = (k > 0)
-          ? (vMin + commonIntervals[k - 1][1]) * 0.5
-          : (vMin - Math.max(12, slotW * 3));
+        // Localizar el intervalo propio de sA y sB que contiene [vMin, vMax] para no invadir islas vecinas
+        let idxIntA = -1;
+        for (let ia = 0; ia < intervalsA.length; ia++) {
+          if (intervalsA[ia][0] <= vMin + 1e-3 && intervalsA[ia][1] >= vMax - 1e-3) {
+            idxIntA = ia;
+            break;
+          }
+        }
+        let idxIntB = -1;
+        for (let ib = 0; ib < intervalsB.length; ib++) {
+          if (intervalsB[ib][0] <= vMin + 1e-3 && intervalsB[ib][1] >= vMax - 1e-3) {
+            idxIntB = ib;
+            break;
+          }
+        }
+
+        // Si sA continúa más allá de vMax (porque sB terminó antes), la ranura en sA debe detenerse en vMax + relief
+        // Si vMax coincide con el borde exterior de sA, extender solo lo justo sin tocar el siguiente intervalo de sA
+        let safeMaxVA = vMax + relief;
+        if (idxIntA !== -1 && Math.abs(intervalsA[idxIntA][1] - vMax) < 0.25) {
+          const openExtA = Math.min(2.0, slotW * 0.6);
+          safeMaxVA = (idxIntA + 1 < intervalsA.length)
+            ? Math.min(vMax + openExtA, (vMax + intervalsA[idxIntA + 1][0]) * 0.5)
+            : (vMax + openExtA);
+        }
+
+        let safeMinVB = vMin - relief;
+        if (idxIntB !== -1 && Math.abs(intervalsB[idxIntB][0] - vMin) < 0.25) {
+          const openExtB = Math.min(2.0, slotW * 0.6);
+          safeMinVB = (idxIntB > 0)
+            ? Math.max(vMin - openExtB, (vMin + intervalsB[idxIntB - 1][1]) * 0.5)
+            : (vMin - openExtB);
+        }
 
         // Rectángulo de ranura en sA (Serie A: abre hacia +v, desde vMid hasta safeMaxVA)
         const rectA = infoA.uAxis === 'x'
@@ -1849,6 +1948,7 @@ function applyIslandFilterToExistingSlices() {
   state.slices.forEach((slice) => {
     const base = slice.rawLoops || slice.loops || [];
     const res = filterLoopsByMinIslandSize(base);
+    slice.rawBaseLoops = res.loops;
     slice.baseLoops = res.loops;
     slice.modelLoops = res.loops.slice();
     slice.unsplitLoops = res.loops.slice();
@@ -2166,9 +2266,10 @@ function isPointInPolygon(pt, poly) {
 
 function classifyLoopsOuterAndHoles(rawLoops) {
   const items = rawLoops.map((pts) => {
-    const signed = computeSignedArea(pts);
-    return { points: pts, absArea: Math.abs(signed), signedArea: signed, isHole: false };
-  }).filter((it) => it.absArea > 1e-3);
+    const cleanPts = pts.slice();
+    const signed = computeSignedArea(cleanPts);
+    return { points: cleanPts, absArea: Math.abs(signed), signedArea: signed, isHole: false };
+  }).filter((it) => it.absArea > 1e-3 && it.points.length >= 3);
 
   items.sort((a, b) => b.absArea - a.absArea);
 
@@ -2180,7 +2281,16 @@ function classifyLoopsOuterAndHoles(rawLoops) {
         depth++;
       }
     }
-    items[i].isHole = (depth % 2 === 1);
+    const isHole = (depth % 2 === 1);
+    items[i].isHole = isHole;
+    // Normalizar orientación: contornos exteriores antihorarios (signedArea > 0) y huecos horarios (signedArea < 0)
+    if (!isHole && items[i].signedArea < 0) {
+      items[i].points.reverse();
+      items[i].signedArea = -items[i].signedArea;
+    } else if (isHole && items[i].signedArea > 0) {
+      items[i].points.reverse();
+      items[i].signedArea = -items[i].signedArea;
+    }
   }
   return items;
 }
