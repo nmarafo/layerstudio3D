@@ -526,16 +526,16 @@ function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB) {
   const infoA = getPuzzleSlice2DAxes(axisA, axisB);
   const infoB = getPuzzleSlice2DAxes(axisB, axisA);
 
-  // Cuando una serie tiene 3 o más láminas, la 1.ª y la última lámina actúan como tapas exteriores con encajes de espiga y mortaja:
-  // - Conservan sus huecos/mortajas interiores para unirse sin pegamento a las costillas transversales.
-  // - Las costillas del otro eje se recortan al borde exterior de dichas tapas (enrasadas a paño, sin asomar por fuera).
+  // Cuando una serie tiene 3 o más láminas, la 1.ª y la última lámina actúan como tapas exteriores cerradas:
+  // - No reciben ranuras que las atraviesen.
+  // - Las costillas del otro eje se recortan para no sobresalir más allá de la cara interior de dichas tapas.
   const hasCapsA = slicesA.length >= 3;
   const hasCapsB = slicesB.length >= 3;
-  const capHalfTh = Math.max(0.15, state.puzzleMaterialThicknessMM * 0.5);
-  const uClipMinForB = hasCapsA ? (slicesA[0].coord - capHalfTh) : -Infinity;
-  const uClipMaxForB = hasCapsA ? (slicesA[slicesA.length - 1].coord + capHalfTh) : Infinity;
-  const uClipMinForA = hasCapsB ? (slicesB[0].coord - capHalfTh) : -Infinity;
-  const uClipMaxForA = hasCapsB ? (slicesB[slicesB.length - 1].coord + capHalfTh) : Infinity;
+  const capMargin = Math.max(0.2, state.puzzleMaterialThicknessMM * 0.5);
+  const uClipMinForB = hasCapsA ? (slicesA[0].coord + capMargin) : -Infinity;
+  const uClipMaxForB = hasCapsA ? (slicesA[slicesA.length - 1].coord - capMargin) : Infinity;
+  const uClipMinForA = hasCapsB ? (slicesB[0].coord + capMargin) : -Infinity;
+  const uClipMaxForA = hasCapsB ? (slicesB[slicesB.length - 1].coord - capMargin) : Infinity;
 
   slicesA.forEach((s, idxA) => {
     const rawBase = s.rawBaseLoops || s.baseLoops || s.loops || [];
@@ -566,14 +566,16 @@ function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB) {
   let totalSlots = 0;
 
   for (let i = 0; i < slicesA.length; i++) {
+    // No ranurar la 1.ª ni la última lámina de la Serie A (quedan como fachadas exteriores limpias)
+    if (hasCapsA && (i === 0 || i === slicesA.length - 1)) continue;
     const sA = slicesA[i];
     if (!sA.baseLoops || sA.baseLoops.length === 0) continue;
-    const isOuterCapA = Boolean(sA.isOuterCap);
 
     for (let j = 0; j < slicesB.length; j++) {
+      // No ranurar la 1.ª ni la última lámina de la Serie B si existen tapas exteriores en B
+      if (hasCapsB && (j === 0 || j === slicesB.length - 1)) continue;
       const sB = slicesB[j];
       if (!sB.baseLoops || sB.baseLoops.length === 0) continue;
-      const isOuterCapB = Boolean(sB.isOuterCap);
 
       const intervalsA = getSolidIntervalsAlongLine(sA.baseLoops, infoA.uAxis, infoA.vAxis, sB.coord);
       const intervalsB = getSolidIntervalsAlongLine(sB.baseLoops, infoB.uAxis, infoB.vAxis, sA.coord);
@@ -605,17 +607,10 @@ function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB) {
           }
         }
 
-        // Si es una tapa exterior (1.ª o última lámina), acotar la mortaja con un puente exterior cerrado
-        // respecto al extremo de la zona común (vMax / vMin) para que mantenga el hueco de encaje sin pegamento
-        // y nunca corte el borde superior/inferior de la tapa
+        // Si sA continúa más allá de vMax (porque sB terminó antes), la ranura en sA debe detenerse en vMax + relief
+        // Si vMax coincide con el borde exterior de sA, extender solo lo justo sin tocar el siguiente intervalo de sA
         let safeMaxVA = vMax + relief;
-        if (isOuterCapA && idxIntA !== -1) {
-          const capBridgeA = Math.min(Math.max(1.8, slotW * 0.75), span * 0.3);
-          const maxCapVA = vMax - capBridgeA;
-          if (maxCapVA > vMid + Math.max(0.8, slotW * 0.35)) {
-            safeMaxVA = maxCapVA;
-          }
-        } else if (idxIntA !== -1 && Math.abs(intervalsA[idxIntA][1] - vMax) < 0.25) {
+        if (idxIntA !== -1 && Math.abs(intervalsA[idxIntA][1] - vMax) < 0.25) {
           const openExtA = Math.min(2.0, slotW * 0.6);
           safeMaxVA = (idxIntA + 1 < intervalsA.length)
             ? Math.min(vMax + openExtA, (vMax + intervalsA[idxIntA + 1][0]) * 0.5)
@@ -623,20 +618,14 @@ function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB) {
         }
 
         let safeMinVB = vMin - relief;
-        if (isOuterCapB && idxIntB !== -1) {
-          const capBridgeB = Math.min(Math.max(1.8, slotW * 0.75), span * 0.3);
-          const minCapVB = vMin + capBridgeB;
-          if (minCapVB < vMid - Math.max(0.8, slotW * 0.35)) {
-            safeMinVB = minCapVB;
-          }
-        } else if (idxIntB !== -1 && Math.abs(intervalsB[idxIntB][0] - vMin) < 0.25) {
+        if (idxIntB !== -1 && Math.abs(intervalsB[idxIntB][0] - vMin) < 0.25) {
           const openExtB = Math.min(2.0, slotW * 0.6);
           safeMinVB = (idxIntB > 0)
             ? Math.max(vMin - openExtB, (vMin + intervalsB[idxIntB - 1][1]) * 0.5)
             : (vMin - openExtB);
         }
 
-        // Rectángulo de ranura/mortaja en sA (Serie A: desde vMid hasta safeMaxVA)
+        // Rectángulo de ranura en sA (Serie A: abre hacia +v, desde vMid hasta safeMaxVA)
         const rectA = infoA.uAxis === 'x'
           ? { minX: sB.coord - halfW, maxX: sB.coord + halfW, minY: vMid - relief, maxY: safeMaxVA }
           : { minX: vMid - relief, maxX: safeMaxVA, minY: sB.coord - halfW, maxY: sB.coord + halfW };
@@ -649,12 +638,12 @@ function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB) {
           vAxis: infoA.vAxis,
           uCenter: sB.coord,
           vMid: vMid,
-          vMouth: safeMaxVA,
+          vMouth: vMax,
           x: sB.coord,
           yStart: vMid,
-          yEnd: safeMaxVA,
-          mx: infoA.uAxis === 'x' ? sB.coord : safeMaxVA,
-          my: infoA.uAxis === 'x' ? safeMaxVA : sB.coord,
+          yEnd: vMax,
+          mx: infoA.uAxis === 'x' ? sB.coord : vMax,
+          my: infoA.uAxis === 'x' ? vMax : sB.coord,
           bx: infoA.uAxis === 'x' ? sB.coord : vMid,
           by: infoA.uAxis === 'x' ? vMid : sB.coord,
           fromTop: true,
@@ -663,19 +652,7 @@ function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB) {
           rect: rectA
         });
 
-        // Si en la tapa exterior sA hemos dejado un puente superior [safeMaxVA, vMax],
-        // recortar también el hombro superior correspondiente en la costilla transversal sB para que la espiga encaje sin colisión
-        if (isOuterCapA && safeMaxVA < vMax - 1e-3) {
-          const shoulderTopB = (idxIntB !== -1 && Math.abs(intervalsB[idxIntB][1] - vMax) < 0.25)
-            ? (vMax + Math.min(2.0, slotW * 0.6))
-            : (vMax + relief);
-          const notchTopRectB = infoB.uAxis === 'x'
-            ? { minX: sA.coord - halfW, maxX: sA.coord + halfW, minY: safeMaxVA - relief, maxY: shoulderTopB }
-            : { minX: safeMaxVA - relief, maxX: shoulderTopB, minY: sB.coord - halfW, maxY: sB.coord + halfW };
-          sB.slotRects.push(notchTopRectB);
-        }
-
-        // Rectángulo de ranura complementaria en sB (Serie B: desde safeMinVB hasta vMid)
+        // Rectángulo de ranura complementaria en sB (Serie B: abre hacia -v, desde safeMinVB hasta vMid)
         const rectB = infoB.uAxis === 'x'
           ? { minX: sA.coord - halfW, maxX: sA.coord + halfW, minY: safeMinVB, maxY: vMid + relief }
           : { minX: safeMinVB, maxX: vMid + relief, minY: sA.coord - halfW, maxY: sA.coord + halfW };
@@ -688,12 +665,12 @@ function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB) {
           vAxis: infoB.vAxis,
           uCenter: sA.coord,
           vMid: vMid,
-          vMouth: safeMinVB,
+          vMouth: vMin,
           x: sA.coord,
-          yStart: safeMinVB,
+          yStart: vMin,
           yEnd: vMid,
-          mx: infoB.uAxis === 'x' ? sA.coord : safeMinVB,
-          my: infoB.uAxis === 'x' ? safeMinVB : sA.coord,
+          mx: infoB.uAxis === 'x' ? sA.coord : vMin,
+          my: infoB.uAxis === 'x' ? vMin : sA.coord,
           bx: infoB.uAxis === 'x' ? sA.coord : vMid,
           by: infoB.uAxis === 'x' ? vMid : sA.coord,
           fromTop: false,
@@ -701,18 +678,6 @@ function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB) {
           slotWidth: slotW,
           rect: rectB
         });
-
-        // Si en la tapa exterior sB hemos dejado un puente inferior [vMin, safeMinVB],
-        // recortar el hombro inferior correspondiente en sA
-        if (isOuterCapB && safeMinVB > vMin + 1e-3) {
-          const shoulderBotA = (idxIntA !== -1 && Math.abs(intervalsA[idxIntA][0] - vMin) < 0.25)
-            ? (vMin - Math.min(2.0, slotW * 0.6))
-            : (vMin - relief);
-          const notchBotRectA = infoA.uAxis === 'x'
-            ? { minX: sB.coord - halfW, maxX: sB.coord + halfW, minY: shoulderBotA, maxY: safeMinVB + relief }
-            : { minX: shoulderBotA, maxX: safeMinVB + relief, minY: sB.coord - halfW, maxY: sB.coord + halfW };
-          sA.slotRects.push(notchBotRectA);
-        }
 
         totalSlots += 2;
       }
