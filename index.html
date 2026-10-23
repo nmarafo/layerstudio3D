@@ -35,17 +35,17 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
 
   <!-- Hoja de estilos principal -->
-  <link rel="stylesheet" href="css/styles.css?v=2.9.5" />
+  <link rel="stylesheet" href="css/styles.css?v=2.9.6" />
 
   <!-- Módulos de la aplicación (cargados en orden de dependencia con defer y cache-busting) -->
-  <script src="js/state.js?v=2.9.5" defer></script>
-  <script src="js/viewer3d.js?v=2.9.5" defer></script>
-  <script src="js/slicer.js?v=2.9.5" defer></script>
-  <script src="js/nesting.js?v=2.9.5" defer></script>
-  <script src="js/modals-guide.js?v=2.9.5" defer></script>
-  <script src="js/viewer2d.js?v=2.9.5" defer></script>
-  <script src="js/exporters.js?v=2.9.5" defer></script>
-  <script src="js/vectorizer2d.js?v=2.9.5" defer></script>
+  <script src="js/state.js?v=2.9.6" defer></script>
+  <script src="js/viewer3d.js?v=2.9.6" defer></script>
+  <script src="js/slicer.js?v=2.9.6" defer></script>
+  <script src="js/nesting.js?v=2.9.6" defer></script>
+  <script src="js/modals-guide.js?v=2.9.6" defer></script>
+  <script src="js/viewer2d.js?v=2.9.6" defer></script>
+  <script src="js/exporters.js?v=2.9.6" defer></script>
+  <script src="js/vectorizer2d.js?v=2.9.6" defer></script>
 </head>
 <body class="h-screen w-screen flex flex-col">
 
@@ -335,19 +335,16 @@
         <!-- CONTROLES DE MODO PUZZLE 3D ENCAJABLE (2 EJES CON RANURAS A MEDIA MADERA SIN PEGAMENTO) -->
         <div id="puzzle3dControlsBox" class="hidden space-y-2.5 bg-slate-900/80 border border-amber-500/35 rounded-xl p-2.5">
           <div>
-            <label class="text-[10px] text-amber-300 font-bold uppercase block mb-1">Ejes de Cruce (2 o 3 Ejes Simultáneos)</label>
-            <div class="grid grid-cols-4 gap-1">
-              <button onclick="setPuzzleAxes('xy')" id="puzzleAxesBtn_xy" class="py-1 px-1 rounded border border-amber-500 bg-amber-500/20 text-[10px] font-bold text-amber-300 transition" title="Costillas X e Y que encajan verticalmente a lo largo de Z">
-                X × Y
+            <label class="text-[10px] text-amber-300 font-bold uppercase block mb-1">Ejes de Cruce (Costillas A × B)</label>
+            <div class="grid grid-cols-3 gap-1">
+              <button onclick="setPuzzleAxes('xy')" id="puzzleAxesBtn_xy" class="py-1 px-1.5 rounded border border-amber-500 bg-amber-500/20 text-[10px] font-bold text-amber-300 transition" title="Costillas X e Y que encajan verticalmente a lo largo de Z">
+                X × Y (Encaje Z)
               </button>
-              <button onclick="setPuzzleAxes('xz')" id="puzzleAxesBtn_xz" class="py-1 px-1 rounded border border-slate-700 bg-slate-950 text-[10px] font-semibold text-slate-300 hover:bg-slate-800 transition" title="Costillas X y Z que encajan a lo largo de Y">
-                X × Z
+              <button onclick="setPuzzleAxes('xz')" id="puzzleAxesBtn_xz" class="py-1 px-1.5 rounded border border-slate-700 bg-slate-950 text-[10px] font-semibold text-slate-300 hover:bg-slate-800 transition" title="Costillas X y Z que encajan a lo largo de Y">
+                X × Z (Encaje Y)
               </button>
-              <button onclick="setPuzzleAxes('yz')" id="puzzleAxesBtn_yz" class="py-1 px-1 rounded border border-slate-700 bg-slate-950 text-[10px] font-semibold text-slate-300 hover:bg-slate-800 transition" title="Costillas Y y Z que encajan a lo largo de X">
-                Y × Z
-              </button>
-              <button onclick="setPuzzleAxes('xyz')" id="puzzleAxesBtn_xyz" class="py-1 px-1 rounded border border-slate-700 bg-slate-950 text-[10px] font-bold text-emerald-300 hover:bg-slate-800 transition" title="3 Ejes Simultáneos (X × Y × Z): rejilla tridimensional completa con ranuras entre los tres ejes">
-                X×Y×Z (3D)
+              <button onclick="setPuzzleAxes('yz')" id="puzzleAxesBtn_yz" class="py-1 px-1.5 rounded border border-slate-700 bg-slate-950 text-[10px] font-semibold text-slate-300 hover:bg-slate-800 transition" title="Costillas Y y Z que encajan a lo largo de X">
+                Y × Z (Encaje X)
               </button>
             </div>
           </div>
@@ -367,14 +364,6 @@
                 <span id="puzzleCountBLabel" class="font-bold text-amber-400">7</span>
               </div>
               <input type="range" id="puzzleCountBSlider" min="2" max="36" value="7" oninput="onPuzzleCountChange('b', this.value)" class="w-full" />
-            </div>
-
-            <div id="puzzleSeriesCBox" class="hidden pt-0.5">
-              <div class="flex justify-between text-[11px] mb-0.5">
-                <span id="puzzleAxisCLabel" class="text-emerald-300 font-semibold">Costillas Serie C (Eje Z · Ranura ⊞):</span>
-                <span id="puzzleCountCLabel" class="font-bold text-emerald-400">5</span>
-              </div>
-              <input type="range" id="puzzleCountCSlider" min="2" max="36" value="5" oninput="onPuzzleCountChange('c', this.value)" class="w-full accent-emerald-500" />
             </div>
           </div>
 
