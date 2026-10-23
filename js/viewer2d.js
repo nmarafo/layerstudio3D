@@ -1212,9 +1212,12 @@ function renderSliceStripUI() {
     topRow.className = 'flex items-center justify-between text-[10px]';
     const codeLabel = slice.puzzleCode ? slice.puzzleCode : ('#' + (idx + 1));
     const codeColor = slice.puzzleSeries === 'A'
-      ? 'text-sky-300'
-      : (slice.puzzleSeries === 'B' ? 'text-amber-300' : 'text-slate-200');
-    topRow.innerHTML = '<span class="font-bold ' + codeColor + '">' + codeLabel + '</span>';
+      ? (slice.isPuzzleSolidCap ? 'text-cyan-200' : 'text-sky-300')
+      : (slice.puzzleSeries === 'B' ? (slice.isPuzzleSolidCap ? 'text-yellow-200' : 'text-amber-300') : 'text-slate-200');
+    const capTag = slice.isPuzzleSolidCap
+      ? '<span class="ml-0.5 px-1 py-0 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[8px] font-semibold" title="Tapa exterior duplicada con relleno completo para grabar">Tapa</span>'
+      : '';
+    topRow.innerHTML = '<span class="font-bold ' + codeColor + ' flex items-center">' + codeLabel + capTag + '</span>';
 
     const chk = document.createElement('input');
     chk.type = 'checkbox';

@@ -403,8 +403,13 @@ function getIslandTextLineOptions(item) {
   }
   if (state.nestEngraveGuideType) {
     if (state.constructionMode === 'puzzle3d' || item.puzzleSeries || (sliceRef && sliceRef.puzzleSeries)) {
-      const series = item.puzzleSeries || (sliceRef && sliceRef.puzzleSeries);
-      guidePart = series === 'A' ? '[Base]' : '[Cruce]';
+      const isSolidCap = Boolean(item.isPuzzleSolidCap || (sliceRef && sliceRef.isPuzzleSolidCap));
+      if (isSolidCap) {
+        guidePart = '[Tapa]';
+      } else {
+        const series = item.puzzleSeries || (sliceRef && sliceRef.puzzleSeries);
+        guidePart = series === 'A' ? '[Base]' : '[Cruce]';
+      }
     } else {
       const hasSup = state.includeNextSliceGuide && item.upperPolys && item.upperPolys.length > 0;
       const hasInf = state.includePrevSliceGuide && item.lowerPolys && item.lowerPolys.length > 0;
@@ -667,6 +672,7 @@ function extractIslandsFromSlices(targetSlices) {
         sliceIndex: idx,
         puzzleCode: slice.puzzleCode || null,
         puzzleSeries: slice.puzzleSeries || null,
+        isPuzzleSolidCap: Boolean(slice.isPuzzleSolidCap),
         sliceAxis: slice.sliceAxis || state.axis,
         puzzleSlotsCount: slice.puzzleSlots ? slice.puzzleSlots.length : 0,
         sectorCode: outer.sectorCode || null,
@@ -1337,9 +1343,11 @@ function update2DInspectorHeader() {
     const slice = state.slices[state.activeSliceIndex];
     if (!slice) return;
     if (state.constructionMode === 'puzzle3d' && slice.puzzleCode) {
-      const seriesLbl = slice.puzzleSeries === 'A' ? 'Serie A ⊔ (Base)' : 'Serie B ⊓ (Cruce)';
+      const seriesLbl = slice.isPuzzleSolidCap
+        ? ('Tapa Maciza de Grabado · Relleno Completo (Gemela de ' + (slice.twinCode || slice.puzzleCode) + ')')
+        : (slice.puzzleSeries === 'A' ? 'Serie A ⊔ (Base con encajes)' : 'Serie B ⊓ (Cruce con encajes)');
       document.getElementById('slice2DTitle').textContent =
-        'Costilla ' + slice.puzzleCode + ' · ' + seriesLbl + ' (' + (state.activeSliceIndex + 1) + '/' + state.slices.length + ')';
+        (slice.isPuzzleSolidCap ? 'Tapa ' : 'Costilla ') + slice.puzzleCode + ' · ' + seriesLbl + ' (' + (state.activeSliceIndex + 1) + '/' + state.slices.length + ')';
       document.getElementById('slice2DCoord').textContent =
         (slice.sliceAxis || state.axis).toUpperCase() + ' = ' + slice.coord.toFixed(2) + ' mm';
     } else {
