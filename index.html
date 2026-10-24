@@ -35,17 +35,17 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
 
   <!-- Hoja de estilos principal -->
-  <link rel="stylesheet" href="css/styles.css?v=2.9.9" />
+  <link rel="stylesheet" href="css/styles.css?v=3.0.0" />
 
   <!-- Módulos de la aplicación (cargados en orden de dependencia con defer y cache-busting) -->
-  <script src="js/state.js?v=2.9.9" defer></script>
-  <script src="js/viewer3d.js?v=2.9.9" defer></script>
-  <script src="js/slicer.js?v=2.9.9" defer></script>
-  <script src="js/nesting.js?v=2.9.9" defer></script>
-  <script src="js/modals-guide.js?v=2.9.9" defer></script>
-  <script src="js/viewer2d.js?v=2.9.9" defer></script>
-  <script src="js/exporters.js?v=2.9.9" defer></script>
-  <script src="js/vectorizer2d.js?v=2.9.9" defer></script>
+  <script src="js/state.js?v=3.0.0" defer></script>
+  <script src="js/viewer3d.js?v=3.0.0" defer></script>
+  <script src="js/slicer.js?v=3.0.0" defer></script>
+  <script src="js/nesting.js?v=3.0.0" defer></script>
+  <script src="js/modals-guide.js?v=3.0.0" defer></script>
+  <script src="js/viewer2d.js?v=3.0.0" defer></script>
+  <script src="js/exporters.js?v=3.0.0" defer></script>
+  <script src="js/vectorizer2d.js?v=3.0.0" defer></script>
 </head>
 <body class="h-screen w-screen flex flex-col">
 
@@ -421,6 +421,33 @@
                 <button onclick="setPuzzleStartMode('shift')" id="puzzleStartModeBtn_shift" class="py-1 px-1 rounded border border-slate-700 bg-slate-950 text-[9px] font-semibold text-slate-300 hover:bg-slate-800 transition" title="Desplaza en bloque todas las láminas del eje">
                   Desplazar Todo
                 </button>
+              </div>
+            </div>
+
+            <!-- Mover en el eje SOLO la costilla seleccionada actualmente -->
+            <div class="bg-slate-950/80 border border-emerald-500/35 rounded-lg p-2 space-y-1.5">
+              <div class="flex items-center justify-between gap-1">
+                <div class="flex items-center gap-1 min-w-0">
+                  <button type="button" onclick="stepSlice(-1)" class="w-4 h-4 flex items-center justify-center rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[9px] leading-none" title="Seleccionar costilla anterior">◀</button>
+                  <span id="puzzleSelectedRibTitle" class="text-[10px] font-bold text-emerald-300 truncate">🎯 Costilla X1 (Eje X)</span>
+                  <button type="button" onclick="stepSlice(1)" class="w-4 h-4 flex items-center justify-center rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[9px] leading-none" title="Seleccionar costilla siguiente">▶</button>
+                </div>
+                <span id="puzzleSelectedRibDeltaBadge" class="text-[9px] font-mono text-emerald-400/90 shrink-0">Δ 0.0 mm</span>
+              </div>
+
+              <div class="flex items-center gap-1">
+                <button type="button" onclick="stepSelectedPuzzleRib(-1)" class="w-5 h-5 flex items-center justify-center rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-emerald-300 font-bold text-xs leading-none transition" title="Mover la costilla seleccionada -1 mm en su eje">−</button>
+                <input type="range" id="puzzleSelectedRibSlider" min="-60" max="60" step="0.5" value="0" oninput="onSelectedPuzzleRibCoordChange(this.value)" class="flex-1 accent-emerald-400" title="Desplazar únicamente la costilla seleccionada a lo largo de su eje" />
+                <button type="button" onclick="stepSelectedPuzzleRib(1)" class="w-5 h-5 flex items-center justify-center rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-emerald-300 font-bold text-xs leading-none transition" title="Mover la costilla seleccionada +1 mm en su eje">+</button>
+              </div>
+
+              <div class="flex items-center justify-between gap-1 text-[10px]">
+                <span class="text-slate-400">Cota en eje (mm):</span>
+                <div class="flex items-center gap-1">
+                  <input type="number" id="puzzleSelectedRibCoordInput" value="0.0" step="0.5" onchange="onSelectedPuzzleRibCoordChange(this.value)" class="w-16 bg-slate-900 border border-emerald-500/40 rounded px-1 py-0.5 text-[10px] text-right font-bold text-emerald-300 font-mono" title="Posición exacta en mm de la costilla seleccionada en su eje" />
+                  <button type="button" onclick="resetSelectedPuzzleRibOffset()" class="px-1.5 py-0.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300 transition" title="Restaurar la posición original de esta costilla">↺ Esta</button>
+                  <button type="button" onclick="resetAllPuzzleRibOffsets()" class="px-1.5 py-0.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-400 hover:text-slate-200 transition" title="Restaurar todas las costillas movidas individualmente">↺ Todas</button>
+                </div>
               </div>
             </div>
           </div>
@@ -943,6 +970,13 @@
               <div class="flex items-center gap-2 flex-wrap">
                 <span id="slice2DTitle" class="text-xs font-bold text-white">Lasca #1 / 24</span>
                 <span id="slice2DCoord" class="text-[11px] px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 font-mono">Z = 0.00 mm</span>
+                <div id="inspectorPuzzleRibMoveBox" class="hidden items-center gap-1 bg-slate-800/90 border border-emerald-500/35 rounded-lg px-1.5 py-0.5">
+                  <span class="text-[9px] text-emerald-300 font-semibold">Mover:</span>
+                  <button type="button" onclick="stepSelectedPuzzleRib(-1)" class="w-4 h-4 flex items-center justify-center rounded bg-slate-900 hover:bg-slate-700 border border-slate-700 text-emerald-300 font-bold text-[10px] leading-none" title="Mover esta costilla -1 mm en su eje">−</button>
+                  <input type="number" id="inspectorPuzzleRibCoordInput" value="0.0" step="0.5" onchange="onSelectedPuzzleRibCoordChange(this.value)" class="w-14 bg-slate-950 border border-slate-700 rounded px-1 py-0 text-[10px] text-right font-bold text-emerald-300 font-mono" title="Cota en mm de la costilla seleccionada" />
+                  <button type="button" onclick="stepSelectedPuzzleRib(1)" class="w-4 h-4 flex items-center justify-center rounded bg-slate-900 hover:bg-slate-700 border border-slate-700 text-emerald-300 font-bold text-[10px] leading-none" title="Mover esta costilla +1 mm en su eje">+</button>
+                  <button type="button" onclick="resetSelectedPuzzleRibOffset()" class="px-1 py-0 rounded bg-slate-900 hover:bg-slate-700 border border-slate-700 text-[9px] text-slate-300" title="Restaurar posición original de esta costilla">↺</button>
+                </div>
               </div>
               <p id="slice2DStats" class="text-[11px] text-slate-400 mt-0.5 truncate">Medida corte: -- × -- mm | Contornos: 0</p>
             </div>

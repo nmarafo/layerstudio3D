@@ -134,7 +134,8 @@ function setPuzzleThicknessPreset(thMM, clearanceMM) {
 }
 
 // Calcula las coordenadas 1D de las costillas de un eje en modo Puzzle 3D permitiendo mover el comienzo del laminado
-function computePuzzleAxisSliceCoords(span, count, offsetMM, mode) {
+// así como desplazar individualmente cualquier costilla seleccionada
+function computePuzzleAxisSliceCoords(span, count, offsetMM, mode, ribOffsetsMap) {
   const safeSpan = Math.max(1, Number(span) || 100);
   const n = Math.max(2, parseInt(count, 10) || 2);
   const minCoord = -safeSpan / 2;
@@ -151,38 +152,161 @@ function computePuzzleAxisSliceCoords(span, count, offsetMM, mode) {
   const off = Number(offsetMM) || 0;
   const adjMode = mode || state.puzzleStartMode || 'start';
 
-  let firstCoord = defaultFirst;
-  let lastCoord = defaultLast;
+  let baseFirst = defaultFirst;
+  let baseLast = defaultLast;
 
   if (adjMode === 'symmetric') {
     const maxSymInward = Math.max(0, (defaultLast - defaultFirst - minSpan) * 0.5);
-    firstCoord = Math.max(absMin, Math.min(defaultFirst + maxSymInward, defaultFirst + off));
-    lastCoord = Math.min(absMax, Math.max(defaultLast - maxSymInward, defaultLast - off));
+    baseFirst = Math.max(absMin, Math.min(defaultFirst + maxSymInward, defaultFirst + off));
+    baseLast = Math.min(absMax, Math.max(defaultLast - maxSymInward, defaultLast - off));
   } else if (adjMode === 'shift') {
-    firstCoord = Math.max(absMin, Math.min(absMax - minSpan, defaultFirst + off));
-    lastCoord = Math.min(absMax, Math.max(firstCoord + minSpan, defaultLast + off));
+    baseFirst = Math.max(absMin, Math.min(absMax - minSpan, defaultFirst + off));
+    baseLast = Math.min(absMax, Math.max(baseFirst + minSpan, defaultLast + off));
   } else {
     // 'start': mueve el comienzo del laminado (1.ª lámina) y reparte uniformemente las costillas hasta el final
-    firstCoord = Math.max(absMin, Math.min(defaultLast - minSpan, defaultFirst + off));
-    lastCoord = defaultLast;
+    baseFirst = Math.max(absMin, Math.min(defaultLast - minSpan, defaultFirst + off));
+    baseLast = defaultLast;
   }
 
+  const baseCoords = [];
   const coords = [];
-  const step = n > 1 ? ((lastCoord - firstCoord) / (n - 1)) : 0;
+  const step = n > 1 ? ((baseLast - baseFirst) / (n - 1)) : 0;
   for (let i = 0; i < n; i++) {
-    coords.push(firstCoord + step * i);
+    const bCoord = baseFirst + step * i;
+    baseCoords.push(bCoord);
+    const ribOff = (ribOffsetsMap && Number.isFinite(ribOffsetsMap[i])) ? Number(ribOffsetsMap[i]) : 0;
+    const finalCoord = Math.max(absMin, Math.min(absMax, bCoord + ribOff));
+    coords.push(finalCoord);
   }
 
   return {
     coords,
-    firstCoord,
-    lastCoord,
+    baseCoords,
+    firstCoord: coords[0],
+    lastCoord: coords[coords.length - 1],
     defaultFirst,
     defaultLast,
     absMin,
     absMax,
     edgeOffsetMM: Number((absMin - defaultFirst).toFixed(2))
   };
+}
+
+function getSelectedPuzzleRibInfo() {
+  const cfg = getPuzzleAxesConfig();
+  const activeSlice = state.slices && state.slices[state.activeSliceIndex];
+  const series = (activeSlice && activeSlice.puzzleSeries === 'B') ? 'B' : 'A';
+  const count = series === 'A' ? Math.max(2, state.puzzleCountA) : Math.max(2, state.puzzleCountB);
+  const rawIdx = (activeSlice && typeof activeSlice.seriesIndex === 'number') ? activeSlice.seriesIndex : 0;
+  const seriesIndex = Math.max(0, Math.min(count - 1, rawIdx));
+  const axis = series === 'A' ? cfg.axisA : cfg.axisB;
+  const span = Math.max(10, (state.dimsMM && state.dimsMM[axis]) || 100);
+  const startOff = series === 'A' ? state.puzzleStartOffsetAMM : state.puzzleStartOffsetBMM;
+  const offsetsMap = series === 'A' ? (state.puzzleRibOffsetsAMM || {}) : (state.puzzleRibOffsetsBMM || {});
+  const coordInfo = computePuzzleAxisSliceCoords(span, count, startOff, state.puzzleStartMode, offsetsMap);
+  const baseCoord = coordInfo.baseCoords[seriesIndex];
+  const actualCoord = coordInfo.coords[seriesIndex];
+  const ribOffset = actualCoord - baseCoord;
+  const ribCode = axis.toUpperCase() + (seriesIndex + 1);
+
+  return {
+    slice: activeSlice || null,
+    series,
+    seriesIndex,
+    axis,
+    ribCode,
+    coordInfo,
+    baseCoord,
+    actualCoord,
+    ribOffset
+  };
+}
+
+function syncPuzzleSelectedRibUI() {
+  const isPuzzle = state.constructionMode === 'puzzle3d';
+  const inspBox = document.getElementById('inspectorPuzzleRibMoveBox');
+  if (inspBox) {
+    const showInsp = Boolean(isPuzzle && !state.nestingEnabled && !state.carrierEnabled);
+    inspBox.classList.toggle('hidden', !showInsp);
+    inspBox.classList.toggle('flex', showInsp);
+  }
+  if (!isPuzzle) return;
+
+  const info = getSelectedPuzzleRibInfo();
+  const titleEl = document.getElementById('puzzleSelectedRibTitle');
+  const deltaEl = document.getElementById('puzzleSelectedRibDeltaBadge');
+  const sliderEl = document.getElementById('puzzleSelectedRibSlider');
+  const inputEl = document.getElementById('puzzleSelectedRibCoordInput');
+  const inspInputEl = document.getElementById('inspectorPuzzleRibCoordInput');
+
+  const isCapSelected = Boolean(info.slice && info.slice.isPuzzleSolidCap);
+  if (titleEl) {
+    titleEl.textContent = '🎯 Costilla ' + info.ribCode + (isCapSelected ? ' + Tapa' : '') + ' (Eje ' + info.axis.toUpperCase() + ')';
+  }
+  if (deltaEl) {
+    const sign = info.ribOffset >= 0 ? '+' : '';
+    deltaEl.textContent = 'Δ ' + sign + info.ribOffset.toFixed(1) + ' mm';
+  }
+  if (sliderEl) {
+    sliderEl.min = String(Number(info.coordInfo.absMin.toFixed(1)));
+    sliderEl.max = String(Number(info.coordInfo.absMax.toFixed(1)));
+    sliderEl.value = String(Number(info.actualCoord.toFixed(1)));
+  }
+  if (inputEl) {
+    inputEl.value = info.actualCoord.toFixed(1);
+  }
+  if (inspInputEl) {
+    inspInputEl.value = info.actualCoord.toFixed(1);
+  }
+}
+
+function onSelectedPuzzleRibCoordChange(val) {
+  const parsed = parseFloat(val);
+  if (!Number.isFinite(parsed)) return;
+  const info = getSelectedPuzzleRibInfo();
+  const clampedCoord = Math.max(info.coordInfo.absMin, Math.min(info.coordInfo.absMax, parsed));
+  const newDelta = Number((clampedCoord - info.baseCoord).toFixed(2));
+
+  if (info.series === 'A') {
+    if (!state.puzzleRibOffsetsAMM) state.puzzleRibOffsetsAMM = {};
+    state.puzzleRibOffsetsAMM[info.seriesIndex] = newDelta;
+  } else {
+    if (!state.puzzleRibOffsetsBMM) state.puzzleRibOffsetsBMM = {};
+    state.puzzleRibOffsetsBMM[info.seriesIndex] = newDelta;
+  }
+
+  if (state.constructionMode === 'puzzle3d') {
+    rebuildGhostAndSlices();
+  }
+  syncPuzzleSelectedRibUI();
+}
+
+function stepSelectedPuzzleRib(deltaMM) {
+  const info = getSelectedPuzzleRibInfo();
+  const stepVal = Number(deltaMM) || 0;
+  onSelectedPuzzleRibCoordChange(info.actualCoord + stepVal);
+}
+
+function resetSelectedPuzzleRibOffset() {
+  const info = getSelectedPuzzleRibInfo();
+  if (info.series === 'A' && state.puzzleRibOffsetsAMM) {
+    delete state.puzzleRibOffsetsAMM[info.seriesIndex];
+  } else if (info.series === 'B' && state.puzzleRibOffsetsBMM) {
+    delete state.puzzleRibOffsetsBMM[info.seriesIndex];
+  }
+  if (state.constructionMode === 'puzzle3d') {
+    rebuildGhostAndSlices();
+  }
+  syncPuzzleSelectedRibUI();
+}
+
+function resetAllPuzzleRibOffsets() {
+  state.puzzleRibOffsetsAMM = {};
+  state.puzzleRibOffsetsBMM = {};
+  if (state.constructionMode === 'puzzle3d') {
+    rebuildGhostAndSlices();
+  }
+  syncPuzzleSelectedRibUI();
 }
 
 function onPuzzleStartOffsetChange(which, val) {
@@ -319,8 +443,8 @@ function syncConstructionModeUI() {
 
   const spanA = Math.max(10, (state.dimsMM && state.dimsMM[cfg.axisA]) || 100);
   const spanB = Math.max(10, (state.dimsMM && state.dimsMM[cfg.axisB]) || 100);
-  const coordInfoA = computePuzzleAxisSliceCoords(spanA, state.puzzleCountA, state.puzzleStartOffsetAMM, state.puzzleStartMode);
-  const coordInfoB = computePuzzleAxisSliceCoords(spanB, state.puzzleCountB, state.puzzleStartOffsetBMM, state.puzzleStartMode);
+  const coordInfoA = computePuzzleAxisSliceCoords(spanA, state.puzzleCountA, state.puzzleStartOffsetAMM, state.puzzleStartMode, state.puzzleRibOffsetsAMM);
+  const coordInfoB = computePuzzleAxisSliceCoords(spanB, state.puzzleCountB, state.puzzleStartOffsetBMM, state.puzzleStartMode, state.puzzleRibOffsetsBMM);
 
   const stLblA = document.getElementById('puzzleStartALabel');
   const stLblB = document.getElementById('puzzleStartBLabel');
@@ -379,6 +503,7 @@ function syncConstructionModeUI() {
       solidCapsCount + ' tapas macizas de grabado</strong>' +
       (state.puzzleTotalSlotsCount > 0 ? (' · <strong>' + state.puzzleTotalSlotsCount + ' encajes</strong>') : '');
   }
+  syncPuzzleSelectedRibUI();
 }
 
 function setSliceAxis(ax) {
@@ -1338,8 +1463,8 @@ function rebuildGhostAndSlices() {
     const spanB = state.dimsMM[cfg.axisB];
     const countA = Math.max(2, state.puzzleCountA);
     const countB = Math.max(2, state.puzzleCountB);
-    const coordInfoA = computePuzzleAxisSliceCoords(spanA, countA, state.puzzleStartOffsetAMM, state.puzzleStartMode);
-    const coordInfoB = computePuzzleAxisSliceCoords(spanB, countB, state.puzzleStartOffsetBMM, state.puzzleStartMode);
+    const coordInfoA = computePuzzleAxisSliceCoords(spanA, countA, state.puzzleStartOffsetAMM, state.puzzleStartMode, state.puzzleRibOffsetsAMM);
+    const coordInfoB = computePuzzleAxisSliceCoords(spanB, countB, state.puzzleStartOffsetBMM, state.puzzleStartMode, state.puzzleRibOffsetsBMM);
 
     const slicesA = [];
     const slicesB = [];

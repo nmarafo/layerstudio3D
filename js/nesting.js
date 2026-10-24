@@ -1371,6 +1371,9 @@ function update2DInspectorHeader() {
       ' | Doc SVG (Pieza): ' + (docB.width / f).toFixed(dec) + ' × ' + (docB.height / f).toFixed(dec) + ' ' + state.unit +
       ' | Contornos: ' + slice.loops.length + slotsStr + splitStr;
   }
+  if (typeof syncPuzzleSelectedRibUI === 'function') {
+    syncPuzzleSelectedRibUI();
+  }
 }
 
 function on2DSliderInput(val) {

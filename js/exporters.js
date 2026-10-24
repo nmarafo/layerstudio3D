@@ -1584,6 +1584,8 @@ function exportProjectFile() {
     puzzleStartOffsetAMM: state.puzzleStartOffsetAMM,
     puzzleStartOffsetBMM: state.puzzleStartOffsetBMM,
     puzzleStartMode: state.puzzleStartMode,
+    puzzleRibOffsetsAMM: state.puzzleRibOffsetsAMM,
+    puzzleRibOffsetsBMM: state.puzzleRibOffsetsBMM,
     puzzleMaterialThicknessMM: state.puzzleMaterialThicknessMM,
     puzzleSlotClearanceMM: state.puzzleSlotClearanceMM,
     splitModelEnabled: state.splitModelEnabled,
@@ -1677,6 +1679,12 @@ function importProjectFile(file) {
       if (typeof data.puzzleStartOffsetBMM === 'number') state.puzzleStartOffsetBMM = data.puzzleStartOffsetBMM;
       if (data.puzzleStartMode === 'start' || data.puzzleStartMode === 'symmetric' || data.puzzleStartMode === 'shift') {
         state.puzzleStartMode = data.puzzleStartMode;
+      }
+      if (data.puzzleRibOffsetsAMM && typeof data.puzzleRibOffsetsAMM === 'object') {
+        state.puzzleRibOffsetsAMM = data.puzzleRibOffsetsAMM;
+      }
+      if (data.puzzleRibOffsetsBMM && typeof data.puzzleRibOffsetsBMM === 'object') {
+        state.puzzleRibOffsetsBMM = data.puzzleRibOffsetsBMM;
       }
       if (typeof data.puzzleMaterialThicknessMM === 'number') state.puzzleMaterialThicknessMM = data.puzzleMaterialThicknessMM;
       if (typeof data.puzzleSlotClearanceMM === 'number') state.puzzleSlotClearanceMM = data.puzzleSlotClearanceMM;

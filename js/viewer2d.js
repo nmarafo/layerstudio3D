@@ -1239,9 +1239,14 @@ function renderSliceStripUI() {
     topRow.appendChild(chk);
 
     const bottomRow = document.createElement('div');
-    bottomRow.className = 'text-[9px] text-slate-400 truncate font-mono';
+    const offsetsMap = slice.puzzleSeries === 'B' ? (state.puzzleRibOffsetsBMM || {}) : (state.puzzleRibOffsetsAMM || {});
+    const customDelta = (slice.puzzleCode && typeof slice.seriesIndex === 'number' && Number.isFinite(offsetsMap[slice.seriesIndex]))
+      ? Number(offsetsMap[slice.seriesIndex])
+      : 0;
+    const isCustomMoved = Math.abs(customDelta) > 0.05;
+    bottomRow.className = 'text-[9px] truncate font-mono ' + (isCustomMoved ? 'text-emerald-300 font-semibold' : 'text-slate-400');
     const axTag = slice.puzzleCode ? ((slice.sliceAxis || '').toUpperCase() + ':') : '';
-    bottomRow.textContent = axTag + slice.coord.toFixed(1) + 'mm';
+    bottomRow.textContent = (isCustomMoved ? '↔' : '') + axTag + slice.coord.toFixed(1) + 'mm';
 
     card.appendChild(topRow);
     card.appendChild(bottomRow);

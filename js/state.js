@@ -33,6 +33,8 @@ const state = {
   puzzleStartOffsetAMM: 0.0,   // Desplazamiento del comienzo del laminado en el 1º eje (Serie A) en mm
   puzzleStartOffsetBMM: 0.0,   // Desplazamiento del comienzo del laminado en el 2º eje (Serie B) en mm
   puzzleStartMode: 'start',    // 'start' (Mover inicio y repartir) | 'symmetric' (Simétrico en ambos extremos) | 'shift' (Desplazar conjunto)
+  puzzleRibOffsetsAMM: {},     // Desplazamiento individual en mm por costilla de la Serie A { [seriesIndex]: deltaMM }
+  puzzleRibOffsetsBMM: {},     // Desplazamiento individual en mm por costilla de la Serie B { [seriesIndex]: deltaMM }
   puzzleMaterialThicknessMM: 5.0, // Grosor del tablero/poliexpan en mm
   puzzleSlotClearanceMM: 0.0,  // Holgura/tolerancia de encaje en mm (ancho ranura = grosor + holgura)
   puzzleTotalSlotsCount: 0,    // Total de ranuras de encaje generadas
