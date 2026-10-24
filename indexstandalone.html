@@ -670,14 +670,29 @@ function onPuzzleCountChange(which, val) {
     state.puzzleCountA = n;
     const lbl = document.getElementById('puzzleCountALabel');
     if (lbl) lbl.textContent = n;
+    const sA = document.getElementById('puzzleCountASlider');
+    if (sA) sA.value = n;
+    const inA = document.getElementById('puzzleCountAInput');
+    if (inA) inA.value = n;
   } else {
     state.puzzleCountB = n;
     const lbl = document.getElementById('puzzleCountBLabel');
     if (lbl) lbl.textContent = n;
+    const sB = document.getElementById('puzzleCountBSlider');
+    if (sB) sB.value = n;
+    const inB = document.getElementById('puzzleCountBInput');
+    if (inB) inB.value = n;
   }
+  syncConstructionModeUI();
   if (state.constructionMode === 'puzzle3d') {
     rebuildGhostAndSlices();
   }
+}
+
+function stepPuzzleCount(which, delta) {
+  const current = which === 'a' ? state.puzzleCountA : state.puzzleCountB;
+  const next = Math.max(2, Math.min(60, (parseInt(current, 10) || 7) + (parseInt(delta, 10) || 0)));
+  onPuzzleCountChange(which, next);
 }
 
 function onPuzzleSlotParamsChange() {
@@ -879,10 +894,14 @@ function syncConstructionModeUI() {
 
   const sA = document.getElementById('puzzleCountASlider');
   const sB = document.getElementById('puzzleCountBSlider');
+  const inA = document.getElementById('puzzleCountAInput');
+  const inB = document.getElementById('puzzleCountBInput');
   const cA = document.getElementById('puzzleCountALabel');
   const cB = document.getElementById('puzzleCountBLabel');
   if (sA) sA.value = state.puzzleCountA;
   if (sB) sB.value = state.puzzleCountB;
+  if (inA) inA.value = state.puzzleCountA;
+  if (inB) inB.value = state.puzzleCountB;
   if (cA) cA.textContent = state.puzzleCountA;
   if (cB) cB.textContent = state.puzzleCountB;
 
@@ -15179,11 +15198,16 @@ if (typeof window !== 'undefined') {
             <!-- Serie A: Número de costillas + Comienzo del laminado -->
             <div class="bg-slate-950/60 border border-sky-500/20 rounded-lg p-2 space-y-1.5">
               <div>
-                <div class="flex justify-between text-[11px] mb-0.5">
-                  <span id="puzzleAxisALabel" class="text-sky-300 font-semibold">Costillas Serie A (Eje X · Ranura ⊔):</span>
-                  <span id="puzzleCountALabel" class="font-bold text-sky-400">7</span>
+                <div class="flex items-center justify-between text-[11px] mb-1 gap-1">
+                  <span id="puzzleAxisALabel" class="text-sky-300 font-semibold truncate">Costillas Serie A (Eje X · Ranura ⊔):</span>
+                  <div class="flex items-center gap-1 shrink-0">
+                    <button type="button" onclick="stepPuzzleCount('a', -1)" class="w-5 h-5 flex items-center justify-center rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-sky-300 font-bold text-xs leading-none transition" title="Bajar 1 costilla en Serie A">−</button>
+                    <input type="number" id="puzzleCountAInput" min="2" max="60" step="1" value="7" onchange="onPuzzleCountChange('a', this.value)" class="w-12 bg-slate-900 border border-sky-500/40 rounded px-1 py-0.5 text-[11px] text-center font-bold text-sky-300 font-mono" title="Número de costillas en Serie A" />
+                    <span id="puzzleCountALabel" class="hidden font-bold text-sky-400">7</span>
+                    <button type="button" onclick="stepPuzzleCount('a', 1)" class="w-5 h-5 flex items-center justify-center rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-sky-300 font-bold text-xs leading-none transition" title="Subir 1 costilla en Serie A">+</button>
+                  </div>
                 </div>
-                <input type="range" id="puzzleCountASlider" min="2" max="36" value="7" oninput="onPuzzleCountChange('a', this.value)" class="w-full" />
+                <input type="range" id="puzzleCountASlider" min="2" max="60" value="7" oninput="onPuzzleCountChange('a', this.value)" class="w-full" />
               </div>
 
               <div class="pt-1 border-t border-slate-800/80 space-y-1">
@@ -15203,11 +15227,16 @@ if (typeof window !== 'undefined') {
             <!-- Serie B: Número de costillas + Comienzo del laminado -->
             <div class="bg-slate-950/60 border border-amber-500/20 rounded-lg p-2 space-y-1.5">
               <div>
-                <div class="flex justify-between text-[11px] mb-0.5">
-                  <span id="puzzleAxisBLabel" class="text-amber-300 font-semibold">Costillas Serie B (Eje Y · Ranura ⊓):</span>
-                  <span id="puzzleCountBLabel" class="font-bold text-amber-400">7</span>
+                <div class="flex items-center justify-between text-[11px] mb-1 gap-1">
+                  <span id="puzzleAxisBLabel" class="text-amber-300 font-semibold truncate">Costillas Serie B (Eje Y · Ranura ⊓):</span>
+                  <div class="flex items-center gap-1 shrink-0">
+                    <button type="button" onclick="stepPuzzleCount('b', -1)" class="w-5 h-5 flex items-center justify-center rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-amber-300 font-bold text-xs leading-none transition" title="Bajar 1 costilla en Serie B">−</button>
+                    <input type="number" id="puzzleCountBInput" min="2" max="60" step="1" value="7" onchange="onPuzzleCountChange('b', this.value)" class="w-12 bg-slate-900 border border-amber-500/40 rounded px-1 py-0.5 text-[11px] text-center font-bold text-amber-300 font-mono" title="Número de costillas en Serie B" />
+                    <span id="puzzleCountBLabel" class="hidden font-bold text-amber-400">7</span>
+                    <button type="button" onclick="stepPuzzleCount('b', 1)" class="w-5 h-5 flex items-center justify-center rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-amber-300 font-bold text-xs leading-none transition" title="Subir 1 costilla en Serie B">+</button>
+                  </div>
                 </div>
-                <input type="range" id="puzzleCountBSlider" min="2" max="36" value="7" oninput="onPuzzleCountChange('b', this.value)" class="w-full" />
+                <input type="range" id="puzzleCountBSlider" min="2" max="60" value="7" oninput="onPuzzleCountChange('b', this.value)" class="w-full" />
               </div>
 
               <div class="pt-1 border-t border-slate-800/80 space-y-1">

@@ -82,14 +82,29 @@ function onPuzzleCountChange(which, val) {
     state.puzzleCountA = n;
     const lbl = document.getElementById('puzzleCountALabel');
     if (lbl) lbl.textContent = n;
+    const sA = document.getElementById('puzzleCountASlider');
+    if (sA) sA.value = n;
+    const inA = document.getElementById('puzzleCountAInput');
+    if (inA) inA.value = n;
   } else {
     state.puzzleCountB = n;
     const lbl = document.getElementById('puzzleCountBLabel');
     if (lbl) lbl.textContent = n;
+    const sB = document.getElementById('puzzleCountBSlider');
+    if (sB) sB.value = n;
+    const inB = document.getElementById('puzzleCountBInput');
+    if (inB) inB.value = n;
   }
+  syncConstructionModeUI();
   if (state.constructionMode === 'puzzle3d') {
     rebuildGhostAndSlices();
   }
+}
+
+function stepPuzzleCount(which, delta) {
+  const current = which === 'a' ? state.puzzleCountA : state.puzzleCountB;
+  const next = Math.max(2, Math.min(60, (parseInt(current, 10) || 7) + (parseInt(delta, 10) || 0)));
+  onPuzzleCountChange(which, next);
 }
 
 function onPuzzleSlotParamsChange() {
@@ -291,10 +306,14 @@ function syncConstructionModeUI() {
 
   const sA = document.getElementById('puzzleCountASlider');
   const sB = document.getElementById('puzzleCountBSlider');
+  const inA = document.getElementById('puzzleCountAInput');
+  const inB = document.getElementById('puzzleCountBInput');
   const cA = document.getElementById('puzzleCountALabel');
   const cB = document.getElementById('puzzleCountBLabel');
   if (sA) sA.value = state.puzzleCountA;
   if (sB) sB.value = state.puzzleCountB;
+  if (inA) inA.value = state.puzzleCountA;
+  if (inB) inB.value = state.puzzleCountB;
   if (cA) cA.textContent = state.puzzleCountA;
   if (cB) cB.textContent = state.puzzleCountB;
 
