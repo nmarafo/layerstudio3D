@@ -499,14 +499,11 @@ function syncConstructionModeUI() {
   const slotW = Math.max(0.4, state.puzzleMaterialThicknessMM + state.puzzleSlotClearanceMM);
   const sumBadge = document.getElementById('puzzleSummaryBadge');
   if (sumBadge) {
-    const structCount = state.puzzleCountA + state.puzzleCountB;
-    const solidCapsCount = (state.puzzleCountA >= 2 ? 2 : 1) + (state.puzzleCountB >= 2 ? 2 : 1);
     sumBadge.innerHTML =
       'Ancho ranura: <strong>' + slotW.toFixed(2) + ' mm</strong> · ' +
-      structCount + ' costillas (' +
+      (state.puzzleCountA + state.puzzleCountB) + ' costillas (' +
       state.puzzleCountA + ' ' + cfg.axisA.toUpperCase() + ' + ' +
-      state.puzzleCountB + ' ' + cfg.axisB.toUpperCase() + ') + <strong>' +
-      solidCapsCount + ' tapas macizas de grabado</strong>' +
+      state.puzzleCountB + ' ' + cfg.axisB.toUpperCase() + ')' +
       (state.puzzleTotalSlotsCount > 0 ? (' · <strong>' + state.puzzleTotalSlotsCount + ' encajes</strong>') : '');
   }
   syncPuzzleSelectedRibUI();
@@ -854,43 +851,17 @@ function getFullFilledSolidLoops(loops) {
   return solidOuters;
 }
 
-// Talla todas las ranuras de encaje a media madera entre las costillas estructurales de la Serie A y las de la Serie B,
-// manteniendo intactas y con relleno 100% macizo las tapas duplicadas de la 1.ª y última lámina de cada eje.
+// Talla todas las ranuras de encaje a media madera entre las costillas de la Serie A y las de la Serie B
 function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB) {
   const slotW = Math.max(0.4, state.puzzleMaterialThicknessMM + state.puzzleSlotClearanceMM);
   const halfW = slotW * 0.5;
   const infoA = getPuzzleSlice2DAxes(axisA, axisB);
   const infoB = getPuzzleSlice2DAxes(axisB, axisA);
 
-  const structA = slicesA.filter((s) => !s.isPuzzleSolidCap);
-  const structB = slicesB.filter((s) => !s.isPuzzleSolidCap);
-  const nonEmptyA = structA.filter((s) => (s.rawBaseLoops || s.baseLoops || s.loops || []).length > 0);
-  const nonEmptyB = structB.filter((s) => (s.rawBaseLoops || s.baseLoops || s.loops || []).length > 0);
-  const refA = nonEmptyA.length >= 2 ? nonEmptyA : structA;
-  const refB = nonEmptyB.length >= 2 ? nonEmptyB : structB;
-
-  // Recortar cada serie estructural en los extremos de la otra serie estructural (cara exterior de la 1.ª y última costilla)
-  // para que todas las costillas encajen entre sí sin atravesar la tapa exterior maciza duplicada
-  const uClipMinForB = refA.length >= 2 ? (refA[0].coord - halfW) : -Infinity;
-  const uClipMaxForB = refA.length >= 2 ? (refA[refA.length - 1].coord + halfW) : Infinity;
-  const uClipMinForA = refB.length >= 2 ? (refB[0].coord - halfW) : -Infinity;
-  const uClipMaxForA = refB.length >= 2 ? (refB[refB.length - 1].coord + halfW) : Infinity;
-
   slicesA.forEach((s) => {
     const rawBase = s.rawBaseLoops || s.baseLoops || s.loops || [];
     s.rawBaseLoops = rawBase;
-    if (s.isPuzzleSolidCap) {
-      const solidLoops = getFullFilledSolidLoops(rawBase);
-      s.baseLoops = solidLoops;
-      s.loops = solidLoops.slice();
-      s.slots = [];
-      s.puzzleSlots = s.slots;
-      s.slotRects = [];
-      return;
-    }
-    s.baseLoops = (structB.length >= 2 && uClipMaxForA > uClipMinForA)
-      ? clipLoopsToAxisRange(rawBase, infoA.uAxis, uClipMinForA, uClipMaxForA)
-      : rawBase.slice();
+    s.baseLoops = rawBase.slice();
     s.slots = [];
     s.puzzleSlots = s.slots;
     s.slotRects = [];
@@ -899,18 +870,7 @@ function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB) {
   slicesB.forEach((s) => {
     const rawBase = s.rawBaseLoops || s.baseLoops || s.loops || [];
     s.rawBaseLoops = rawBase;
-    if (s.isPuzzleSolidCap) {
-      const solidLoops = getFullFilledSolidLoops(rawBase);
-      s.baseLoops = solidLoops;
-      s.loops = solidLoops.slice();
-      s.slots = [];
-      s.puzzleSlots = s.slots;
-      s.slotRects = [];
-      return;
-    }
-    s.baseLoops = (structA.length >= 2 && uClipMaxForB > uClipMinForB)
-      ? clipLoopsToAxisRange(rawBase, infoB.uAxis, uClipMinForB, uClipMaxForB)
-      : rawBase.slice();
+    s.baseLoops = rawBase.slice();
     s.slots = [];
     s.puzzleSlots = s.slots;
     s.slotRects = [];
@@ -918,12 +878,12 @@ function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB) {
 
   let totalSlots = 0;
 
-  for (let i = 0; i < structA.length; i++) {
-    const sA = structA[i];
+  for (let i = 0; i < slicesA.length; i++) {
+    const sA = slicesA[i];
     if (!sA.baseLoops || sA.baseLoops.length === 0) continue;
 
-    for (let j = 0; j < structB.length; j++) {
-      const sB = structB[j];
+    for (let j = 0; j < slicesB.length; j++) {
+      const sB = slicesB[j];
       if (!sB.baseLoops || sB.baseLoops.length === 0) continue;
 
       const intervalsA = getSolidIntervalsAlongLine(sA.baseLoops, infoA.uAxis, infoA.vAxis, sB.coord);
@@ -1476,7 +1436,6 @@ function rebuildGhostAndSlices() {
     const slicesB = [];
     let totalRemovedIslands = 0;
     let totalFilledHoles = 0;
-    const matTh = Math.max(0.4, state.puzzleMaterialThicknessMM);
 
     for (let i = 0; i < countA; i++) {
       const coordA = coordInfoA.coords[i];
@@ -1486,39 +1445,13 @@ function rebuildGhostAndSlices() {
       totalFilledHoles += (filteredRes.filledHolesCount || 0);
       const codeA = cfg.axisA.toUpperCase() + (i + 1);
 
-      // Si es la 1.ª lámina del eje A, añadir primero su duplicado con relleno completo (tapa exterior para grabar)
-      if (i === 0) {
-        const solidLoops = getFullFilledSolidLoops(filteredRes.loops);
-        slicesA.push({
-          index: 0,
-          coord: coordA - matTh,
-          sliceAxis: cfg.axisA,
-          puzzleSeries: 'A',
-          seriesIndex: i,
-          puzzleCode: codeA + 'T',
-          isPuzzleSolidCap: true,
-          capSide: 'start',
-          twinCode: codeA,
-          selected: true,
-          rawLoops: rawLoops,
-          rawBaseLoops: filteredRes.loops,
-          baseLoops: solidLoops,
-          loops: solidLoops,
-          slots: [],
-          slotRects: []
-        });
-      }
-
-      // Costilla estructural adaptada para incrustarse con las intersecciones del otro eje
       slicesA.push({
-        index: 0,
+        index: i,
         coord: coordA,
         sliceAxis: cfg.axisA,
         puzzleSeries: 'A',
         seriesIndex: i,
         puzzleCode: codeA,
-        isPuzzleSolidCap: false,
-        isOuterStructuralRib: (i === 0 || i === countA - 1),
         selected: true,
         rawLoops: rawLoops,
         rawBaseLoops: filteredRes.loops,
@@ -1527,29 +1460,6 @@ function rebuildGhostAndSlices() {
         slots: [],
         slotRects: []
       });
-
-      // Si es la última lámina del eje A, añadir después su duplicado con relleno completo (tapa exterior para grabar)
-      if (i === countA - 1 && countA >= 2) {
-        const solidLoops = getFullFilledSolidLoops(filteredRes.loops);
-        slicesA.push({
-          index: 0,
-          coord: coordA + matTh,
-          sliceAxis: cfg.axisA,
-          puzzleSeries: 'A',
-          seriesIndex: i,
-          puzzleCode: codeA + 'T',
-          isPuzzleSolidCap: true,
-          capSide: 'end',
-          twinCode: codeA,
-          selected: true,
-          rawLoops: rawLoops,
-          rawBaseLoops: filteredRes.loops,
-          baseLoops: solidLoops,
-          loops: solidLoops,
-          slots: [],
-          slotRects: []
-        });
-      }
     }
 
     for (let j = 0; j < countB; j++) {
@@ -1560,39 +1470,13 @@ function rebuildGhostAndSlices() {
       totalFilledHoles += (filteredRes.filledHolesCount || 0);
       const codeB = cfg.axisB.toUpperCase() + (j + 1);
 
-      // Si es la 1.ª lámina del eje B, añadir primero su duplicado con relleno completo (tapa exterior para grabar)
-      if (j === 0) {
-        const solidLoops = getFullFilledSolidLoops(filteredRes.loops);
-        slicesB.push({
-          index: 0,
-          coord: coordB - matTh,
-          sliceAxis: cfg.axisB,
-          puzzleSeries: 'B',
-          seriesIndex: j,
-          puzzleCode: codeB + 'T',
-          isPuzzleSolidCap: true,
-          capSide: 'start',
-          twinCode: codeB,
-          selected: true,
-          rawLoops: rawLoops,
-          rawBaseLoops: filteredRes.loops,
-          baseLoops: solidLoops,
-          loops: solidLoops,
-          slots: [],
-          slotRects: []
-        });
-      }
-
-      // Costilla estructural adaptada para incrustarse con las intersecciones del otro eje
       slicesB.push({
-        index: 0,
+        index: countA + j,
         coord: coordB,
         sliceAxis: cfg.axisB,
         puzzleSeries: 'B',
         seriesIndex: j,
         puzzleCode: codeB,
-        isPuzzleSolidCap: false,
-        isOuterStructuralRib: (j === 0 || j === countB - 1),
         selected: true,
         rawLoops: rawLoops,
         rawBaseLoops: filteredRes.loops,
@@ -1601,29 +1485,6 @@ function rebuildGhostAndSlices() {
         slots: [],
         slotRects: []
       });
-
-      // Si es la última lámina del eje B, añadir después su duplicado con relleno completo (tapa exterior para grabar)
-      if (j === countB - 1 && countB >= 2) {
-        const solidLoops = getFullFilledSolidLoops(filteredRes.loops);
-        slicesB.push({
-          index: 0,
-          coord: coordB + matTh,
-          sliceAxis: cfg.axisB,
-          puzzleSeries: 'B',
-          seriesIndex: j,
-          puzzleCode: codeB + 'T',
-          isPuzzleSolidCap: true,
-          capSide: 'end',
-          twinCode: codeB,
-          selected: true,
-          rawLoops: rawLoops,
-          rawBaseLoops: filteredRes.loops,
-          baseLoops: solidLoops,
-          loops: solidLoops,
-          slots: [],
-          slotRects: []
-        });
-      }
     }
 
     state.slices = slicesA.concat(slicesB);
