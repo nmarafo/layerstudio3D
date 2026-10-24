@@ -35,17 +35,17 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
 
   <!-- Hoja de estilos principal -->
-  <link rel="stylesheet" href="css/styles.css?v=2.9.7" />
+  <link rel="stylesheet" href="css/styles.css?v=2.9.8" />
 
   <!-- Módulos de la aplicación (cargados en orden de dependencia con defer y cache-busting) -->
-  <script src="js/state.js?v=2.9.7" defer></script>
-  <script src="js/viewer3d.js?v=2.9.7" defer></script>
-  <script src="js/slicer.js?v=2.9.7" defer></script>
-  <script src="js/nesting.js?v=2.9.7" defer></script>
-  <script src="js/modals-guide.js?v=2.9.7" defer></script>
-  <script src="js/viewer2d.js?v=2.9.7" defer></script>
-  <script src="js/exporters.js?v=2.9.7" defer></script>
-  <script src="js/vectorizer2d.js?v=2.9.7" defer></script>
+  <script src="js/state.js?v=2.9.8" defer></script>
+  <script src="js/viewer3d.js?v=2.9.8" defer></script>
+  <script src="js/slicer.js?v=2.9.8" defer></script>
+  <script src="js/nesting.js?v=2.9.8" defer></script>
+  <script src="js/modals-guide.js?v=2.9.8" defer></script>
+  <script src="js/viewer2d.js?v=2.9.8" defer></script>
+  <script src="js/exporters.js?v=2.9.8" defer></script>
+  <script src="js/vectorizer2d.js?v=2.9.8" defer></script>
 </head>
 <body class="h-screen w-screen flex flex-col">
 
@@ -349,21 +349,69 @@
             </div>
           </div>
 
-          <div class="space-y-1.5 pt-1 border-t border-slate-800">
-            <div>
-              <div class="flex justify-between text-[11px] mb-0.5">
-                <span id="puzzleAxisALabel" class="text-sky-300 font-semibold">Costillas Serie A (Eje X · Ranura ⊔):</span>
-                <span id="puzzleCountALabel" class="font-bold text-sky-400">7</span>
+          <div class="space-y-2 pt-1 border-t border-slate-800">
+            <!-- Serie A: Número de costillas + Comienzo del laminado -->
+            <div class="bg-slate-950/60 border border-sky-500/20 rounded-lg p-2 space-y-1.5">
+              <div>
+                <div class="flex justify-between text-[11px] mb-0.5">
+                  <span id="puzzleAxisALabel" class="text-sky-300 font-semibold">Costillas Serie A (Eje X · Ranura ⊔):</span>
+                  <span id="puzzleCountALabel" class="font-bold text-sky-400">7</span>
+                </div>
+                <input type="range" id="puzzleCountASlider" min="2" max="36" value="7" oninput="onPuzzleCountChange('a', this.value)" class="w-full" />
               </div>
-              <input type="range" id="puzzleCountASlider" min="2" max="36" value="7" oninput="onPuzzleCountChange('a', this.value)" class="w-full" />
+
+              <div class="pt-1 border-t border-slate-800/80 space-y-1">
+                <div class="flex items-center justify-between text-[10px]">
+                  <span id="puzzleStartALabel" class="text-sky-200/90 font-medium">Comienzo laminado Eje X:</span>
+                  <span id="puzzleStartACoordBadge" class="text-[9px] font-mono text-sky-300/90">1.ª en -51.4 mm</span>
+                </div>
+                <div class="flex items-center gap-1">
+                  <input type="range" id="puzzleStartASlider" min="-60" max="60" step="0.5" value="0" oninput="onPuzzleStartOffsetChange('a', this.value)" class="flex-1 accent-sky-400" title="Desplaza dónde empieza el laminado en el 1.er eje (Serie A)" />
+                  <input type="number" id="puzzleStartAInput" value="0.0" step="0.5" onchange="onPuzzleStartOffsetChange('a', this.value)" class="w-14 bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-[10px] text-right text-sky-300 font-mono" title="Desplazamiento del comienzo en mm" />
+                  <button onclick="setPuzzleStartAtEdge('a')" class="px-1.5 py-0.5 bg-sky-500/15 hover:bg-sky-500/30 border border-sky-500/30 rounded text-[9px] text-sky-300 font-semibold transition" title="Llevar la 1.ª lámina justo al comienzo del borde de la figura">Borde</button>
+                  <button onclick="resetPuzzleStartOffset('a')" class="px-1 py-0.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300 transition" title="Restaurar comienzo por defecto (0 mm)">↺</button>
+                </div>
+              </div>
             </div>
 
-            <div>
-              <div class="flex justify-between text-[11px] mb-0.5">
-                <span id="puzzleAxisBLabel" class="text-amber-300 font-semibold">Costillas Serie B (Eje Y · Ranura ⊓):</span>
-                <span id="puzzleCountBLabel" class="font-bold text-amber-400">7</span>
+            <!-- Serie B: Número de costillas + Comienzo del laminado -->
+            <div class="bg-slate-950/60 border border-amber-500/20 rounded-lg p-2 space-y-1.5">
+              <div>
+                <div class="flex justify-between text-[11px] mb-0.5">
+                  <span id="puzzleAxisBLabel" class="text-amber-300 font-semibold">Costillas Serie B (Eje Y · Ranura ⊓):</span>
+                  <span id="puzzleCountBLabel" class="font-bold text-amber-400">7</span>
+                </div>
+                <input type="range" id="puzzleCountBSlider" min="2" max="36" value="7" oninput="onPuzzleCountChange('b', this.value)" class="w-full" />
               </div>
-              <input type="range" id="puzzleCountBSlider" min="2" max="36" value="7" oninput="onPuzzleCountChange('b', this.value)" class="w-full" />
+
+              <div class="pt-1 border-t border-slate-800/80 space-y-1">
+                <div class="flex items-center justify-between text-[10px]">
+                  <span id="puzzleStartBLabel" class="text-amber-200/90 font-medium">Comienzo laminado Eje Y:</span>
+                  <span id="puzzleStartBCoordBadge" class="text-[9px] font-mono text-amber-300/90">1.ª en -51.4 mm</span>
+                </div>
+                <div class="flex items-center gap-1">
+                  <input type="range" id="puzzleStartBSlider" min="-60" max="60" step="0.5" value="0" oninput="onPuzzleStartOffsetChange('b', this.value)" class="flex-1 accent-amber-400" title="Desplaza dónde empieza el laminado en el 2.º eje (Serie B)" />
+                  <input type="number" id="puzzleStartBInput" value="0.0" step="0.5" onchange="onPuzzleStartOffsetChange('b', this.value)" class="w-14 bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-[10px] text-right text-amber-300 font-mono" title="Desplazamiento del comienzo en mm" />
+                  <button onclick="setPuzzleStartAtEdge('b')" class="px-1.5 py-0.5 bg-amber-500/15 hover:bg-amber-500/30 border border-amber-500/30 rounded text-[9px] text-amber-300 font-semibold transition" title="Llevar la 1.ª lámina justo al comienzo del borde de la figura">Borde</button>
+                  <button onclick="resetPuzzleStartOffset('b')" class="px-1 py-0.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300 transition" title="Restaurar comienzo por defecto (0 mm)">↺</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Modo de acción al mover el comienzo del laminado -->
+            <div class="space-y-1 pt-0.5">
+              <span class="text-[9px] text-slate-400 block">Al mover el comienzo del laminado en cada eje:</span>
+              <div class="grid grid-cols-3 gap-1">
+                <button onclick="setPuzzleStartMode('start')" id="puzzleStartModeBtn_start" class="py-1 px-1 rounded border border-amber-500 bg-amber-500/20 text-[9px] font-bold text-amber-300 transition" title="Mueve la 1.ª lámina del eje y reparte el resto hasta el final">
+                  Solo Inicio
+                </button>
+                <button onclick="setPuzzleStartMode('symmetric')" id="puzzleStartModeBtn_symmetric" class="py-1 px-1 rounded border border-slate-700 bg-slate-950 text-[9px] font-semibold text-slate-300 hover:bg-slate-800 transition" title="Mueve simétricamente tanto la 1.ª como la última lámina del eje">
+                  Simétrico (1.ª/Últ.)
+                </button>
+                <button onclick="setPuzzleStartMode('shift')" id="puzzleStartModeBtn_shift" class="py-1 px-1 rounded border border-slate-700 bg-slate-950 text-[9px] font-semibold text-slate-300 hover:bg-slate-800 transition" title="Desplaza en bloque todas las láminas del eje">
+                  Desplazar Todo
+                </button>
+              </div>
             </div>
           </div>
 

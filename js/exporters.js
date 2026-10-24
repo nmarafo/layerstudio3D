@@ -1581,6 +1581,9 @@ function exportProjectFile() {
     puzzleAxes: state.puzzleAxes,
     puzzleCountA: state.puzzleCountA,
     puzzleCountB: state.puzzleCountB,
+    puzzleStartOffsetAMM: state.puzzleStartOffsetAMM,
+    puzzleStartOffsetBMM: state.puzzleStartOffsetBMM,
+    puzzleStartMode: state.puzzleStartMode,
     puzzleMaterialThicknessMM: state.puzzleMaterialThicknessMM,
     puzzleSlotClearanceMM: state.puzzleSlotClearanceMM,
     splitModelEnabled: state.splitModelEnabled,
@@ -1670,6 +1673,11 @@ function importProjectFile(file) {
       }
       if (typeof data.puzzleCountA === 'number') state.puzzleCountA = data.puzzleCountA;
       if (typeof data.puzzleCountB === 'number') state.puzzleCountB = data.puzzleCountB;
+      if (typeof data.puzzleStartOffsetAMM === 'number') state.puzzleStartOffsetAMM = data.puzzleStartOffsetAMM;
+      if (typeof data.puzzleStartOffsetBMM === 'number') state.puzzleStartOffsetBMM = data.puzzleStartOffsetBMM;
+      if (data.puzzleStartMode === 'start' || data.puzzleStartMode === 'symmetric' || data.puzzleStartMode === 'shift') {
+        state.puzzleStartMode = data.puzzleStartMode;
+      }
       if (typeof data.puzzleMaterialThicknessMM === 'number') state.puzzleMaterialThicknessMM = data.puzzleMaterialThicknessMM;
       if (typeof data.puzzleSlotClearanceMM === 'number') state.puzzleSlotClearanceMM = data.puzzleSlotClearanceMM;
       if (typeof syncConstructionModeUI === 'function') syncConstructionModeUI();

@@ -30,6 +30,9 @@ const state = {
   puzzleAxes: 'xy',            // 'xy' (encaje en Z) | 'xz' (encaje en Y) | 'yz' (encaje en X)
   puzzleCountA: 7,             // Nº de costillas en el 1º eje (Serie A)
   puzzleCountB: 7,             // Nº de costillas en el 2º eje (Serie B)
+  puzzleStartOffsetAMM: 0.0,   // Desplazamiento del comienzo del laminado en el 1º eje (Serie A) en mm
+  puzzleStartOffsetBMM: 0.0,   // Desplazamiento del comienzo del laminado en el 2º eje (Serie B) en mm
+  puzzleStartMode: 'start',    // 'start' (Mover inicio y repartir) | 'symmetric' (Simétrico en ambos extremos) | 'shift' (Desplazar conjunto)
   puzzleMaterialThicknessMM: 5.0, // Grosor del tablero/poliexpan en mm
   puzzleSlotClearanceMM: 0.0,  // Holgura/tolerancia de encaje en mm (ancho ranura = grosor + holgura)
   puzzleTotalSlotsCount: 0,    // Total de ranuras de encaje generadas

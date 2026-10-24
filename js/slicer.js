@@ -118,6 +118,119 @@ function setPuzzleThicknessPreset(thMM, clearanceMM) {
   }
 }
 
+// Calcula las coordenadas 1D de las costillas de un eje en modo Puzzle 3D permitiendo mover el comienzo del laminado
+function computePuzzleAxisSliceCoords(span, count, offsetMM, mode) {
+  const safeSpan = Math.max(1, Number(span) || 100);
+  const n = Math.max(2, parseInt(count, 10) || 2);
+  const minCoord = -safeSpan / 2;
+  const maxCoord = safeSpan / 2;
+  const defaultStep = safeSpan / n;
+  const defaultFirst = minCoord + defaultStep * 0.5;
+  const defaultLast = maxCoord - defaultStep * 0.5;
+
+  // Margen de seguridad mínimo respecto al borde extremo del bounding box para garantizar intersección limpia con la malla
+  const safeMargin = Math.min(Math.max(0.15, safeSpan * 0.004), defaultStep * 0.45);
+  const absMin = minCoord + safeMargin;
+  const absMax = maxCoord - safeMargin;
+  const minSpan = Math.max(1.0, Math.min(safeSpan * 0.15, n * 0.8));
+  const off = Number(offsetMM) || 0;
+  const adjMode = mode || state.puzzleStartMode || 'start';
+
+  let firstCoord = defaultFirst;
+  let lastCoord = defaultLast;
+
+  if (adjMode === 'symmetric') {
+    const maxSymInward = Math.max(0, (defaultLast - defaultFirst - minSpan) * 0.5);
+    firstCoord = Math.max(absMin, Math.min(defaultFirst + maxSymInward, defaultFirst + off));
+    lastCoord = Math.min(absMax, Math.max(defaultLast - maxSymInward, defaultLast - off));
+  } else if (adjMode === 'shift') {
+    firstCoord = Math.max(absMin, Math.min(absMax - minSpan, defaultFirst + off));
+    lastCoord = Math.min(absMax, Math.max(firstCoord + minSpan, defaultLast + off));
+  } else {
+    // 'start': mueve el comienzo del laminado (1.ª lámina) y reparte uniformemente las costillas hasta el final
+    firstCoord = Math.max(absMin, Math.min(defaultLast - minSpan, defaultFirst + off));
+    lastCoord = defaultLast;
+  }
+
+  const coords = [];
+  const step = n > 1 ? ((lastCoord - firstCoord) / (n - 1)) : 0;
+  for (let i = 0; i < n; i++) {
+    coords.push(firstCoord + step * i);
+  }
+
+  return {
+    coords,
+    firstCoord,
+    lastCoord,
+    defaultFirst,
+    defaultLast,
+    absMin,
+    absMax,
+    edgeOffsetMM: Number((absMin - defaultFirst).toFixed(2))
+  };
+}
+
+function onPuzzleStartOffsetChange(which, val) {
+  const parsed = parseFloat(val);
+  if (!Number.isFinite(parsed)) return;
+  const cfg = getPuzzleAxesConfig();
+  const ax = which === 'a' ? cfg.axisA : cfg.axisB;
+  const span = Math.max(1, (state.dimsMM && state.dimsMM[ax]) || 100);
+  const clamped = Math.max(-span * 0.85, Math.min(span * 0.85, Number(parsed.toFixed(2))));
+
+  if (which === 'a') {
+    state.puzzleStartOffsetAMM = clamped;
+  } else {
+    state.puzzleStartOffsetBMM = clamped;
+  }
+  syncConstructionModeUI();
+  if (state.constructionMode === 'puzzle3d') {
+    rebuildGhostAndSlices();
+  }
+}
+
+function setPuzzleStartAtEdge(which) {
+  const cfg = getPuzzleAxesConfig();
+  const ax = which === 'a' ? cfg.axisA : cfg.axisB;
+  const count = which === 'a' ? state.puzzleCountA : state.puzzleCountB;
+  const span = Math.max(1, (state.dimsMM && state.dimsMM[ax]) || 100);
+  const res = computePuzzleAxisSliceCoords(span, count, 0, state.puzzleStartMode);
+  if (which === 'a') {
+    state.puzzleStartOffsetAMM = res.edgeOffsetMM;
+  } else {
+    state.puzzleStartOffsetBMM = res.edgeOffsetMM;
+  }
+  syncConstructionModeUI();
+  if (state.constructionMode === 'puzzle3d') {
+    rebuildGhostAndSlices();
+  }
+}
+
+function resetPuzzleStartOffset(which) {
+  if (which === 'a') {
+    state.puzzleStartOffsetAMM = 0;
+  } else if (which === 'b') {
+    state.puzzleStartOffsetBMM = 0;
+  } else {
+    state.puzzleStartOffsetAMM = 0;
+    state.puzzleStartOffsetBMM = 0;
+  }
+  syncConstructionModeUI();
+  if (state.constructionMode === 'puzzle3d') {
+    rebuildGhostAndSlices();
+  }
+}
+
+function setPuzzleStartMode(mode) {
+  if (mode === 'start' || mode === 'symmetric' || mode === 'shift') {
+    state.puzzleStartMode = mode;
+  }
+  syncConstructionModeUI();
+  if (state.constructionMode === 'puzzle3d') {
+    rebuildGhostAndSlices();
+  }
+}
+
 function syncConstructionModeUI() {
   const isPuzzle = state.constructionMode === 'puzzle3d';
   const btnStacked = document.getElementById('constModeBtn_stacked');
@@ -184,6 +297,50 @@ function syncConstructionModeUI() {
   if (sB) sB.value = state.puzzleCountB;
   if (cA) cA.textContent = state.puzzleCountA;
   if (cB) cB.textContent = state.puzzleCountB;
+
+  const spanA = Math.max(10, (state.dimsMM && state.dimsMM[cfg.axisA]) || 100);
+  const spanB = Math.max(10, (state.dimsMM && state.dimsMM[cfg.axisB]) || 100);
+  const coordInfoA = computePuzzleAxisSliceCoords(spanA, state.puzzleCountA, state.puzzleStartOffsetAMM, state.puzzleStartMode);
+  const coordInfoB = computePuzzleAxisSliceCoords(spanB, state.puzzleCountB, state.puzzleStartOffsetBMM, state.puzzleStartMode);
+
+  const stLblA = document.getElementById('puzzleStartALabel');
+  const stLblB = document.getElementById('puzzleStartBLabel');
+  if (stLblA) stLblA.textContent = 'Comienzo laminado Eje ' + cfg.axisA.toUpperCase() + ':';
+  if (stLblB) stLblB.textContent = 'Comienzo laminado Eje ' + cfg.axisB.toUpperCase() + ':';
+
+  const stBadgeA = document.getElementById('puzzleStartACoordBadge');
+  const stBadgeB = document.getElementById('puzzleStartBCoordBadge');
+  if (stBadgeA) {
+    stBadgeA.textContent = '1.ª: ' + coordInfoA.firstCoord.toFixed(1) + ' mm · Últ: ' + coordInfoA.lastCoord.toFixed(1) + ' mm';
+  }
+  if (stBadgeB) {
+    stBadgeB.textContent = '1.ª: ' + coordInfoB.firstCoord.toFixed(1) + ' mm · Últ: ' + coordInfoB.lastCoord.toFixed(1) + ' mm';
+  }
+
+  const stSliderA = document.getElementById('puzzleStartASlider');
+  const stSliderB = document.getElementById('puzzleStartBSlider');
+  const stInputA = document.getElementById('puzzleStartAInput');
+  const stInputB = document.getElementById('puzzleStartBInput');
+  if (stSliderA) {
+    stSliderA.min = String(Math.floor(coordInfoA.edgeOffsetMM - 2));
+    stSliderA.max = String(Math.ceil(spanA * 0.65));
+    stSliderA.value = String(state.puzzleStartOffsetAMM || 0);
+  }
+  if (stSliderB) {
+    stSliderB.min = String(Math.floor(coordInfoB.edgeOffsetMM - 2));
+    stSliderB.max = String(Math.ceil(spanB * 0.65));
+    stSliderB.value = String(state.puzzleStartOffsetBMM || 0);
+  }
+  if (stInputA) stInputA.value = Number(state.puzzleStartOffsetAMM || 0).toFixed(1);
+  if (stInputB) stInputB.value = Number(state.puzzleStartOffsetBMM || 0).toFixed(1);
+
+  ['start', 'symmetric', 'shift'].forEach((m) => {
+    const mBtn = document.getElementById('puzzleStartModeBtn_' + m);
+    if (!mBtn) return;
+    mBtn.className = (state.puzzleStartMode || 'start') === m
+      ? 'py-1 px-1 rounded border border-amber-500 bg-amber-500/20 text-[9px] font-bold text-amber-300 transition'
+      : 'py-1 px-1 rounded border border-slate-700 bg-slate-950 text-[9px] font-semibold text-slate-300 hover:bg-slate-800 transition';
+  });
 
   const thEl = document.getElementById('puzzleThicknessInput');
   const clEl = document.getElementById('puzzleClearanceInput');
@@ -557,13 +714,17 @@ function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB) {
 
   const structA = slicesA.filter((s) => !s.isPuzzleSolidCap);
   const structB = slicesB.filter((s) => !s.isPuzzleSolidCap);
+  const nonEmptyA = structA.filter((s) => (s.rawBaseLoops || s.baseLoops || s.loops || []).length > 0);
+  const nonEmptyB = structB.filter((s) => (s.rawBaseLoops || s.baseLoops || s.loops || []).length > 0);
+  const refA = nonEmptyA.length >= 2 ? nonEmptyA : structA;
+  const refB = nonEmptyB.length >= 2 ? nonEmptyB : structB;
 
   // Recortar cada serie estructural en los extremos de la otra serie estructural (cara exterior de la 1.ª y última costilla)
   // para que todas las costillas encajen entre sí sin atravesar la tapa exterior maciza duplicada
-  const uClipMinForB = structA.length >= 2 ? (structA[0].coord - halfW) : -Infinity;
-  const uClipMaxForB = structA.length >= 2 ? (structA[structA.length - 1].coord + halfW) : Infinity;
-  const uClipMinForA = structB.length >= 2 ? (structB[0].coord - halfW) : -Infinity;
-  const uClipMaxForA = structB.length >= 2 ? (structB[structB.length - 1].coord + halfW) : Infinity;
+  const uClipMinForB = refA.length >= 2 ? (refA[0].coord - halfW) : -Infinity;
+  const uClipMaxForB = refA.length >= 2 ? (refA[refA.length - 1].coord + halfW) : Infinity;
+  const uClipMinForA = refB.length >= 2 ? (refB[0].coord - halfW) : -Infinity;
+  const uClipMaxForA = refB.length >= 2 ? (refB[refB.length - 1].coord + halfW) : Infinity;
 
   slicesA.forEach((s) => {
     const rawBase = s.rawBaseLoops || s.baseLoops || s.loops || [];
@@ -1158,10 +1319,8 @@ function rebuildGhostAndSlices() {
     const spanB = state.dimsMM[cfg.axisB];
     const countA = Math.max(2, state.puzzleCountA);
     const countB = Math.max(2, state.puzzleCountB);
-    const minA = -spanA / 2;
-    const stepA = spanA / countA;
-    const minB = -spanB / 2;
-    const stepB = spanB / countB;
+    const coordInfoA = computePuzzleAxisSliceCoords(spanA, countA, state.puzzleStartOffsetAMM, state.puzzleStartMode);
+    const coordInfoB = computePuzzleAxisSliceCoords(spanB, countB, state.puzzleStartOffsetBMM, state.puzzleStartMode);
 
     const slicesA = [];
     const slicesB = [];
@@ -1170,7 +1329,7 @@ function rebuildGhostAndSlices() {
     const matTh = Math.max(0.4, state.puzzleMaterialThicknessMM);
 
     for (let i = 0; i < countA; i++) {
-      const coordA = minA + stepA * (i + 0.5);
+      const coordA = coordInfoA.coords[i];
       const rawLoops = sliceTrianglesAtPlane(verts, cfg.axisA, coordA, spanA);
       const filteredRes = filterLoopsByMinIslandSize(rawLoops);
       totalRemovedIslands += filteredRes.removedCount;
@@ -1244,7 +1403,7 @@ function rebuildGhostAndSlices() {
     }
 
     for (let j = 0; j < countB; j++) {
-      const coordB = minB + stepB * (j + 0.5);
+      const coordB = coordInfoB.coords[j];
       const rawLoops = sliceTrianglesAtPlane(verts, cfg.axisB, coordB, spanB);
       const filteredRes = filterLoopsByMinIslandSize(rawLoops);
       totalRemovedIslands += filteredRes.removedCount;
