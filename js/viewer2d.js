@@ -1203,7 +1203,9 @@ function renderSliceStripUI() {
   state.slices.forEach((slice, idx) => {
     const card = document.createElement('div');
     card.id = 'sliceCard_' + idx;
-    card.className = 'slice-card shrink-0 w-20 h-16 rounded-lg border border-slate-700 bg-slate-800/70 p-1.5 flex flex-col justify-between cursor-pointer transition';
+    const isHiddenInView = typeof isSliceHiddenInView === 'function' && isSliceHiddenInView(slice);
+    card.className = 'slice-card shrink-0 w-20 h-16 rounded-lg border border-slate-700 bg-slate-800/70 p-1.5 flex flex-col justify-between cursor-pointer transition' +
+      (isHiddenInView ? ' opacity-50' : '');
     card.onclick = (e) => {
       if (e.target.tagName.toLowerCase() !== 'input') selectActiveSlice(idx);
     };
@@ -1217,7 +1219,10 @@ function renderSliceStripUI() {
     const capTag = slice.isPuzzleSolidCap
       ? '<span class="ml-0.5 px-1 py-0 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[8px] font-semibold" title="Tapa exterior duplicada con relleno completo para grabar">Tapa</span>'
       : '';
-    topRow.innerHTML = '<span class="font-bold ' + codeColor + ' flex items-center">' + codeLabel + capTag + '</span>';
+    const hiddenTag = isHiddenInView
+      ? '<span class="ml-0.5 text-[9px]" title="Oculta en la vista">🙈</span>'
+      : '';
+    topRow.innerHTML = '<span class="font-bold ' + codeColor + ' flex items-center">' + codeLabel + capTag + hiddenTag + '</span>';
 
     const chk = document.createElement('input');
     chk.type = 'checkbox';

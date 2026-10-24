@@ -228,6 +228,67 @@ function getSelectedPuzzleRibInfo() {
   };
 }
 
+function isSliceHiddenInView(slice) {
+  if (!slice) return false;
+  if (state.constructionMode === 'puzzle3d') {
+    if (slice.puzzleSeries === 'A' && state.puzzleHideSeriesA) return true;
+    if (slice.puzzleSeries === 'B' && state.puzzleHideSeriesB) return true;
+    const ser = slice.puzzleSeries === 'B' ? 'B' : 'A';
+    if (
+      state.puzzleHiddenRibs &&
+      state.puzzleHiddenRibs[ser] &&
+      typeof slice.seriesIndex === 'number' &&
+      state.puzzleHiddenRibs[ser][slice.seriesIndex]
+    ) {
+      return true;
+    }
+  }
+  return Boolean(slice.hiddenInView);
+}
+
+function togglePuzzleSeriesVisibility(which) {
+  if (which === 'a') {
+    state.puzzleHideSeriesA = !state.puzzleHideSeriesA;
+  } else if (which === 'b') {
+    state.puzzleHideSeriesB = !state.puzzleHideSeriesB;
+  }
+  syncPuzzleSelectedRibUI();
+  update3DSlicesTransforms();
+  if (typeof renderSliceStripUI === 'function') renderSliceStripUI();
+  if (typeof render2DSlice === 'function') render2DSlice();
+}
+
+function toggleActivePuzzleAxisVisibility() {
+  const info = getSelectedPuzzleRibInfo();
+  togglePuzzleSeriesVisibility(info.series === 'B' ? 'b' : 'a');
+}
+
+function toggleSelectedPuzzleRibVisibility() {
+  const info = getSelectedPuzzleRibInfo();
+  if (!state.puzzleHiddenRibs) state.puzzleHiddenRibs = { A: {}, B: {} };
+  if (!state.puzzleHiddenRibs[info.series]) state.puzzleHiddenRibs[info.series] = {};
+  const currentlyHidden = Boolean(state.puzzleHiddenRibs[info.series][info.seriesIndex]);
+  if (currentlyHidden) {
+    delete state.puzzleHiddenRibs[info.series][info.seriesIndex];
+  } else {
+    state.puzzleHiddenRibs[info.series][info.seriesIndex] = true;
+  }
+  syncPuzzleSelectedRibUI();
+  update3DSlicesTransforms();
+  if (typeof renderSliceStripUI === 'function') renderSliceStripUI();
+  if (typeof render2DSlice === 'function') render2DSlice();
+}
+
+function showAllPuzzleRibsInView() {
+  state.puzzleHideSeriesA = false;
+  state.puzzleHideSeriesB = false;
+  state.puzzleHiddenRibs = { A: {}, B: {} };
+  syncPuzzleSelectedRibUI();
+  update3DSlicesTransforms();
+  if (typeof renderSliceStripUI === 'function') renderSliceStripUI();
+  if (typeof render2DSlice === 'function') render2DSlice();
+}
+
 function syncPuzzleSelectedRibUI() {
   const isPuzzle = state.constructionMode === 'puzzle3d';
   const inspBox = document.getElementById('inspectorPuzzleRibMoveBox');
@@ -236,8 +297,14 @@ function syncPuzzleSelectedRibUI() {
     inspBox.classList.toggle('hidden', !showInsp);
     inspBox.classList.toggle('flex', showInsp);
   }
+  const v3dBox = document.getElementById('viewer3DPuzzleVisBox');
+  if (v3dBox) {
+    v3dBox.classList.toggle('hidden', !isPuzzle);
+    v3dBox.classList.toggle('flex', isPuzzle);
+  }
   if (!isPuzzle) return;
 
+  const cfg = getPuzzleAxesConfig();
   const info = getSelectedPuzzleRibInfo();
   const titleEl = document.getElementById('puzzleSelectedRibTitle');
   const deltaEl = document.getElementById('puzzleSelectedRibDeltaBadge');
@@ -263,6 +330,104 @@ function syncPuzzleSelectedRibUI() {
   }
   if (inspInputEl) {
     inspInputEl.value = info.actualCoord.toFixed(1);
+  }
+
+  // Sincronizar botones de ocultar/mostrar Eje A y Eje B en las cabeceras de Serie A y Serie B
+  const visBtnA = document.getElementById('puzzleToggleVisBtn_a');
+  if (visBtnA) {
+    visBtnA.textContent = state.puzzleHideSeriesA ? ('🙈 Eje ' + cfg.axisA.toUpperCase() + ' oculto') : ('👁️ Eje ' + cfg.axisA.toUpperCase());
+    visBtnA.className = state.puzzleHideSeriesA
+      ? 'px-1.5 h-5 flex items-center justify-center rounded bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 font-bold text-[9px] leading-none transition'
+      : 'px-1.5 h-5 flex items-center justify-center rounded bg-sky-500/15 hover:bg-sky-500/30 border border-sky-500/35 text-sky-300 font-semibold text-[9px] leading-none transition';
+  }
+  const visBtnB = document.getElementById('puzzleToggleVisBtn_b');
+  if (visBtnB) {
+    visBtnB.textContent = state.puzzleHideSeriesB ? ('🙈 Eje ' + cfg.axisB.toUpperCase() + ' oculto') : ('👁️ Eje ' + cfg.axisB.toUpperCase());
+    visBtnB.className = state.puzzleHideSeriesB
+      ? 'px-1.5 h-5 flex items-center justify-center rounded bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 font-bold text-[9px] leading-none transition'
+      : 'px-1.5 h-5 flex items-center justify-center rounded bg-amber-500/15 hover:bg-amber-500/30 border border-amber-500/35 text-amber-300 font-semibold text-[9px] leading-none transition';
+  }
+
+  // Sincronizar botones de ocultar/mostrar costilla seleccionada y eje activo
+  const isRibIndivHidden = Boolean(
+    state.puzzleHiddenRibs &&
+    state.puzzleHiddenRibs[info.series] &&
+    state.puzzleHiddenRibs[info.series][info.seriesIndex]
+  );
+  const isActiveAxisHidden = info.series === 'B' ? Boolean(state.puzzleHideSeriesB) : Boolean(state.puzzleHideSeriesA);
+  const hasAnyHidden = Boolean(
+    state.puzzleHideSeriesA ||
+    state.puzzleHideSeriesB ||
+    (state.puzzleHiddenRibs && (
+      Object.keys(state.puzzleHiddenRibs.A || {}).length > 0 ||
+      Object.keys(state.puzzleHiddenRibs.B || {}).length > 0
+    ))
+  );
+
+  const btnRibVis = document.getElementById('puzzleToggleSelectedRibVisBtn');
+  if (btnRibVis) {
+    btnRibVis.textContent = isRibIndivHidden ? ('🙈 Mostrar ' + info.ribCode) : ('👁️ Ocultar ' + info.ribCode);
+    btnRibVis.className = isRibIndivHidden
+      ? 'flex-1 py-1 px-1.5 rounded border border-rose-500/50 bg-rose-500/20 hover:bg-rose-500/30 text-[9px] font-bold text-rose-300 transition truncate'
+      : 'flex-1 py-1 px-1.5 rounded border border-slate-700 bg-slate-900 hover:bg-slate-800 text-[9px] font-semibold text-slate-200 transition truncate';
+  }
+
+  const btnAxisVis = document.getElementById('puzzleToggleActiveAxisVisBtn');
+  if (btnAxisVis) {
+    const axName = info.axis.toUpperCase();
+    btnAxisVis.textContent = isActiveAxisHidden ? ('🙈 Mostrar Eje ' + axName) : ('👁️ Ocultar Eje ' + axName);
+    btnAxisVis.className = isActiveAxisHidden
+      ? 'flex-1 py-1 px-1.5 rounded border border-rose-500/50 bg-rose-500/20 hover:bg-rose-500/30 text-[9px] font-bold text-rose-300 transition truncate'
+      : 'flex-1 py-1 px-1.5 rounded border border-slate-700 bg-slate-900 hover:bg-slate-800 text-[9px] font-semibold text-slate-200 transition truncate';
+  }
+
+  const btnShowAll = document.getElementById('puzzleShowAllVisBtn');
+  if (btnShowAll) {
+    btnShowAll.classList.toggle('hidden', !hasAnyHidden);
+  }
+
+  const inspBtnRib = document.getElementById('inspToggleSelectedRibVisBtn');
+  if (inspBtnRib) {
+    inspBtnRib.textContent = isRibIndivHidden ? ('🙈 ' + info.ribCode) : ('👁️ ' + info.ribCode);
+    inspBtnRib.className = isRibIndivHidden
+      ? 'px-1.5 py-0 rounded bg-rose-500/25 hover:bg-rose-500/35 border border-rose-500/50 text-[9px] text-rose-300 font-bold'
+      : 'px-1.5 py-0 rounded bg-slate-900 hover:bg-slate-700 border border-slate-700 text-[9px] text-slate-200 font-medium';
+  }
+
+  const inspBtnAxis = document.getElementById('inspToggleActiveAxisVisBtn');
+  if (inspBtnAxis) {
+    const axName = info.axis.toUpperCase();
+    inspBtnAxis.textContent = isActiveAxisHidden ? ('🙈 Eje ' + axName) : ('👁️ Eje ' + axName);
+    inspBtnAxis.className = isActiveAxisHidden
+      ? 'px-1.5 py-0 rounded bg-rose-500/25 hover:bg-rose-500/35 border border-rose-500/50 text-[9px] text-rose-300 font-bold'
+      : 'px-1.5 py-0 rounded bg-slate-900 hover:bg-slate-700 border border-slate-700 text-[9px] text-slate-200 font-medium';
+  }
+
+  // Sincronizar barra flotante en la esquina superior derecha del Visor 3D
+  const v3dBtnA = document.getElementById('viewer3DVisBtn_a');
+  if (v3dBtnA) {
+    v3dBtnA.textContent = state.puzzleHideSeriesA ? ('🙈 Eje ' + cfg.axisA.toUpperCase()) : ('👁️ Eje ' + cfg.axisA.toUpperCase());
+    v3dBtnA.className = state.puzzleHideSeriesA
+      ? 'px-1.5 py-0.5 rounded bg-rose-500/25 hover:bg-rose-500/35 border border-rose-500/50 text-[10px] font-bold text-rose-300 transition'
+      : 'px-1.5 py-0.5 rounded bg-sky-500/15 hover:bg-sky-500/30 border border-sky-500/35 text-[10px] font-semibold text-sky-300 transition';
+  }
+  const v3dBtnB = document.getElementById('viewer3DVisBtn_b');
+  if (v3dBtnB) {
+    v3dBtnB.textContent = state.puzzleHideSeriesB ? ('🙈 Eje ' + cfg.axisB.toUpperCase()) : ('👁️ Eje ' + cfg.axisB.toUpperCase());
+    v3dBtnB.className = state.puzzleHideSeriesB
+      ? 'px-1.5 py-0.5 rounded bg-rose-500/25 hover:bg-rose-500/35 border border-rose-500/50 text-[10px] font-bold text-rose-300 transition'
+      : 'px-1.5 py-0.5 rounded bg-amber-500/15 hover:bg-amber-500/30 border border-amber-500/35 text-[10px] font-semibold text-amber-300 transition';
+  }
+  const v3dBtnRib = document.getElementById('viewer3DVisBtn_rib');
+  if (v3dBtnRib) {
+    v3dBtnRib.textContent = isRibIndivHidden ? ('🙈 ' + info.ribCode) : ('👁️ ' + info.ribCode);
+    v3dBtnRib.className = isRibIndivHidden
+      ? 'px-1.5 py-0.5 rounded bg-rose-500/25 hover:bg-rose-500/35 border border-rose-500/50 text-[10px] font-bold text-rose-300 transition'
+      : 'px-1.5 py-0.5 rounded bg-emerald-500/15 hover:bg-emerald-500/30 border border-emerald-500/35 text-[10px] font-semibold text-emerald-300 transition';
+  }
+  const v3dBtnAll = document.getElementById('viewer3DVisBtn_all');
+  if (v3dBtnAll) {
+    v3dBtnAll.classList.toggle('hidden', !hasAnyHidden);
   }
 }
 
@@ -2280,7 +2445,10 @@ function update3DSlicesTransforms() {
     mesh.position.set(px, py, pz);
 
     const isActive = idx === state.activeSliceIndex;
-    if (state.isolateCurrent) {
+    const hiddenInView = isSliceHiddenInView(slice);
+    if (hiddenInView) {
+      mesh.visible = false;
+    } else if (state.isolateCurrent) {
       mesh.visible = isActive;
     } else {
       mesh.visible = true;
