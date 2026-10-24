@@ -43,6 +43,12 @@ const state = {
   puzzleMaterialThicknessMM: 5.0, // Grosor del tablero/poliexpan en mm
   puzzleSlotClearanceMM: 0.0,  // Holgura/tolerancia de encaje en mm (ancho ranura = grosor + holgura)
   puzzleTotalSlotsCount: 0,    // Total de ranuras de encaje generadas
+  puzzleSimplifyCutLine: false,// true = simplifica la línea de corte de las costillas del Puzzle 3D preservando las ranuras exactas
+  puzzleSimplifyMode: 'rdp',   // 'rdp' (Poligonal limpia) | 'smooth' (Curva suavizada) | 'bridge' (Cerrar entrantes) | 'convex' (Envolvente convexa)
+  puzzleSimplifyToleranceMM: 1.5, // Tolerancia de simplificación de la línea de corte en mm
+  puzzleSimplifySmoothPasses: 1,  // Pasadas de suavizado Chaikin cuando puzzleSimplifyMode === 'smooth'
+  puzzleRawVerticesCount: 0,      // Total de vértices originales en los contornos base del Puzzle 3D
+  puzzleSimplifiedVerticesCount: 0, // Total de vértices tras simplificar la línea de corte del Puzzle 3D
   explodeFactor: 0,
   showGhost: true,
   isolateCurrent: false,

@@ -151,6 +151,12 @@ const state = {
   puzzleMaterialThicknessMM: 5.0, // Grosor del tablero/poliexpan en mm
   puzzleSlotClearanceMM: 0.0,  // Holgura/tolerancia de encaje en mm (ancho ranura = grosor + holgura)
   puzzleTotalSlotsCount: 0,    // Total de ranuras de encaje generadas
+  puzzleSimplifyCutLine: false,// true = simplifica la línea de corte de las costillas del Puzzle 3D preservando las ranuras exactas
+  puzzleSimplifyMode: 'rdp',   // 'rdp' (Poligonal limpia) | 'smooth' (Curva suavizada) | 'bridge' (Cerrar entrantes) | 'convex' (Envolvente convexa)
+  puzzleSimplifyToleranceMM: 1.5, // Tolerancia de simplificación de la línea de corte en mm
+  puzzleSimplifySmoothPasses: 1,  // Pasadas de suavizado Chaikin cuando puzzleSimplifyMode === 'smooth'
+  puzzleRawVerticesCount: 0,      // Total de vértices originales en los contornos base del Puzzle 3D
+  puzzleSimplifiedVerticesCount: 0, // Total de vértices tras simplificar la línea de corte del Puzzle 3D
   explodeFactor: 0,
   showGhost: true,
   isolateCurrent: false,
@@ -998,6 +1004,16 @@ function syncPuzzleSelectedRibUI() {
       : 'px-1.5 py-0 rounded bg-slate-900 hover:bg-slate-700 border border-slate-700 text-[9px] text-slate-200 font-medium';
   }
 
+  const inspBtnSimp = document.getElementById('inspTogglePuzzleSimplifyBtn');
+  if (inspBtnSimp) {
+    inspBtnSimp.textContent = state.puzzleSimplifyCutLine
+      ? ('✂️ Corte Simplificado (' + Number(state.puzzleSimplifyToleranceMM || 1.5).toFixed(1) + 'mm)')
+      : '✂️ Simplificar Corte';
+    inspBtnSimp.className = state.puzzleSimplifyCutLine
+      ? 'px-1.5 py-0 rounded bg-cyan-500/25 hover:bg-cyan-500/35 border border-cyan-500/50 text-[9px] text-cyan-300 font-bold transition'
+      : 'px-1.5 py-0 rounded bg-slate-900 hover:bg-slate-700 border border-slate-700 text-[9px] text-slate-300 font-medium transition';
+  }
+
   // Sincronizar barra flotante en la esquina superior derecha del Visor 3D
   const v3dBtnA = document.getElementById('viewer3DVisBtn_a');
   if (v3dBtnA) {
@@ -1256,6 +1272,41 @@ function syncConstructionModeUI() {
   if (thEl) thEl.value = state.puzzleMaterialThicknessMM;
   if (clEl) clEl.value = state.puzzleSlotClearanceMM;
 
+  // Sincronizar controles de simplificación de la línea de corte en Puzzle 3D
+  const simpChk = document.getElementById('puzzleSimplifyCutCheck');
+  if (simpChk) simpChk.checked = Boolean(state.puzzleSimplifyCutLine);
+
+  const simpBox = document.getElementById('puzzleSimplifyCutBox');
+  if (simpBox) {
+    simpBox.classList.toggle('opacity-45', !state.puzzleSimplifyCutLine);
+  }
+
+  const simpModeSel = document.getElementById('puzzleSimplifyModeSelect');
+  if (simpModeSel) simpModeSel.value = state.puzzleSimplifyMode || 'rdp';
+
+  const simpTolSlider = document.getElementById('puzzleSimplifyTolSlider');
+  const simpTolInput = document.getElementById('puzzleSimplifyTolInput');
+  const tolVal = Number(state.puzzleSimplifyToleranceMM || 1.5);
+  if (simpTolSlider) simpTolSlider.value = String(tolVal);
+  if (simpTolInput) simpTolInput.value = tolVal.toFixed(1);
+
+  const simpStatsBadge = document.getElementById('puzzleSimplifyStatsBadge');
+  if (simpStatsBadge) {
+    const rawV = state.puzzleRawVerticesCount || 0;
+    const simpV = state.puzzleSimplifiedVerticesCount || 0;
+    if (!state.puzzleSimplifyCutLine) {
+      simpStatsBadge.className = 'text-[9px] text-slate-400 text-center pt-0.5';
+      simpStatsBadge.textContent = 'Desactivado (' + rawV + ' vértices originales en costillas)';
+    } else if (rawV > 0) {
+      const savedPct = Math.max(0, Math.round((1 - simpV / rawV) * 100));
+      simpStatsBadge.className = 'text-[9px] text-cyan-300 font-semibold text-center pt-0.5';
+      simpStatsBadge.textContent = '✂️ ' + rawV + ' → ' + simpV + ' vértices (−' + savedPct + '%) · Ranuras intactas';
+    } else {
+      simpStatsBadge.className = 'text-[9px] text-cyan-300 text-center pt-0.5';
+      simpStatsBadge.textContent = '✂️ Línea de corte simplificada (tol. ' + tolVal.toFixed(1) + ' mm)';
+    }
+  }
+
   const slotW = Math.max(0.4, state.puzzleMaterialThicknessMM + state.puzzleSlotClearanceMM);
   const sumBadge = document.getElementById('puzzleSummaryBadge');
   if (sumBadge) {
@@ -1264,7 +1315,8 @@ function syncConstructionModeUI() {
       (state.puzzleCountA + state.puzzleCountB) + ' costillas (' +
       state.puzzleCountA + ' ' + cfg.axisA.toUpperCase() + ' + ' +
       state.puzzleCountB + ' ' + cfg.axisB.toUpperCase() + ')' +
-      (state.puzzleTotalSlotsCount > 0 ? (' · <strong>' + state.puzzleTotalSlotsCount + ' encajes</strong>') : '');
+      (state.puzzleTotalSlotsCount > 0 ? (' · <strong>' + state.puzzleTotalSlotsCount + ' encajes</strong>') : '') +
+      (state.puzzleSimplifyCutLine ? ' · <strong>✂️ Corte simplificado</strong>' : '');
   }
   syncPuzzleSelectedRibUI();
 }
@@ -1611,6 +1663,399 @@ function getFullFilledSolidLoops(loops) {
   return solidOuters;
 }
 
+// =========================================================================
+// SIMPLIFICACIÓN DE LA LÍNEA DE CORTE EN EL MODO PUZZLE 3D
+// =========================================================================
+
+// Distancia perpendicular al cuadrado desde el punto p al segmento ab
+function pointToSegmentDistSqPuzzle2D(p, a, b) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq < 1e-12) {
+    const ex = p.x - a.x;
+    const ey = p.y - a.y;
+    return ex * ex + ey * ey;
+  }
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq;
+  if (t < 0) t = 0;
+  else if (t > 1) t = 1;
+  const projX = a.x + t * dx;
+  const projY = a.y + t * dy;
+  const ox = p.x - projX;
+  const oy = p.y - projY;
+  return ox * ox + oy * oy;
+}
+
+// Simplificación Ramer-Douglas-Peucker sobre una cadena abierta de puntos 2D
+function rdpSimplifyOpenChainPuzzle2D(chain, epsSq) {
+  if (!chain || chain.length <= 2) return chain ? chain.slice() : [];
+  let maxDistSq = 0;
+  let maxIdx = -1;
+  const first = chain[0];
+  const last = chain[chain.length - 1];
+
+  for (let i = 1; i < chain.length - 1; i++) {
+    const dSq = pointToSegmentDistSqPuzzle2D(chain[i], first, last);
+    if (dSq > maxDistSq) {
+      maxDistSq = dSq;
+      maxIdx = i;
+    }
+  }
+
+  if (maxDistSq > epsSq && maxIdx !== -1) {
+    const left = rdpSimplifyOpenChainPuzzle2D(chain.slice(0, maxIdx + 1), epsSq);
+    const right = rdpSimplifyOpenChainPuzzle2D(chain.slice(maxIdx), epsSq);
+    return left.slice(0, left.length - 1).concat(right);
+  }
+  return [first, last];
+}
+
+// Elimina vértices duplicados consecutivos y vértices colineales intermedios preservando esquinas de 90° (como las ranuras)
+function cleanCollinearVerticesInPolygon2D(pts, colTolMM = 1e-3) {
+  if (!pts || pts.length < 3) return pts ? pts.slice() : [];
+  const minDistSq = 1e-6;
+  const dedup = [];
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    const prev = dedup.length > 0 ? dedup[dedup.length - 1] : pts[pts.length - 1];
+    const dx = p.x - prev.x;
+    const dy = p.y - prev.y;
+    if (dx * dx + dy * dy > minDistSq) {
+      dedup.push({ x: p.x, y: p.y });
+    }
+  }
+  if (dedup.length <= 3) return dedup;
+
+  const tolSq = colTolMM * colTolMM;
+  const out = [];
+  const n = dedup.length;
+  for (let i = 0; i < n; i++) {
+    const prev = out.length > 0 ? out[out.length - 1] : dedup[(i - 1 + n) % n];
+    const curr = dedup[i];
+    const next = dedup[(i + 1) % n];
+
+    const ux = curr.x - prev.x;
+    const uy = curr.y - prev.y;
+    const vx = next.x - curr.x;
+    const vy = next.y - curr.y;
+    const dot = ux * vx + uy * vy;
+
+    // Solo eliminar si avanza en la misma dirección y cae sobre la recta prev->next dentro de la tolerancia
+    if (dot > 0 && pointToSegmentDistSqPuzzle2D(curr, prev, next) <= tolSq && (out.length + (n - i - 1)) >= 3) {
+      continue;
+    }
+    out.push(curr);
+  }
+  return out.length >= 3 ? out : dedup;
+}
+
+function cleanCollinearVerticesInLoops(loops, colTolMM = 1e-3) {
+  if (!loops || loops.length === 0) return [];
+  const out = [];
+  loops.forEach((l) => {
+    const cleanedPts = cleanCollinearVerticesInPolygon2D(l.points || [], colTolMM);
+    if (cleanedPts.length < 3) return;
+    const sArea = computeSignedArea(cleanedPts);
+    if (Math.abs(sArea) < 1e-3) return;
+    out.push({
+      ...l,
+      points: cleanedPts,
+      signedArea: sArea,
+      absArea: Math.abs(sArea)
+    });
+  });
+  return out;
+}
+
+// Simplificación Ramer-Douglas-Peucker para un polígono cerrado dividiéndolo por sus dos vértices antípodas más lejanos
+function simplifyClosedPolygonPuzzle2D(pts, toleranceMM) {
+  const cleaned = cleanCollinearVerticesInPolygon2D(pts, 0.01);
+  if (cleaned.length <= 4 || !(toleranceMM > 0.01)) return cleaned;
+
+  const n = cleaned.length;
+  let idxA = 0;
+  let bestDistA = -1;
+  const p0 = cleaned[0];
+  for (let i = 1; i < n; i++) {
+    const dx = cleaned[i].x - p0.x;
+    const dy = cleaned[i].y - p0.y;
+    const d = dx * dx + dy * dy;
+    if (d > bestDistA) {
+      bestDistA = d;
+      idxA = i;
+    }
+  }
+
+  let idxB = (idxA + Math.floor(n / 2)) % n;
+  let bestDistB = -1;
+  const pA = cleaned[idxA];
+  for (let i = 0; i < n; i++) {
+    if (i === idxA) continue;
+    const dx = cleaned[i].x - pA.x;
+    const dy = cleaned[i].y - pA.y;
+    const d = dx * dx + dy * dy;
+    if (d > bestDistB) {
+      bestDistB = d;
+      idxB = i;
+    }
+  }
+
+  if (idxA === idxB) return cleaned;
+
+  const chain1 = [];
+  for (let i = idxA; ; i = (i + 1) % n) {
+    chain1.push(cleaned[i]);
+    if (i === idxB) break;
+  }
+  const chain2 = [];
+  for (let i = idxB; ; i = (i + 1) % n) {
+    chain2.push(cleaned[i]);
+    if (i === idxA) break;
+  }
+
+  const epsSq = toleranceMM * toleranceMM;
+  const s1 = rdpSimplifyOpenChainPuzzle2D(chain1, epsSq);
+  const s2 = rdpSimplifyOpenChainPuzzle2D(chain2, epsSq);
+  let combined = s1.slice(0, s1.length - 1).concat(s2.slice(0, s2.length - 1));
+
+  // Verificar si los propios puntos de partición quedaron casi colineales con sus vecinos
+  if (combined.length > 3) {
+    combined = cleanCollinearVerticesInPolygon2D(combined, Math.min(toleranceMM * 0.45, 0.8));
+  }
+  return combined.length >= 3 ? combined : cleaned.slice(0, 3);
+}
+
+// Suavizado de esquinas de Chaikin sobre un polígono cerrado
+function smoothClosedPolygonChaikinPuzzle2D(pts, passes = 1) {
+  let current = pts ? pts.slice() : [];
+  const numPasses = Math.max(1, Math.min(3, parseInt(passes, 10) || 1));
+  for (let p = 0; p < numPasses; p++) {
+    const n = current.length;
+    if (n < 3 || n > 1200) break;
+    const next = [];
+    for (let i = 0; i < n; i++) {
+      const a = current[i];
+      const b = current[(i + 1) % n];
+      next.push(
+        { x: 0.75 * a.x + 0.25 * b.x, y: 0.75 * a.y + 0.25 * b.y },
+        { x: 0.25 * a.x + 0.75 * b.x, y: 0.25 * a.y + 0.75 * b.y }
+      );
+    }
+    current = next;
+  }
+  return current;
+}
+
+// Envolvente convexa 2D (Monotone Chain) en sentido antihorario (CCW)
+function computeConvexHullPuzzle2D(pts) {
+  if (!pts || pts.length <= 3) return pts ? pts.slice() : [];
+  const sorted = pts.map((p) => ({ x: p.x, y: p.y })).sort((a, b) => (a.x !== b.x ? a.x - b.x : a.y - b.y));
+  const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+
+  const lower = [];
+  for (let i = 0; i < sorted.length; i++) {
+    const p = sorted[i];
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) {
+      lower.pop();
+    }
+    lower.push(p);
+  }
+  const upper = [];
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const p = sorted[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) {
+      upper.pop();
+    }
+    upper.push(p);
+  }
+  upper.pop();
+  lower.pop();
+  const hull = lower.concat(upper);
+  return hull.length >= 3 ? hull : pts.slice();
+}
+
+// Puentea y cierra entrantes cóncavos / muescas estrechas en el contorno exterior antes de simplificar
+function bridgeConcavitiesPuzzle2D(pts, toleranceMM, isHole) {
+  if (!pts || pts.length < 5 || isHole) {
+    return simplifyClosedPolygonPuzzle2D(pts, toleranceMM);
+  }
+  let ring = simplifyClosedPolygonPuzzle2D(pts, Math.max(0.15, toleranceMM * 0.35));
+  if (ring.length < 5) return ring;
+
+  // Asegurar sentido antihorario (CCW) para que las concavidades queden hacia la izquierda de la cuerda puente
+  if (computeSignedArea(ring) < 0) {
+    ring.reverse();
+  }
+
+  const maxBridgeSpan = Math.max(2.0, toleranceMM * 4.0);
+  const maxBridgeSpanSq = maxBridgeSpan * maxBridgeSpan;
+  const bridged = [];
+  const n = ring.length;
+  let i = 0;
+
+  while (i < n) {
+    const pStart = ring[i];
+    bridged.push(pStart);
+    let bestJump = -1;
+    const maxLookahead = Math.min(Math.floor(n * 0.4), 24);
+
+    for (let step = maxLookahead; step >= 2; step--) {
+      if (i + step >= n) continue;
+      const pEnd = ring[i + step];
+      const dx = pEnd.x - pStart.x;
+      const dy = pEnd.y - pStart.y;
+      const chordSq = dx * dx + dy * dy;
+      if (chordSq > maxBridgeSpanSq || chordSq < 1e-4) continue;
+
+      // Comprobar que todos los vértices intermedios se adentran hacia el interior (izquierda de pStart->pEnd en CCW)
+      let allConcaveInward = true;
+      let arcLen = 0;
+      for (let k = i; k < i + step; k++) {
+        arcLen += Math.hypot(ring[k + 1].x - ring[k].x, ring[k + 1].y - ring[k].y);
+        if (k > i) {
+          const pk = ring[k];
+          const crossVal = dx * (pk.y - pStart.y) - dy * (pk.x - pStart.x);
+          if (crossVal <= 0) {
+            allConcaveInward = false;
+            break;
+          }
+        }
+      }
+      const chordLen = Math.sqrt(chordSq);
+      if (allConcaveInward && arcLen > chordLen * 1.25) {
+        bestJump = i + step;
+        break;
+      }
+    }
+
+    if (bestJump !== -1) {
+      i = bestJump;
+    } else {
+      i++;
+    }
+  }
+
+  return simplifyClosedPolygonPuzzle2D(bridged.length >= 3 ? bridged : ring, toleranceMM);
+}
+
+function countLoopsVertices(loops) {
+  let count = 0;
+  (loops || []).forEach((l) => {
+    if (l && l.points) count += l.points.length;
+  });
+  return count;
+}
+
+// Simplifica la lista de contornos base de una costilla del Puzzle 3D antes de tallar las ranuras
+function simplifyPuzzleLoopsList(rawBaseLoops) {
+  if (!rawBaseLoops || rawBaseLoops.length === 0) return [];
+  if (!state.puzzleSimplifyCutLine) return rawBaseLoops.slice();
+
+  const tolMM = Math.max(0.05, Number(state.puzzleSimplifyToleranceMM) || 1.5);
+  const mode = state.puzzleSimplifyMode || 'rdp';
+  const smoothPasses = Math.max(1, Math.min(3, parseInt(state.puzzleSimplifySmoothPasses, 10) || 1));
+
+  const simplifiedLoops = [];
+  rawBaseLoops.forEach((loop) => {
+    const pts = loop.points;
+    if (!pts || pts.length < 3) return;
+    const isHole = Boolean(loop.isHole);
+    let outPts = pts.slice();
+
+    if (mode === 'convex' && !isHole) {
+      outPts = computeConvexHullPuzzle2D(outPts);
+      outPts = simplifyClosedPolygonPuzzle2D(outPts, tolMM * 0.5);
+    } else if (mode === 'bridge') {
+      outPts = bridgeConcavitiesPuzzle2D(outPts, tolMM, isHole);
+    } else if (mode === 'smooth') {
+      outPts = simplifyClosedPolygonPuzzle2D(outPts, tolMM);
+      outPts = smoothClosedPolygonChaikinPuzzle2D(outPts, smoothPasses);
+      outPts = cleanCollinearVerticesInPolygon2D(outPts, Math.max(0.03, tolMM * 0.1));
+    } else {
+      // 'rdp' (Poligonal limpia)
+      outPts = simplifyClosedPolygonPuzzle2D(outPts, tolMM);
+    }
+
+    if (!outPts || outPts.length < 3) {
+      outPts = pts.slice();
+    }
+
+    let sArea = computeSignedArea(outPts);
+    if ((!isHole && sArea < 0) || (isHole && sArea > 0)) {
+      outPts.reverse();
+      sArea = -sArea;
+    }
+    const absA = Math.abs(sArea);
+    if (absA < 0.05) return;
+
+    simplifiedLoops.push({
+      ...loop,
+      points: outPts,
+      signedArea: sArea,
+      absArea: absA,
+      isHole: isHole
+    });
+  });
+
+  return simplifiedLoops;
+}
+
+function recomputePuzzleCutLineSimplification() {
+  if (state.constructionMode === 'puzzle3d' && state.slices && state.slices.length > 0) {
+    applyIslandFilterToExistingSlices();
+  } else {
+    syncConstructionModeUI();
+  }
+}
+
+function setPuzzleSimplifyCutLine(enabled) {
+  state.puzzleSimplifyCutLine = Boolean(enabled);
+  recomputePuzzleCutLineSimplification();
+}
+
+function onPuzzleSimplifyParamsChange() {
+  const modeEl = document.getElementById('puzzleSimplifyModeSelect');
+  const tolEl = document.getElementById('puzzleSimplifyTolInput');
+  if (modeEl && modeEl.value) {
+    state.puzzleSimplifyMode = modeEl.value;
+  }
+  if (tolEl) {
+    const val = parseFloat(tolEl.value);
+    if (Number.isFinite(val) && val >= 0.05) {
+      state.puzzleSimplifyToleranceMM = Math.max(0.05, Math.min(30, Number(val.toFixed(2))));
+    }
+  }
+  recomputePuzzleCutLineSimplification();
+}
+
+function onPuzzleSimplifyTolInput(val) {
+  const parsed = parseFloat(val);
+  if (!Number.isFinite(parsed) || parsed < 0.05) return;
+  state.puzzleSimplifyToleranceMM = Math.max(0.05, Math.min(30, Number(parsed.toFixed(2))));
+  if (!state.puzzleSimplifyCutLine) {
+    state.puzzleSimplifyCutLine = true;
+  }
+  recomputePuzzleCutLineSimplification();
+}
+
+function stepPuzzleSimplifyTolerance(deltaMM) {
+  const cur = Number(state.puzzleSimplifyToleranceMM) || 1.5;
+  const next = Math.max(0.1, Math.min(30, Number((cur + (Number(deltaMM) || 0)).toFixed(1))));
+  state.puzzleSimplifyToleranceMM = next;
+  state.puzzleSimplifyCutLine = true;
+  recomputePuzzleCutLineSimplification();
+}
+
+function setPuzzleSimplifyPreset(mode, tolMM) {
+  state.puzzleSimplifyCutLine = true;
+  if (mode) state.puzzleSimplifyMode = mode;
+  if (typeof tolMM === 'number' && tolMM > 0) {
+    state.puzzleSimplifyToleranceMM = tolMM;
+  }
+  recomputePuzzleCutLineSimplification();
+}
+
 // Talla todas las ranuras de encaje a media madera entre las costillas de la Serie A y las de la Serie B
 function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB) {
   const slotW = Math.max(0.4, state.puzzleMaterialThicknessMM + state.puzzleSlotClearanceMM);
@@ -1618,10 +2063,15 @@ function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB) {
   const infoA = getPuzzleSlice2DAxes(axisA, axisB);
   const infoB = getPuzzleSlice2DAxes(axisB, axisA);
 
+  let rawVertsTotal = 0;
+  let simpVertsTotal = 0;
+
   slicesA.forEach((s) => {
     const rawBase = s.rawBaseLoops || s.baseLoops || s.loops || [];
     s.rawBaseLoops = rawBase;
-    s.baseLoops = rawBase.slice();
+    rawVertsTotal += countLoopsVertices(rawBase);
+    s.baseLoops = state.puzzleSimplifyCutLine ? simplifyPuzzleLoopsList(rawBase) : rawBase.slice();
+    simpVertsTotal += countLoopsVertices(s.baseLoops);
     s.slots = [];
     s.puzzleSlots = s.slots;
     s.slotRects = [];
@@ -1630,11 +2080,16 @@ function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB) {
   slicesB.forEach((s) => {
     const rawBase = s.rawBaseLoops || s.baseLoops || s.loops || [];
     s.rawBaseLoops = rawBase;
-    s.baseLoops = rawBase.slice();
+    rawVertsTotal += countLoopsVertices(rawBase);
+    s.baseLoops = state.puzzleSimplifyCutLine ? simplifyPuzzleLoopsList(rawBase) : rawBase.slice();
+    simpVertsTotal += countLoopsVertices(s.baseLoops);
     s.slots = [];
     s.puzzleSlots = s.slots;
     s.slotRects = [];
   });
+
+  state.puzzleRawVerticesCount = rawVertsTotal;
+  state.puzzleSimplifiedVerticesCount = simpVertsTotal;
 
   let totalSlots = 0;
 
@@ -1763,6 +2218,9 @@ function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB) {
     let currentLoops = slice.baseLoops.slice();
     for (let r = 0; r < slice.slotRects.length; r++) {
       currentLoops = subtractSingleRectFromLoops(currentLoops, slice.slotRects[r]);
+    }
+    if (state.puzzleSimplifyCutLine) {
+      currentLoops = cleanCollinearVerticesInLoops(currentLoops, 1e-3);
     }
     slice.loops = currentLoops;
   });
@@ -4248,6 +4706,13 @@ if (typeof window !== 'undefined') {
   window.setSlicerFrameEnabled = setSlicerFrameEnabled;
   window.onSlicerFrameSettingsChange = onSlicerFrameSettingsChange;
   window.setSlicerFramePreset = setSlicerFramePreset;
+  window.simplifyClosedPolygonPuzzle2D = simplifyClosedPolygonPuzzle2D;
+  window.simplifyPuzzleLoopsList = simplifyPuzzleLoopsList;
+  window.setPuzzleSimplifyCutLine = setPuzzleSimplifyCutLine;
+  window.onPuzzleSimplifyParamsChange = onPuzzleSimplifyParamsChange;
+  window.onPuzzleSimplifyTolInput = onPuzzleSimplifyTolInput;
+  window.stepPuzzleSimplifyTolerance = stepPuzzleSimplifyTolerance;
+  window.setPuzzleSimplifyPreset = setPuzzleSimplifyPreset;
 }
 
 
@@ -16445,6 +16910,49 @@ if (typeof window !== 'undefined') {
             </div>
           </div>
 
+          <!-- Opción para simplificar la línea de corte en el Puzzle 3D preservando las ranuras exactas -->
+          <div class="space-y-1.5 pt-2 border-t border-slate-800">
+            <label class="flex items-center justify-between text-[11px] font-bold text-cyan-300 cursor-pointer" title="Simplifica y limpia el contorno exterior de las costillas del Puzzle 3D eliminando micro-vértices o dientes de sierra, pero manteniendo intactas las ranuras rectangulares de encaje">
+              <span>✂️ Simplificar línea de corte</span>
+              <input type="checkbox" id="puzzleSimplifyCutCheck" onchange="setPuzzleSimplifyCutLine(this.checked)" class="accent-cyan-500 w-3.5 h-3.5" />
+            </label>
+
+            <div id="puzzleSimplifyCutBox" class="space-y-1.5 bg-slate-950/75 border border-slate-800 rounded-lg p-2 opacity-45 transition">
+              <div class="flex items-center justify-between gap-1 text-[10px]">
+                <span class="text-slate-400">Modo:</span>
+                <select id="puzzleSimplifyModeSelect" onchange="onPuzzleSimplifyParamsChange()" class="bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] text-cyan-300 outline-none">
+                  <option value="rdp" selected>Poligonal limpia (rectas)</option>
+                  <option value="smooth">Curva suavizada (orgánica)</option>
+                  <option value="bridge">Cerrar entrantes / muescas</option>
+                  <option value="convex">Envolvente convexa exterior</option>
+                </select>
+              </div>
+
+              <div class="space-y-1">
+                <div class="flex items-center justify-between text-[10px]">
+                  <span class="text-slate-400">Tolerancia (mm):</span>
+                  <div class="flex items-center gap-1">
+                    <button type="button" onclick="stepPuzzleSimplifyTolerance(-0.5)" class="w-4 h-4 flex items-center justify-center rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-cyan-300 font-bold text-[10px] leading-none" title="Disminuir tolerancia (-0.5 mm)">−</button>
+                    <input type="number" id="puzzleSimplifyTolInput" value="1.5" min="0.1" max="30.0" step="0.2" onchange="onPuzzleSimplifyTolInput(this.value)" class="w-12 bg-slate-900 border border-slate-700 rounded px-1 py-0 text-[10px] text-right font-bold text-cyan-300 font-mono" />
+                    <button type="button" onclick="stepPuzzleSimplifyTolerance(0.5)" class="w-4 h-4 flex items-center justify-center rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-cyan-300 font-bold text-[10px] leading-none" title="Aumentar tolerancia (+0.5 mm)">+</button>
+                  </div>
+                </div>
+                <input type="range" id="puzzleSimplifyTolSlider" min="0.1" max="15.0" step="0.1" value="1.5" oninput="onPuzzleSimplifyTolInput(this.value)" class="w-full accent-cyan-500" />
+              </div>
+
+              <div class="grid grid-cols-4 gap-1 pt-0.5">
+                <button type="button" onclick="setPuzzleSimplifyPreset('rdp', 0.8)" class="py-0.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300 transition" title="Simplificación ligera (0.8 mm)">Suave</button>
+                <button type="button" onclick="setPuzzleSimplifyPreset('rdp', 1.8)" class="py-0.5 bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 rounded text-[9px] text-cyan-300 font-semibold transition" title="Simplificación poligonal media (1.8 mm)">Recta</button>
+                <button type="button" onclick="setPuzzleSimplifyPreset('smooth', 2.0)" class="py-0.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300 transition" title="Curva orgánica suavizada (2.0 mm)">Curva</button>
+                <button type="button" onclick="setPuzzleSimplifyPreset('bridge', 2.5)" class="py-0.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300 transition" title="Cierra entrantes estrechos y muescas del perfil">Sin muescas</button>
+              </div>
+
+              <div id="puzzleSimplifyStatsBadge" class="text-[9px] text-slate-400 text-center pt-0.5">
+                Desactivado (se conserva el contorno original de la malla)
+              </div>
+            </div>
+          </div>
+
           <div id="puzzleSummaryBadge" class="text-[10px] text-amber-200 bg-amber-950/40 border border-amber-500/30 rounded-lg p-2 text-center font-medium leading-snug">
             Ranura de encaje: <strong>5.00 mm</strong> · 14 costillas (7 X + 7 Y)
           </div>
@@ -16970,6 +17478,8 @@ if (typeof window !== 'undefined') {
                   <div class="h-3 w-px bg-slate-700 mx-0.5"></div>
                   <button type="button" id="inspToggleSelectedRibVisBtn" onclick="toggleSelectedPuzzleRibVisibility()" class="px-1.5 py-0 rounded bg-slate-900 hover:bg-slate-700 border border-slate-700 text-[9px] text-slate-200 font-medium" title="Ocultar o mostrar en la vista esta costilla">👁️ Costilla</button>
                   <button type="button" id="inspToggleActiveAxisVisBtn" onclick="toggleActivePuzzleAxisVisibility()" class="px-1.5 py-0 rounded bg-slate-900 hover:bg-slate-700 border border-slate-700 text-[9px] text-slate-200 font-medium" title="Ocultar o mostrar en la vista todo el eje de esta costilla">👁️ Eje</button>
+                  <div class="h-3 w-px bg-slate-700 mx-0.5"></div>
+                  <button type="button" id="inspTogglePuzzleSimplifyBtn" onclick="setPuzzleSimplifyCutLine(!state.puzzleSimplifyCutLine)" class="px-1.5 py-0 rounded bg-slate-900 hover:bg-slate-700 border border-slate-700 text-[9px] text-slate-300 font-medium transition" title="Activar o desactivar la simplificación de la línea de corte en el Puzzle 3D">✂️ Simplificar Corte</button>
                 </div>
               </div>
               <p id="slice2DStats" class="text-[11px] text-slate-400 mt-0.5 truncate">Medida corte: -- × -- mm | Contornos: 0</p>

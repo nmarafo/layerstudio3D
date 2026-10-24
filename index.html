@@ -35,17 +35,17 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
 
   <!-- Hoja de estilos principal -->
-  <link rel="stylesheet" href="css/styles.css?v=3.0.4" />
+  <link rel="stylesheet" href="css/styles.css?v=3.0.5" />
 
   <!-- Módulos de la aplicación (cargados en orden de dependencia con defer y cache-busting) -->
-  <script src="js/state.js?v=3.0.4" defer></script>
-  <script src="js/viewer3d.js?v=3.0.4" defer></script>
-  <script src="js/slicer.js?v=3.0.4" defer></script>
-  <script src="js/nesting.js?v=3.0.4" defer></script>
-  <script src="js/modals-guide.js?v=3.0.4" defer></script>
-  <script src="js/viewer2d.js?v=3.0.4" defer></script>
-  <script src="js/exporters.js?v=3.0.4" defer></script>
-  <script src="js/vectorizer2d.js?v=3.0.4" defer></script>
+  <script src="js/state.js?v=3.0.5" defer></script>
+  <script src="js/viewer3d.js?v=3.0.5" defer></script>
+  <script src="js/slicer.js?v=3.0.5" defer></script>
+  <script src="js/nesting.js?v=3.0.5" defer></script>
+  <script src="js/modals-guide.js?v=3.0.5" defer></script>
+  <script src="js/viewer2d.js?v=3.0.5" defer></script>
+  <script src="js/exporters.js?v=3.0.5" defer></script>
+  <script src="js/vectorizer2d.js?v=3.0.5" defer></script>
 </head>
 <body class="h-screen w-screen flex flex-col">
 
@@ -492,6 +492,49 @@
             <div class="flex items-center justify-between text-[11px] pt-0.5" title="Negativo (-0.1 mm) para encaje a presión en poliexpan/espuma; Positivo (+0.1 mm) para holgura suave en madera rígida">
               <span class="text-slate-300">Holgura encaje / Kerf (mm):</span>
               <input type="number" id="puzzleClearanceInput" value="0.0" min="-2.0" max="3.0" step="0.05" onchange="onPuzzleSlotParamsChange()" class="w-16 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-emerald-300 font-semibold" />
+            </div>
+          </div>
+
+          <!-- Opción para simplificar la línea de corte en el Puzzle 3D preservando las ranuras exactas -->
+          <div class="space-y-1.5 pt-2 border-t border-slate-800">
+            <label class="flex items-center justify-between text-[11px] font-bold text-cyan-300 cursor-pointer" title="Simplifica y limpia el contorno exterior de las costillas del Puzzle 3D eliminando micro-vértices o dientes de sierra, pero manteniendo intactas las ranuras rectangulares de encaje">
+              <span>✂️ Simplificar línea de corte</span>
+              <input type="checkbox" id="puzzleSimplifyCutCheck" onchange="setPuzzleSimplifyCutLine(this.checked)" class="accent-cyan-500 w-3.5 h-3.5" />
+            </label>
+
+            <div id="puzzleSimplifyCutBox" class="space-y-1.5 bg-slate-950/75 border border-slate-800 rounded-lg p-2 opacity-45 transition">
+              <div class="flex items-center justify-between gap-1 text-[10px]">
+                <span class="text-slate-400">Modo:</span>
+                <select id="puzzleSimplifyModeSelect" onchange="onPuzzleSimplifyParamsChange()" class="bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] text-cyan-300 outline-none">
+                  <option value="rdp" selected>Poligonal limpia (rectas)</option>
+                  <option value="smooth">Curva suavizada (orgánica)</option>
+                  <option value="bridge">Cerrar entrantes / muescas</option>
+                  <option value="convex">Envolvente convexa exterior</option>
+                </select>
+              </div>
+
+              <div class="space-y-1">
+                <div class="flex items-center justify-between text-[10px]">
+                  <span class="text-slate-400">Tolerancia (mm):</span>
+                  <div class="flex items-center gap-1">
+                    <button type="button" onclick="stepPuzzleSimplifyTolerance(-0.5)" class="w-4 h-4 flex items-center justify-center rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-cyan-300 font-bold text-[10px] leading-none" title="Disminuir tolerancia (-0.5 mm)">−</button>
+                    <input type="number" id="puzzleSimplifyTolInput" value="1.5" min="0.1" max="30.0" step="0.2" onchange="onPuzzleSimplifyTolInput(this.value)" class="w-12 bg-slate-900 border border-slate-700 rounded px-1 py-0 text-[10px] text-right font-bold text-cyan-300 font-mono" />
+                    <button type="button" onclick="stepPuzzleSimplifyTolerance(0.5)" class="w-4 h-4 flex items-center justify-center rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-cyan-300 font-bold text-[10px] leading-none" title="Aumentar tolerancia (+0.5 mm)">+</button>
+                  </div>
+                </div>
+                <input type="range" id="puzzleSimplifyTolSlider" min="0.1" max="15.0" step="0.1" value="1.5" oninput="onPuzzleSimplifyTolInput(this.value)" class="w-full accent-cyan-500" />
+              </div>
+
+              <div class="grid grid-cols-4 gap-1 pt-0.5">
+                <button type="button" onclick="setPuzzleSimplifyPreset('rdp', 0.8)" class="py-0.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300 transition" title="Simplificación ligera (0.8 mm)">Suave</button>
+                <button type="button" onclick="setPuzzleSimplifyPreset('rdp', 1.8)" class="py-0.5 bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 rounded text-[9px] text-cyan-300 font-semibold transition" title="Simplificación poligonal media (1.8 mm)">Recta</button>
+                <button type="button" onclick="setPuzzleSimplifyPreset('smooth', 2.0)" class="py-0.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300 transition" title="Curva orgánica suavizada (2.0 mm)">Curva</button>
+                <button type="button" onclick="setPuzzleSimplifyPreset('bridge', 2.5)" class="py-0.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300 transition" title="Cierra entrantes estrechos y muescas del perfil">Sin muescas</button>
+              </div>
+
+              <div id="puzzleSimplifyStatsBadge" class="text-[9px] text-slate-400 text-center pt-0.5">
+                Desactivado (se conserva el contorno original de la malla)
+              </div>
             </div>
           </div>
 
@@ -1020,6 +1063,8 @@
                   <div class="h-3 w-px bg-slate-700 mx-0.5"></div>
                   <button type="button" id="inspToggleSelectedRibVisBtn" onclick="toggleSelectedPuzzleRibVisibility()" class="px-1.5 py-0 rounded bg-slate-900 hover:bg-slate-700 border border-slate-700 text-[9px] text-slate-200 font-medium" title="Ocultar o mostrar en la vista esta costilla">👁️ Costilla</button>
                   <button type="button" id="inspToggleActiveAxisVisBtn" onclick="toggleActivePuzzleAxisVisibility()" class="px-1.5 py-0 rounded bg-slate-900 hover:bg-slate-700 border border-slate-700 text-[9px] text-slate-200 font-medium" title="Ocultar o mostrar en la vista todo el eje de esta costilla">👁️ Eje</button>
+                  <div class="h-3 w-px bg-slate-700 mx-0.5"></div>
+                  <button type="button" id="inspTogglePuzzleSimplifyBtn" onclick="setPuzzleSimplifyCutLine(!state.puzzleSimplifyCutLine)" class="px-1.5 py-0 rounded bg-slate-900 hover:bg-slate-700 border border-slate-700 text-[9px] text-slate-300 font-medium transition" title="Activar o desactivar la simplificación de la línea de corte en el Puzzle 3D">✂️ Simplificar Corte</button>
                 </div>
               </div>
               <p id="slice2DStats" class="text-[11px] text-slate-400 mt-0.5 truncate">Medida corte: -- × -- mm | Contornos: 0</p>
