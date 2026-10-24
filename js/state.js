@@ -38,6 +38,8 @@ const state = {
   puzzleHideSeriesA: false,    // true = oculta en la vista todas las costillas del 1.er eje (Serie A)
   puzzleHideSeriesB: false,    // true = oculta en la vista todas las costillas del 2.º eje (Serie B)
   puzzleHiddenRibs: { A: {}, B: {} }, // Costillas individuales ocultas en la vista { A: { [seriesIndex]: true }, B: { [seriesIndex]: true } }
+  sliceImageEngravings: {},    // Grabado de imagen personalizado por lámina / costilla { [sliceKey]: config }
+  sliceEngravePanelOpen: false,// true = muestra el panel de grabado de imagen sobre la lámina seleccionada en el Inspector 2D
   puzzleMaterialThicknessMM: 5.0, // Grosor del tablero/poliexpan en mm
   puzzleSlotClearanceMM: 0.0,  // Holgura/tolerancia de encaje en mm (ancho ranura = grosor + holgura)
   puzzleTotalSlotsCount: 0,    // Total de ranuras de encaje generadas

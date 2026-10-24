@@ -361,6 +361,9 @@ function openImageVectorizerModal(presetIfEmpty) {
   if (typeof bindVectorizerEditorCanvasEvents === 'function') {
     bindVectorizerEditorCanvasEvents();
   }
+  if (typeof syncSliceImageEngraveUI === 'function') {
+    syncSliceImageEngraveUI();
+  }
 
   if (!vec2dState.sourceCanvas || presetIfEmpty) {
     loadVectorizerDemoPreset(presetIfEmpty || 'drawing');
@@ -1429,6 +1432,9 @@ function runImageVectorization() {
   wCtx.clearRect(0, 0, innerW, innerH);
   wCtx.drawImage(vec2dState.sourceCanvas, 0, 0, innerW, innerH);
   const rgba = wCtx.getImageData(0, 0, innerW, innerH).data;
+  if (typeof populateProceduralDemoRgbaIfBlank === 'function') {
+    populateProceduralDemoRgbaIfBlank(rgba, innerW, innerH, vec2dState.imageName);
+  }
 
   // 1. Detectar si la imagen tiene transparencia real
   let transparentPixels = 0;
@@ -3763,6 +3769,823 @@ function bindVectorizerEditorCanvasEvents() {
   });
 }
 
+// ============================================================================
+// MOTOR DE GRABADO DE IMAGEN EN LA LÁMINA / COSTILLA SELECCIONADA
+// ============================================================================
+
+// Rellena un búfer RGBA con un patrón sintético si el contexto 2D es un mock sin rasterizador (p. ej. en pruebas headless)
+function populateProceduralDemoRgbaIfBlank(rgba, w, h, hintName) {
+  if (!rgba || rgba.length < w * h * 4) return;
+  let hasAlpha = false;
+  for (let i = 3; i < rgba.length; i += 16) {
+    if (rgba[i] > 10) {
+      hasAlpha = true;
+      break;
+    }
+  }
+  if (hasAlpha) return;
+
+  const isCrest = String(hintName || '').toLowerCase().includes('escudo') || String(hintName || '').toLowerCase().includes('crest');
+  const isMandala = String(hintName || '').toLowerCase().includes('mandala') || String(hintName || '').toLowerCase().includes('medallion');
+
+  for (let y = 0; y < h; y++) {
+    const ny = (y / Math.max(1, h - 1)) * 2 - 1;
+    for (let x = 0; x < w; x++) {
+      const nx = (x / Math.max(1, w - 1)) * 2 - 1;
+      const r = Math.hypot(nx, ny);
+      const idx = (y * w + x) * 4;
+      if (r > 0.82) {
+        rgba[idx] = 0;
+        rgba[idx + 1] = 0;
+        rgba[idx + 2] = 0;
+        rgba[idx + 3] = 0;
+        continue;
+      }
+      let isDark = false;
+      if (isMandala) {
+        const ang = Math.atan2(ny, nx);
+        const petals = Math.cos(ang * 6) * 0.18 + 0.45;
+        isDark = (Math.abs(r - 0.68) < 0.06) || (Math.abs(r - petals) < 0.07) || (r < 0.16 && r > 0.06);
+      } else if (isCrest) {
+        isDark = (Math.abs(Math.abs(nx) - 0.55) < 0.06 && Math.abs(ny) < 0.55) ||
+          (Math.abs(Math.abs(ny) - 0.55) < 0.06 && Math.abs(nx) < 0.55) ||
+          (Math.hypot(nx, ny) < 0.26 && Math.hypot(nx, ny) > 0.10);
+      } else {
+        // Búho / Dibujo: anillo exterior + dos ojos + pico central
+        const dEyeL = Math.hypot(nx + 0.26, ny + 0.18);
+        const dEyeR = Math.hypot(nx - 0.26, ny + 0.18);
+        const inRing = Math.abs(r - 0.70) < 0.055;
+        const inEyes = (dEyeL < 0.20 && dEyeL > 0.11) || dEyeL < 0.06 || (dEyeR < 0.20 && dEyeR > 0.11) || dEyeR < 0.06;
+        const inBeak = Math.abs(nx) < 0.09 && ny > -0.05 && ny < 0.22 && (Math.abs(nx) + (ny - 0.08) * 0.5 < 0.14);
+        const inFeathers = ny > 0.26 && ny < 0.56 && Math.abs(nx) < 0.42 && Math.sin(nx * 18) > 0.35 && Math.sin(ny * 18) > 0.2;
+        isDark = inRing || inEyes || inBeak || inFeathers;
+      }
+      const val = isDark ? 18 : 248;
+      rgba[idx] = val;
+      rgba[idx + 1] = val;
+      rgba[idx + 2] = val;
+      rgba[idx + 3] = 255;
+    }
+  }
+}
+
+function getSliceEngravingKey(slice) {
+  if (!slice) return null;
+  if (state.constructionMode === 'puzzle3d' && slice.puzzleCode) {
+    return 'puzzle_' + slice.puzzleCode;
+  }
+  return 'stacked_' + (typeof slice.index === 'number' ? slice.index : 0);
+}
+
+function getSliceImageEngravingConfig(slice) {
+  const key = getSliceEngravingKey(slice);
+  if (!key || !state.sliceImageEngravings) return null;
+  return state.sliceImageEngravings[key] || null;
+}
+
+function ensureSliceImageEngravingConfig(slice) {
+  const key = getSliceEngravingKey(slice);
+  if (!key) return null;
+  if (!state.sliceImageEngravings) state.sliceImageEngravings = {};
+  if (!state.sliceImageEngravings[key]) {
+    state.sliceImageEngravings[key] = {
+      enabled: false,
+      imageName: 'Ilustracion_Buho',
+      presetName: 'drawing',
+      sourceCanvas: null,
+      aspectRatio: 1.0,
+      scalePct: 75,
+      offsetXMM: 0,
+      offsetYMM: 0,
+      rotationDeg: 0,
+      flipX: false,
+      flipY: false,
+      detectMode: 'smart_drawing',
+      engraveStyle: 'vector_fill',
+      threshold: 145,
+      invert: false,
+      clipToSlice: true,
+      marginMM: 0.5,
+      customNormalizedLoops: null
+    };
+  }
+  return state.sliceImageEngravings[key];
+}
+
+// Comprueba si un punto 2D está dentro del material sólido de una lámina (regla par-impar sobre slice.loops)
+function isPointInsideSliceSolid2D(pt, sliceLoops) {
+  if (!sliceLoops || sliceLoops.length === 0) return false;
+  let insideCount = 0;
+  for (let i = 0; i < sliceLoops.length; i++) {
+    const poly = sliceLoops[i].points;
+    if (poly && poly.length >= 3 && isPointInPolygon(pt, poly)) {
+      insideCount++;
+    }
+  }
+  return (insideCount % 2) === 1;
+}
+
+// Calcula y aplica los vectores de grabado de imagen (slice.engraveLoops) sobre una lámina concreta
+function recomputeSliceImageEngraving(slice) {
+  if (!slice) return;
+  const cfg = getSliceImageEngravingConfig(slice);
+  if (!cfg || !cfg.enabled) {
+    if (slice.hasCustomImageEngraving) {
+      slice.engraveLoops = (slice.baseEngraveLoops || []).slice();
+      slice.fineEdgeLoops = [];
+      slice.hatchPolylines = [];
+      slice.hasCustomImageEngraving = false;
+    }
+    return;
+  }
+
+  const sliceLoops = slice.loops || [];
+  if (sliceLoops.length === 0) {
+    slice.engraveLoops = [];
+    slice.fineEdgeLoops = [];
+    slice.hatchPolylines = [];
+    slice.hasCustomImageEngraving = false;
+    return;
+  }
+
+  const cutBounds = typeof getSliceBounds2D === 'function'
+    ? getSliceBounds2D(slice)
+    : { minX: -40, maxX: 40, minY: -40, maxY: 40, width: 80, height: 80, cx: 0, cy: 0 };
+
+  const targetCX = cutBounds.cx + (Number(cfg.offsetXMM) || 0);
+  const targetCY = cutBounds.cy + (Number(cfg.offsetYMM) || 0);
+  const aspect = Math.max(0.1, Number(cfg.aspectRatio) || 1.0);
+  const fitW = Math.min(cutBounds.width, cutBounds.height * aspect);
+  const fitH = fitW / aspect;
+  const scaleFactor = Math.max(0.05, Math.min(3.0, (Number(cfg.scalePct) || 75) / 100));
+  const targetW = Math.max(2.0, fitW * scaleFactor);
+  const targetH = Math.max(2.0, fitH * scaleFactor);
+
+  const rotRad = ((Number(cfg.rotationDeg) || 0) * Math.PI) / 180;
+  const cosR = Math.cos(rotRad);
+  const sinR = Math.sin(rotRad);
+  const flipSignX = cfg.flipX ? -1 : 1;
+  const flipSignY = cfg.flipY ? -1 : 1;
+
+  const normToSliceMM = (nx, ny) => {
+    const lx = nx * targetW * flipSignX;
+    const ly = ny * targetH * flipSignY;
+    return {
+      x: targetCX + (lx * cosR - ly * sinR),
+      y: targetCY + (lx * sinR + ly * cosR)
+    };
+  };
+
+  const sliceMMToNorm = (mmX, mmY) => {
+    const dx = mmX - targetCX;
+    const dy = mmY - targetCY;
+    const lx = dx * cosR + dy * sinR;
+    const ly = -dx * sinR + dy * cosR;
+    return {
+      nx: (lx * flipSignX) / targetW,
+      ny: (ly * flipSignY) / targetH
+    };
+  };
+
+  // Caso 1: Lazos vectoriales personalizados enviados desde el Editor Vectorial completo (#imageVectorizerModal)
+  if (Array.isArray(cfg.customNormalizedLoops) && cfg.customNormalizedLoops.length > 0) {
+    const outLoops = [];
+    cfg.customNormalizedLoops.forEach((nl) => {
+      if (!nl.points || nl.points.length < 3) return;
+      const mappedPts = nl.points.map((p) => normToSliceMM(p.nx, p.ny));
+      if (cfg.clipToSlice) {
+        const insidePts = mappedPts.filter((pt) => isPointInsideSliceSolid2D(pt, sliceLoops));
+        if (insidePts.length < 3) return;
+        const usePts = insidePts.length === mappedPts.length ? mappedPts : insidePts;
+        const sa = computePolygonSignedArea2D(usePts);
+        if (Math.abs(sa) < 0.04) return;
+        outLoops.push({
+          points: usePts,
+          areaMM2: Math.abs(sa),
+          signedArea: sa,
+          isHole: Boolean(nl.isHole)
+        });
+      } else {
+        const sa = computePolygonSignedArea2D(mappedPts);
+        if (Math.abs(sa) < 0.04) return;
+        outLoops.push({
+          points: mappedPts,
+          areaMM2: Math.abs(sa),
+          signedArea: sa,
+          isHole: Boolean(nl.isHole)
+        });
+      }
+    });
+
+    slice.engraveLoops = outLoops;
+    slice.engraveStyle = cfg.engraveStyle || 'vector_fill';
+    slice.fineEdgeLoops = [];
+    slice.hatchPolylines = slice.engraveStyle === 'vector_hatch'
+      ? generateHatchPolylinesForLoops(outLoops, cutBounds.width, cutBounds.height, 0.8, false)
+      : [];
+    slice.hasCustomImageEngraving = true;
+    return;
+  }
+
+  // Caso 2: Trazado vectorial directo sobre la imagen (sourceCanvas o preset integrado) con recorte exacto al interior de la lámina
+  if (!cfg.sourceCanvas) {
+    cfg.sourceCanvas = createDemoBitmapCanvas(cfg.presetName || 'drawing');
+  }
+  const srcW = cfg.sourceCanvas.width || 240;
+  const srcH = cfg.sourceCanvas.height || 240;
+  const maxRes = 240;
+  const sc = maxRes / Math.max(srcW, srcH);
+  const innerW = Math.max(32, Math.round(srcW * sc));
+  const innerH = Math.max(32, Math.round(srcH * sc));
+  const gridW = innerW + 2;
+  const gridH = innerH + 2;
+  const nGrid = gridW * gridH;
+
+  const workCanvas = document.createElement('canvas');
+  workCanvas.width = innerW;
+  workCanvas.height = innerH;
+  const wCtx = workCanvas.getContext('2d');
+  wCtx.clearRect(0, 0, innerW, innerH);
+  wCtx.drawImage(cfg.sourceCanvas, 0, 0, innerW, innerH);
+  const rgba = wCtx.getImageData(0, 0, innerW, innerH).data;
+  populateProceduralDemoRgbaIfBlank(rgba, innerW, innerH, cfg.presetName || cfg.imageName);
+
+  // Construir máscara del interior sólido de la lámina (slice.loops) en el espacio de celdas (gridW x gridH)
+  let sliceMask = null;
+  let sdfSlice = null;
+  const mmPerPx = Math.max(targetW / innerW, targetH / innerH);
+  const minSliceSdfPx = cfg.clipToSlice
+    ? (Math.max(0, Number(cfg.marginMM) ?? 0.5) / Math.max(0.01, mmPerPx))
+    : -999;
+
+  if (cfg.clipToSlice) {
+    sliceMask = new Uint8Array(nGrid);
+    const gridLoops = sliceLoops.map((l) =>
+      (l.points || []).map((pt) => {
+        const { nx, ny } = sliceMMToNorm(pt.x, pt.y);
+        return {
+          gx: 1 + (nx + 0.5) * Math.max(1, innerW - 1),
+          gy: 1 + (0.5 - ny) * Math.max(1, innerH - 1)
+        };
+      })
+    );
+
+    for (let gy = 1; gy <= innerH; gy++) {
+      const yScan = gy + 0.00013;
+      const crossings = [];
+      for (let li = 0; li < gridLoops.length; li++) {
+        const pts = gridLoops[li];
+        const m = pts.length;
+        if (m < 3) continue;
+        for (let i = 0; i < m; i++) {
+          const p1 = pts[i];
+          const p2 = pts[(i + 1) % m];
+          if ((p1.gy <= yScan && p2.gy > yScan) || (p2.gy <= yScan && p1.gy > yScan)) {
+            const t = (yScan - p1.gy) / (p2.gy - p1.gy);
+            crossings.push(p1.gx + t * (p2.gx - p1.gx));
+          }
+        }
+      }
+      if (crossings.length < 2) continue;
+      crossings.sort((a, b) => a - b);
+      const rowOffset = gy * gridW;
+      for (let k = 0; k + 1 < crossings.length; k += 2) {
+        const x0 = Math.max(1, Math.ceil(crossings[k]));
+        const x1 = Math.min(innerW, Math.floor(crossings[k + 1]));
+        for (let gx = x0; gx <= x1; gx++) {
+          sliceMask[rowOffset + gx] = 1;
+        }
+      }
+    }
+    sdfSlice = computeSignedDistanceField2D(sliceMask, gridW, gridH);
+  }
+
+  let transparentPixels = 0;
+  for (let i = 3; i < rgba.length; i += 4) {
+    if (rgba[i] < 128) transparentPixels++;
+  }
+  const hasTransparency = transparentPixels > (innerW * innerH * 0.012);
+
+  const sampleCorner = (cx, cy) => {
+    const idx = (cy * innerW + cx) * 4;
+    return [rgba[idx], rgba[idx + 1], rgba[idx + 2], rgba[idx + 3]];
+  };
+  const c0 = sampleCorner(0, 0);
+  const c1 = sampleCorner(innerW - 1, 0);
+  const c2 = sampleCorner(0, innerH - 1);
+  const c3 = sampleCorner(innerW - 1, innerH - 1);
+  const bgR = (c0[0] + c1[0] + c2[0] + c3[0]) * 0.25;
+  const bgG = (c0[1] + c1[1] + c2[1] + c3[1]) * 0.25;
+  const bgB = (c0[2] + c1[2] + c2[2] + c3[2]) * 0.25;
+
+  const solidMask = new Uint8Array(nGrid);
+  const lumaGrid = new Float32Array(nGrid);
+  lumaGrid.fill(255);
+
+  for (let y = 0; y < innerH; y++) {
+    for (let x = 0; x < innerW; x++) {
+      const sIdx = (y * innerW + x) * 4;
+      const r = rgba[sIdx];
+      const g = rgba[sIdx + 1];
+      const b = rgba[sIdx + 2];
+      const a = rgba[sIdx + 3];
+      const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+      const gIdx = (y + 1) * gridW + (x + 1);
+      if (a >= 35) {
+        lumaGrid[gIdx] = luma;
+      }
+      let isFg = false;
+      if (hasTransparency) {
+        isFg = a >= 85;
+      } else {
+        const distBg = Math.hypot(r - bgR, g - bgG, b - bgB);
+        isFg = a >= 60 && (distBg > 42 || luma < 220);
+      }
+      if (isFg) solidMask[gIdx] = 1;
+    }
+  }
+
+  let fgCount = 0;
+  for (let i = 0; i < nGrid; i++) fgCount += solidMask[i];
+  if (fgCount < 16) {
+    for (let y = 1; y <= innerH; y++) {
+      for (let x = 1; x <= innerW; x++) {
+        solidMask[y * gridW + x] = 1;
+      }
+    }
+  }
+
+  const sdfImgSolid = computeSignedDistanceField2D(solidMask, gridW, gridH);
+  const thr = Math.max(10, Math.min(245, Number(cfg.threshold) || 145));
+  const inv = Boolean(cfg.invert);
+  const detectMode = cfg.detectMode || 'smart_drawing';
+
+  const radFine = Math.max(3, Math.round(Math.min(gridW, gridH) * 0.018));
+  const radMed = Math.max(6, Math.round(Math.min(gridW, gridH) * 0.045));
+  const localMeanFine = computeLocalMeanFieldIntegral(lumaGrid, gridW, gridH, radFine);
+  const localMeanMed = computeLocalMeanFieldIntegral(lumaGrid, gridW, gridH, radMed);
+
+  const rawEngraveField = new Float32Array(nGrid);
+  rawEngraveField.fill(-80);
+
+  for (let i = 0; i < nGrid; i++) {
+    if (!solidMask[i] || sdfImgSolid[i] < 0.4) {
+      rawEngraveField[i] = -60;
+      continue;
+    }
+    if (cfg.clipToSlice && (!sliceMask[i] || sdfSlice[i] < minSliceSdfPx)) {
+      rawEngraveField[i] = -60;
+      continue;
+    }
+
+    const luma = lumaGrid[i];
+    const mFine = localMeanFine[i];
+    const mMed = localMeanMed[i];
+    const localDiffFine = inv ? (luma - mFine) : (mFine - luma);
+    const localDiffMed = inv ? (luma - mMed) : (mMed - luma);
+    const localStrokeScore = Math.max(localDiffFine * 1.35, localDiffMed) - 12.5;
+    const globalScore = inv ? (luma - thr) : (thr - luma);
+
+    if (detectMode === 'line_art') {
+      const veryDarkInk = inv ? (luma - Math.max(210, thr + 45)) : (Math.min(58, thr * 0.42) - luma);
+      rawEngraveField[i] = Math.max(localStrokeScore * 2.1, veryDarkInk);
+    } else if (detectMode === 'global_threshold') {
+      rawEngraveField[i] = globalScore;
+    } else {
+      rawEngraveField[i] = Math.max(globalScore, localStrokeScore * 2.1);
+    }
+  }
+
+  const engraveField = smoothScalarField3x3(rawEngraveField, gridW, gridH);
+  const rawPxLoops = traceIsoContoursMarchingSquares(engraveField, gridW, gridH, -2.0, true);
+
+  const invInnerW = 1 / Math.max(1, innerW - 1);
+  const invInnerH = 1 / Math.max(1, innerH - 1);
+  const minAreaMM2 = Math.max(0.05, (targetW * targetH) * 0.00004);
+  const tolMM = Math.max(0.04, Math.min(targetW, targetH) * 0.0012);
+
+  const finalLoops = [];
+  rawPxLoops.forEach((rawPts) => {
+    const mmPts = rawPts.map((p) => {
+      const nx = (p.x - 1) * invInnerW - 0.5;
+      const ny = 0.5 - (p.y - 1) * invInnerH;
+      return normToSliceMM(nx, ny);
+    });
+    const rawArea = Math.abs(computePolygonSignedArea2D(mmPts));
+    if (rawArea < minAreaMM2) return;
+
+    let cleanPts = simplifyClosedPolygonRDP(mmPts, tolMM);
+    cleanPts = smoothClosedPolygonChaikin(cleanPts, 1);
+    if (cfg.clipToSlice) {
+      cleanPts = cleanPts.filter((pt) => isPointInsideSliceSolid2D(pt, sliceLoops));
+    }
+    if (cleanPts.length < 3) return;
+    const signedA = computePolygonSignedArea2D(cleanPts);
+    const finalArea = Math.abs(signedA);
+    if (finalArea < minAreaMM2) return;
+
+    finalLoops.push({
+      points: cleanPts,
+      areaMM2: finalArea,
+      signedArea: signedA,
+      isHole: signedA < 0
+    });
+  });
+
+  finalLoops.sort((a, b) => b.areaMM2 - a.areaMM2);
+  for (let i = 0; i < finalLoops.length; i++) {
+    let depth = 0;
+    const testPt = finalLoops[i].points[0];
+    for (let j = 0; j < i; j++) {
+      if (isPointInPolygon(testPt, finalLoops[j].points)) {
+        depth++;
+      }
+    }
+    finalLoops[i].isHole = (depth % 2) === 1;
+  }
+
+  slice.engraveLoops = finalLoops;
+  slice.engraveStyle = cfg.engraveStyle || 'vector_fill';
+  slice.fineEdgeLoops = [];
+  slice.hatchPolylines = slice.engraveStyle === 'vector_hatch'
+    ? generateHatchPolylinesForLoops(finalLoops, cutBounds.width, cutBounds.height, 0.8, false)
+    : [];
+  slice.hasCustomImageEngraving = true;
+}
+
+function reapplyAllSliceImageEngravings() {
+  if (!state.slices || state.slices.length === 0) return;
+  state.slices.forEach((slice) => {
+    const cfg = getSliceImageEngravingConfig(slice);
+    if ((cfg && cfg.enabled) || slice.hasCustomImageEngraving) {
+      recomputeSliceImageEngraving(slice);
+    }
+  });
+}
+
+function refreshActiveSliceEngravingAndRender() {
+  const slice = state.slices && state.slices[state.activeSliceIndex];
+  if (slice) {
+    recomputeSliceImageEngraving(slice);
+  }
+  if (typeof build3DSlicesMesh === 'function') build3DSlicesMesh();
+  if (state.nestingEnabled && typeof recomputeBoardNesting === 'function') {
+    recomputeBoardNesting();
+  }
+  if (typeof renderSliceStripUI === 'function') renderSliceStripUI();
+  if (typeof update2DInspectorHeader === 'function') update2DInspectorHeader();
+  if (typeof render2DSlice === 'function') render2DSlice();
+  syncSliceImageEngraveUI();
+}
+
+function syncSliceImageEngraveUI() {
+  const slice = state.slices && state.slices[state.activeSliceIndex];
+  const codeLabel = slice
+    ? (slice.puzzleCode ? ('Costilla ' + slice.puzzleCode) : ('Lasca #' + (slice.index + 1)))
+    : 'Lámina #1';
+  const shortCode = slice
+    ? (slice.puzzleCode ? slice.puzzleCode : ('#' + (slice.index + 1)))
+    : '#1';
+
+  const vecBadge = document.getElementById('vecTargetSliceCodeBadge');
+  if (vecBadge) vecBadge.textContent = shortCode;
+
+  const targetBadge = document.getElementById('sliceEngraveTargetBadge');
+  if (targetBadge) targetBadge.textContent = codeLabel;
+
+  const sidebarTargetBadge = document.getElementById('sidebarSliceEngraveTargetBadge');
+  if (sidebarTargetBadge) sidebarTargetBadge.textContent = shortCode;
+
+  const cfg = slice ? getSliceImageEngravingConfig(slice) : null;
+  const hasEngrave = Boolean(cfg && cfg.enabled && slice && slice.engraveLoops && slice.engraveLoops.length > 0);
+
+  const panel = document.getElementById('sliceImageEngravePanel');
+  if (panel) {
+    panel.classList.toggle('hidden', !state.sliceEngravePanelOpen);
+  }
+
+  const inspBtn = document.getElementById('btnInspectorEngraveSliceImg');
+  if (inspBtn) {
+    if (hasEngrave) {
+      inspBtn.textContent = '🖼️ Imagen Grabada (' + shortCode + ')';
+      inspBtn.className = 'text-[11px] px-2.5 py-1 rounded-lg bg-emerald-500/25 hover:bg-emerald-500/35 text-emerald-300 border border-emerald-500/50 font-bold transition';
+    } else if (state.sliceEngravePanelOpen) {
+      inspBtn.textContent = '🖼️ Grabar Imagen: ON';
+      inspBtn.className = 'text-[11px] px-2.5 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold transition';
+    } else {
+      inspBtn.textContent = '🖼️ Grabar Imagen';
+      inspBtn.className = 'text-[11px] px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-emerald-500/35 font-semibold transition';
+    }
+  }
+
+  const statusBadge = document.getElementById('sliceEngraveStatusBadge');
+  if (statusBadge) {
+    if (hasEngrave) {
+      statusBadge.textContent = (cfg.imageName || 'Imagen') + ' · ' + slice.engraveLoops.length + ' trazos (#008800)';
+      statusBadge.className = 'text-[10px] font-mono text-emerald-300 bg-emerald-950/60 border border-emerald-500/40 px-2 py-0.5 rounded';
+    } else {
+      statusBadge.textContent = 'Sin imagen grabada en esta lámina';
+      statusBadge.className = 'text-[10px] font-mono text-slate-400 bg-slate-950 border border-slate-800 px-2 py-0.5 rounded';
+    }
+  }
+
+  const clearBtn = document.getElementById('btnClearSliceEngrave');
+  if (clearBtn) {
+    clearBtn.classList.toggle('hidden', !(cfg && cfg.enabled));
+  }
+
+  const controlsRow = document.getElementById('sliceEngraveControlsRow');
+  if (controlsRow) {
+    controlsRow.classList.toggle('opacity-45', !(cfg && cfg.enabled));
+  }
+
+  const effCfg = cfg || {
+    scalePct: 75,
+    offsetXMM: 0,
+    offsetYMM: 0,
+    rotationDeg: 0,
+    flipX: false,
+    detectMode: 'smart_drawing',
+    threshold: 145,
+    invert: false,
+    clipToSlice: true
+  };
+
+  const setVal = (id, v) => {
+    const el = document.getElementById(id);
+    if (el) el.value = v;
+  };
+  const setChk = (id, v) => {
+    const el = document.getElementById(id);
+    if (el) el.checked = Boolean(v);
+  };
+
+  setVal('sliceEngraveScaleInput', Math.round(Number(effCfg.scalePct) || 75));
+  setVal('sliceEngraveOffsetXInput', Number(effCfg.offsetXMM || 0).toFixed(1));
+  setVal('sliceEngraveOffsetYInput', Number(effCfg.offsetYMM || 0).toFixed(1));
+  setVal('sliceEngraveModeSelect', effCfg.detectMode || 'smart_drawing');
+  setVal('sliceEngraveThresholdSlider', Math.round(Number(effCfg.threshold) || 145));
+  setChk('sliceEngraveInvertCheck', effCfg.invert);
+  setChk('sliceEngraveClipCheck', effCfg.clipToSlice !== false);
+
+  const flipBtn = document.getElementById('btnSliceEngraveFlipX');
+  if (flipBtn) {
+    flipBtn.className = effCfg.flipX
+      ? 'px-1.5 py-0.5 rounded bg-emerald-500/25 border border-emerald-500/50 text-[10px] text-emerald-300 font-bold transition'
+      : 'px-1.5 py-0.5 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[10px] text-slate-300 transition';
+  }
+}
+
+function toggleSliceImageEngravePanel(forceState) {
+  if (typeof forceState === 'boolean') {
+    state.sliceEngravePanelOpen = forceState;
+  } else {
+    state.sliceEngravePanelOpen = !state.sliceEngravePanelOpen;
+  }
+  syncSliceImageEngraveUI();
+}
+
+function applyDemoImageEngravingToSelectedSlice(presetName = 'drawing') {
+  const slice = state.slices && state.slices[state.activeSliceIndex];
+  if (!slice) return;
+  const cfg = ensureSliceImageEngravingConfig(slice);
+  if (!cfg) return;
+
+  const demoCanvas = createDemoBitmapCanvas(presetName);
+  const namesMap = {
+    drawing: 'Ilustracion_Buho',
+    crest: 'Escudo_Canarias',
+    medallion: 'Mandala_Solar',
+    badge: 'Insignia_Layer3D'
+  };
+  cfg.enabled = true;
+  cfg.presetName = presetName;
+  cfg.imageName = namesMap[presetName] || 'Ilustracion_Demo';
+  cfg.sourceCanvas = demoCanvas;
+  cfg.aspectRatio = (demoCanvas.width || 480) / Math.max(1, demoCanvas.height || 480);
+  cfg.customNormalizedLoops = null;
+  state.sliceEngravePanelOpen = true;
+
+  refreshActiveSliceEngravingAndRender();
+}
+
+function handleSliceImageEngraveFile(file) {
+  if (!file) return;
+  const slice = state.slices && state.slices[state.activeSliceIndex];
+  if (!slice) return;
+  const cfg = ensureSliceImageEngravingConfig(slice);
+  if (!cfg) return;
+
+  const cleanName = (file.name || 'Imagen_Grabado').replace(/\.(png|bmp|jpg|jpeg|webp|gif)$/i, '') || 'Imagen_Grabado';
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = new Image();
+    img.onload = () => {
+      const maxDim = 1000;
+      let w = img.naturalWidth || img.width || 256;
+      let h = img.naturalHeight || img.height || 256;
+      if (w > maxDim || h > maxDim) {
+        const sc = maxDim / Math.max(w, h);
+        w = Math.max(16, Math.round(w * sc));
+        h = Math.max(16, Math.round(h * sc));
+      }
+      const c = document.createElement('canvas');
+      c.width = w;
+      c.height = h;
+      const ctx = c.getContext('2d');
+      ctx.clearRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+
+      cfg.enabled = true;
+      cfg.imageName = cleanName;
+      cfg.presetName = null;
+      cfg.sourceCanvas = c;
+      cfg.aspectRatio = w / Math.max(1, h);
+      cfg.threshold = computeOtsuThresholdFromCanvas(c);
+      cfg.customNormalizedLoops = null;
+      state.sliceEngravePanelOpen = true;
+
+      refreshActiveSliceEngravingAndRender();
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function onSelectedSliceEngraveParamsChange() {
+  const slice = state.slices && state.slices[state.activeSliceIndex];
+  if (!slice) return;
+  const cfg = ensureSliceImageEngravingConfig(slice);
+  if (!cfg) return;
+  if (!cfg.enabled) {
+    // Si el usuario mueve un control sin haber cargado imagen aún, cargamos la ilustración por defecto
+    applyDemoImageEngravingToSelectedSlice(cfg.presetName || 'drawing');
+    return;
+  }
+
+  const scaleEl = document.getElementById('sliceEngraveScaleInput');
+  const offXEl = document.getElementById('sliceEngraveOffsetXInput');
+  const offYEl = document.getElementById('sliceEngraveOffsetYInput');
+  const modeEl = document.getElementById('sliceEngraveModeSelect');
+  const thrEl = document.getElementById('sliceEngraveThresholdSlider');
+  const invEl = document.getElementById('sliceEngraveInvertCheck');
+  const clipEl = document.getElementById('sliceEngraveClipCheck');
+
+  if (scaleEl) cfg.scalePct = Math.max(10, Math.min(250, parseFloat(scaleEl.value) || 75));
+  if (offXEl) cfg.offsetXMM = parseFloat(offXEl.value) || 0;
+  if (offYEl) cfg.offsetYMM = parseFloat(offYEl.value) || 0;
+
+  if (modeEl && modeEl.value !== cfg.detectMode) {
+    cfg.detectMode = modeEl.value;
+    cfg.customNormalizedLoops = null;
+  }
+  if (thrEl) {
+    const newThr = Math.max(15, Math.min(245, parseInt(thrEl.value, 10) || 145));
+    if (newThr !== cfg.threshold) {
+      cfg.threshold = newThr;
+      cfg.customNormalizedLoops = null;
+    }
+  }
+  if (invEl && Boolean(invEl.checked) !== cfg.invert) {
+    cfg.invert = Boolean(invEl.checked);
+    cfg.customNormalizedLoops = null;
+  }
+  if (clipEl) cfg.clipToSlice = Boolean(clipEl.checked);
+
+  refreshActiveSliceEngravingAndRender();
+}
+
+function stepSelectedSliceEngraveScale(deltaPct) {
+  const slice = state.slices && state.slices[state.activeSliceIndex];
+  if (!slice) return;
+  const cfg = ensureSliceImageEngravingConfig(slice);
+  if (!cfg) return;
+  if (!cfg.enabled) {
+    applyDemoImageEngravingToSelectedSlice('drawing');
+  }
+  cfg.scalePct = Math.max(10, Math.min(250, Math.round((Number(cfg.scalePct) || 75) + (Number(deltaPct) || 0))));
+  refreshActiveSliceEngravingAndRender();
+}
+
+function rotateSelectedSliceEngraving(deltaDeg = 90) {
+  const slice = state.slices && state.slices[state.activeSliceIndex];
+  if (!slice) return;
+  const cfg = ensureSliceImageEngravingConfig(slice);
+  if (!cfg) return;
+  if (!cfg.enabled) {
+    applyDemoImageEngravingToSelectedSlice('drawing');
+  }
+  cfg.rotationDeg = ((Number(cfg.rotationDeg) || 0) + (Number(deltaDeg) || 90)) % 360;
+  refreshActiveSliceEngravingAndRender();
+}
+
+function toggleSelectedSliceEngravingFlipX() {
+  const slice = state.slices && state.slices[state.activeSliceIndex];
+  if (!slice) return;
+  const cfg = ensureSliceImageEngravingConfig(slice);
+  if (!cfg) return;
+  if (!cfg.enabled) {
+    applyDemoImageEngravingToSelectedSlice('drawing');
+  }
+  cfg.flipX = !cfg.flipX;
+  refreshActiveSliceEngravingAndRender();
+}
+
+function resetSelectedSliceEngraveTransform() {
+  const slice = state.slices && state.slices[state.activeSliceIndex];
+  if (!slice) return;
+  const cfg = getSliceImageEngravingConfig(slice);
+  if (!cfg) return;
+  cfg.scalePct = 75;
+  cfg.offsetXMM = 0;
+  cfg.offsetYMM = 0;
+  cfg.rotationDeg = 0;
+  cfg.flipX = false;
+  cfg.flipY = false;
+  refreshActiveSliceEngravingAndRender();
+}
+
+function clearSelectedSliceImageEngraving() {
+  const slice = state.slices && state.slices[state.activeSliceIndex];
+  if (!slice) return;
+  const key = getSliceEngravingKey(slice);
+  if (key && state.sliceImageEngravings) {
+    delete state.sliceImageEngravings[key];
+  }
+  slice.engraveLoops = (slice.baseEngraveLoops || []).slice();
+  slice.fineEdgeLoops = [];
+  slice.hatchPolylines = [];
+  slice.hasCustomImageEngraving = false;
+
+  if (typeof build3DSlicesMesh === 'function') build3DSlicesMesh();
+  if (state.nestingEnabled && typeof recomputeBoardNesting === 'function') {
+    recomputeBoardNesting();
+  }
+  if (typeof renderSliceStripUI === 'function') renderSliceStripUI();
+  if (typeof update2DInspectorHeader === 'function') update2DInspectorHeader();
+  if (typeof render2DSlice === 'function') render2DSlice();
+  syncSliceImageEngraveUI();
+}
+
+function openVectorizerForSelectedSlice() {
+  const slice = state.slices && state.slices[state.activeSliceIndex];
+  const cfg = slice ? getSliceImageEngravingConfig(slice) : null;
+  if (cfg && cfg.sourceCanvas) {
+    vec2dState.sourceCanvas = cfg.sourceCanvas;
+    vec2dState.sourceWidth = cfg.sourceCanvas.width;
+    vec2dState.sourceHeight = cfg.sourceCanvas.height;
+    vec2dState.aspectRatio = cfg.aspectRatio || 1.0;
+    vec2dState.imageName = cfg.imageName || 'Imagen_Lamina';
+    openImageVectorizerModal();
+  } else {
+    openImageVectorizerModal('drawing');
+  }
+}
+
+// Aplica los vectores de grabado actuales del modal #imageVectorizerModal (incluyendo textos y ediciones manuales) a la lámina seleccionada
+function applyVectorizedImageToSelectedSlice() {
+  const slice = state.slices && state.slices[state.activeSliceIndex];
+  if (!slice) return;
+  if (!vec2dState.sourceCanvas) {
+    loadVectorizerDemoPreset('drawing');
+  }
+  const res = vec2dState.result;
+  const cfg = ensureSliceImageEngravingConfig(slice);
+  if (!cfg) return;
+
+  const spanW = Math.max(5, Number(res.totalWidthMM || vec2dState.widthMM) || 100);
+  const spanH = Math.max(5, Number(res.totalHeightMM || vec2dState.heightMM) || 100);
+
+  const combinedLoops = (res.engraveLoops || [])
+    .concat(res.frameEngraveLoops || [])
+    .concat(vec2dState.detectFineEdges ? (res.fineEdgeLoops || []) : []);
+
+  cfg.enabled = true;
+  cfg.imageName = vec2dState.imageName || 'Grabado_Vectorial';
+  cfg.sourceCanvas = vec2dState.sourceCanvas;
+  cfg.aspectRatio = spanW / Math.max(1, spanH);
+  cfg.detectMode = vec2dState.engraveDetectMode || 'smart_drawing';
+  cfg.engraveStyle = vec2dState.engraveStyle === 'hybrid_raster' ? 'vector_fill' : (vec2dState.engraveStyle || 'vector_fill');
+  cfg.threshold = vec2dState.engraveThreshold || 145;
+  cfg.invert = Boolean(vec2dState.invertEngrave);
+
+  if (combinedLoops.length > 0) {
+    cfg.customNormalizedLoops = combinedLoops.map((l) => ({
+      points: (l.points || []).map((p) => ({
+        nx: p.x / spanW,
+        ny: p.y / spanH
+      })),
+      isHole: Boolean(l.isHole)
+    }));
+  } else {
+    cfg.customNormalizedLoops = null;
+  }
+
+  state.sliceEngravePanelOpen = true;
+  refreshActiveSliceEngravingAndRender();
+  closeImageVectorizerModal();
+}
+
 if (typeof window !== 'undefined') {
   window.openImageVectorizerModal = openImageVectorizerModal;
   window.closeImageVectorizerModal = closeImageVectorizerModal;
@@ -3786,6 +4609,23 @@ if (typeof window !== 'undefined') {
   window.vectorizerEditorActionOnSelected = vectorizerEditorActionOnSelected;
   window.onVectorizerEditorSettingChange = onVectorizerEditorSettingChange;
   window.insertVectorizerEditorTextAt = insertVectorizerEditorTextAt;
+  window.populateProceduralDemoRgbaIfBlank = populateProceduralDemoRgbaIfBlank;
+  window.getSliceEngravingKey = getSliceEngravingKey;
+  window.getSliceImageEngravingConfig = getSliceImageEngravingConfig;
+  window.recomputeSliceImageEngraving = recomputeSliceImageEngraving;
+  window.reapplyAllSliceImageEngravings = reapplyAllSliceImageEngravings;
+  window.syncSliceImageEngraveUI = syncSliceImageEngraveUI;
+  window.toggleSliceImageEngravePanel = toggleSliceImageEngravePanel;
+  window.applyDemoImageEngravingToSelectedSlice = applyDemoImageEngravingToSelectedSlice;
+  window.handleSliceImageEngraveFile = handleSliceImageEngraveFile;
+  window.onSelectedSliceEngraveParamsChange = onSelectedSliceEngraveParamsChange;
+  window.stepSelectedSliceEngraveScale = stepSelectedSliceEngraveScale;
+  window.rotateSelectedSliceEngraving = rotateSelectedSliceEngraving;
+  window.toggleSelectedSliceEngravingFlipX = toggleSelectedSliceEngravingFlipX;
+  window.resetSelectedSliceEngraveTransform = resetSelectedSliceEngraveTransform;
+  window.clearSelectedSliceImageEngraving = clearSelectedSliceImageEngraving;
+  window.openVectorizerForSelectedSlice = openVectorizerForSelectedSlice;
+  window.applyVectorizedImageToSelectedSlice = applyVectorizedImageToSelectedSlice;
 
   window.addEventListener('DOMContentLoaded', () => {
     const fileInputImg = document.getElementById('fileInputImage2D');
@@ -3793,6 +4633,14 @@ if (typeof window !== 'undefined') {
       fileInputImg.addEventListener('change', (e) => {
         const f = e.target.files && e.target.files[0];
         if (f) handleImageVectorizerFile(f);
+        e.target.value = '';
+      });
+    }
+    const fileInputSliceImg = document.getElementById('fileInputSliceEngraveImg');
+    if (fileInputSliceImg) {
+      fileInputSliceImg.addEventListener('change', (e) => {
+        const f = e.target.files && e.target.files[0];
+        if (f) handleSliceImageEngraveFile(f);
         e.target.value = '';
       });
     }

@@ -1222,7 +1222,10 @@ function renderSliceStripUI() {
     const hiddenTag = isHiddenInView
       ? '<span class="ml-0.5 text-[9px]" title="Oculta en la vista">🙈</span>'
       : '';
-    topRow.innerHTML = '<span class="font-bold ' + codeColor + ' flex items-center">' + codeLabel + capTag + hiddenTag + '</span>';
+    const engraveTag = (slice.hasCustomImageEngraving || (slice.engraveLoops && slice.engraveLoops.length > 0))
+      ? '<span class="ml-0.5 text-[9px]" title="Contiene imagen grabada">🖼️</span>'
+      : '';
+    topRow.innerHTML = '<span class="font-bold ' + codeColor + ' flex items-center">' + codeLabel + capTag + hiddenTag + engraveTag + '</span>';
 
     const chk = document.createElement('input');
     chk.type = 'checkbox';

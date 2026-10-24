@@ -1554,6 +1554,10 @@ function applyModelSplitToExistingSlices(triggerRender = true) {
 
   syncSplitModelUI();
 
+  if (typeof reapplyAllSliceImageEngravings === 'function') {
+    reapplyAllSliceImageEngravings();
+  }
+
   if (triggerRender) {
     build3DSlicesMesh();
     if (state.nestingEnabled) {
@@ -2219,9 +2223,59 @@ function build3DSlicesMesh() {
   if (!sliceGroup3D || typeof THREE === 'undefined') return;
   while (sliceGroup3D.children.length > 0) {
     const m = sliceGroup3D.children.pop();
+    if (m.children && m.children.length > 0) {
+      m.children.forEach((ch) => {
+        if (ch.geometry) ch.geometry.dispose();
+        if (ch.material) ch.material.dispose();
+      });
+    }
     if (m.geometry) m.geometry.dispose();
     if (m.material) m.material.dispose();
   }
+
+  const attachSliceEngraveLines3D = (targetMesh, slice, ax, extrudeDepth) => {
+    if (
+      !targetMesh ||
+      !slice ||
+      !slice.engraveLoops ||
+      slice.engraveLoops.length === 0 ||
+      typeof THREE.LineSegments !== 'function' ||
+      typeof THREE.LineBasicMaterial !== 'function'
+    ) {
+      return;
+    }
+    const zFront = extrudeDepth * 0.5 + 0.08;
+    const zBack = -extrudeDepth * 0.5 - 0.08;
+    const coords = [];
+    slice.engraveLoops.forEach((el) => {
+      const pts = el.points;
+      if (!pts || pts.length < 2) return;
+      for (let i = 0, n = pts.length; i < n; i++) {
+        const p1 = pts[i];
+        const p2 = pts[(i + 1) % n];
+        coords.push(p1.x, p1.y, zFront, p2.x, p2.y, zFront);
+        coords.push(p1.x, p1.y, zBack, p2.x, p2.y, zBack);
+      }
+    });
+    if (coords.length === 0) return;
+    const lGeom = new THREE.BufferGeometry();
+    lGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(coords), 3));
+    if (ax === 'x') {
+      lGeom.rotateY(Math.PI / 2);
+      lGeom.rotateZ(Math.PI / 2);
+    } else if (ax === 'y') {
+      lGeom.rotateX(Math.PI / 2);
+    }
+    const lMat = new THREE.LineBasicMaterial({
+      color: 0x34d399,
+      transparent: true,
+      opacity: slice.selected ? 0.95 : 0.25
+    });
+    const linesMesh = new THREE.LineSegments(lGeom, lMat);
+    if (typeof targetMesh.add === 'function') {
+      targetMesh.add(linesMesh);
+    }
+  };
 
   const isPuzzle = state.constructionMode === 'puzzle3d';
   const extrudeDepth = isPuzzle
@@ -2372,6 +2426,7 @@ function build3DSlicesMesh() {
 
     const mesh = new THREE.Mesh(geom, mat);
     mesh.userData = { sliceIndex: idx, baseColor: baseCol.getHex() };
+    attachSliceEngraveLines3D(mesh, slice, ax, extrudeDepth);
     sliceGroup3D.add(mesh);
   });
 

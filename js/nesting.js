@@ -651,9 +651,14 @@ function extractIslandsFromSlices(targetSlices) {
       const islandRods = sliceRods.filter((r) => isPointInIslandMaterial(r, outer.points, islandHoles));
 
       // Vectores de grabado u orla de marco que caen dentro de esta isla
-      const islandEngraveLoops = (slice.engraveLoops || []).filter((el) =>
-        el && el.points && el.points.length >= 3 && isPointInIslandMaterial(el.points[0], outer.points, islandHoles)
-      );
+      const islandEngraveLoops = (slice.engraveLoops || []).filter((el) => {
+        if (!el || !el.points || el.points.length < 3) return false;
+        if (isPointInIslandMaterial(el.points[0], outer.points, islandHoles)) return true;
+        const midPt = el.points[Math.floor(el.points.length / 2)];
+        if (midPt && isPointInIslandMaterial(midPt, outer.points, islandHoles)) return true;
+        if (outers.length === 1 && isPointInPolygon(el.points[0], outer.points)) return true;
+        return false;
+      });
 
       // Polilíneas de guía superior (#N+1) e inferior (#N-1) recortadas a esta isla
       const upperPolys = nextSlice ? getGuidePolylinesForIsland(outer.points, islandHoles, nextSlice) : [];
@@ -1366,13 +1371,19 @@ function update2DInspectorHeader() {
     const splitStr = (state.splitModelEnabled && slice.splitGrid && slice.splitGrid.totalParts > 1)
       ? (' | 🧩 Conjuntos: ' + slice.splitGrid.cols + '×' + slice.splitGrid.rows + ' (' + (slice.splitGrid.partW / f).toFixed(dec) + '×' + (slice.splitGrid.partH / f).toFixed(dec) + ' ' + state.unit + ')')
       : '';
+    const engraveStr = (slice.engraveLoops && slice.engraveLoops.length > 0)
+      ? (' | 🖼️ Grabado: ' + slice.engraveLoops.length + ' trazos')
+      : '';
     document.getElementById('slice2DStats').textContent =
       'Corte: ' + (b.width / f).toFixed(dec) + ' × ' + (b.height / f).toFixed(dec) + ' ' + state.unit +
       ' | Doc SVG (Pieza): ' + (docB.width / f).toFixed(dec) + ' × ' + (docB.height / f).toFixed(dec) + ' ' + state.unit +
-      ' | Contornos: ' + slice.loops.length + slotsStr + splitStr;
+      ' | Contornos: ' + slice.loops.length + slotsStr + splitStr + engraveStr;
   }
   if (typeof syncPuzzleSelectedRibUI === 'function') {
     syncPuzzleSelectedRibUI();
+  }
+  if (typeof syncSliceImageEngraveUI === 'function') {
+    syncSliceImageEngraveUI();
   }
 }
 
