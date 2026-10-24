@@ -62,6 +62,12 @@ function getPuzzleSlice2DAxes(sliceAxis, otherAxis) {
 
 function setConstructionMode(mode) {
   state.constructionMode = mode === 'puzzle3d' ? 'puzzle3d' : 'stacked';
+  if (state.constructionMode === 'puzzle3d') {
+    // En el modo Puzzle 3D, activar por defecto Eliminar Islas Pequeñas y Rellenar Huecos Internos
+    state.filterSmallIslands = true;
+    state.fillInternalHoles = true;
+    updateFilteredIslandsUI();
+  }
   syncConstructionModeUI();
   rebuildGhostAndSlices();
 }
