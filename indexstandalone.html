@@ -8540,9 +8540,9 @@ function generateIllustratedAssemblyGuideHTML() {
     '</div>';
 
   // Construir paginación DIN A4 a doble cara (Anverso Impar = Lomo Izquierdo / Reverso Par = Lomo Derecho)
-  // minimizando el número total de páginas sin perder legibilidad
-  const stepsOnFirstPage = state.nestedBoards.length <= 2 ? 2 : (state.nestedBoards.length <= 4 ? 1 : 0);
-  const stepsPerFullA4Page = 4;
+  // en modo de 2 columnas por defecto (6 pasos por cara A4 = 12 pasos por hoja física a doble cara)
+  const stepsOnFirstPage = state.nestedBoards.length <= 2 ? 4 : (state.nestedBoards.length <= 4 ? 2 : 0);
+  const stepsPerFullA4Page = 6;
   const pagesContent = [];
 
   // Página 1 (Anverso Impar #1): Cabecera + Resumen + Tableros + Primeros pasos que caben en la 1ª cara A4
@@ -8551,7 +8551,7 @@ function generateIllustratedAssemblyGuideHTML() {
     '<div class="doc-header-block">' +
       '<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;">' +
         '<h1>Guía de Corte y Montaje: ' + escapeGuideXml(state.modelName) + '</h1>' +
-        '<span style="font-size:10.5px;color:#475569;font-weight:600;">Formato DIN A4 Dúplex Encuadernable · Escala Real</span>' +
+        '<span style="font-size:10.5px;color:#475569;font-weight:600;">Formato DIN A4 Dúplex Encuadernable · 2 Columnas</span>' +
       '</div>' +
       '<div class="meta-grid">' +
         '<div class="meta-item"><strong>Dimensiones Pieza</strong>' + state.dimsMM.x.toFixed(1) + ' × ' + state.dimsMM.y.toFixed(1) + ' × ' + state.dimsMM.z.toFixed(1) + ' mm</div>' +
@@ -8572,7 +8572,7 @@ function generateIllustratedAssemblyGuideHTML() {
   }
   pagesContent.push(firstPageHtml);
 
-  // Páginas siguientes: empaquetar de 4 en 4 pasos por cara DIN A4
+  // Páginas siguientes: empaquetar de 6 en 6 pasos (3 filas × 2 columnas) por cara DIN A4
   for (let i = stepsOnFirstPage; i < stepCardsList.length; i += stepsPerFullA4Page) {
     const chunk = stepCardsList.slice(i, i + stepsPerFullA4Page);
     let pageChunkHtml = '';
@@ -8621,7 +8621,7 @@ function generateIllustratedAssemblyGuideHTML() {
             footerCredits +
           '</div>' +
           '<div class="running-footer">' +
-            '<span>LayerStudio 3D — Guía Técnica de Taller (DIN A4 Dúplex)</span>' +
+            '<span>LayerStudio 3D — Guía Técnica de Taller (DIN A4 Dúplex · 2 Columnas)</span>' +
             '<span><strong>Página ' + pageNum + ' de ' + totalA4Pages + '</strong> (Hoja física ' + Math.ceil(pageNum / 2) + ' de ' + totalPhysicalSheets + ')</span>' +
           '</div>' +
         '</div>' +
@@ -8702,7 +8702,7 @@ function generateIllustratedAssemblyGuideHTML() {
     '  }',
     '</style>',
     '</head>',
-    '<body>',
+    '<body class="grid-2col-steps">',
     '<div class="container">',
     '  <div class="no-print-bar">',
     '    <div>',
@@ -8710,8 +8710,8 @@ function generateIllustratedAssemblyGuideHTML() {
     '      <div style="font-size:11px;color:#94a3b8;">📄 <strong>' + totalA4Pages + ' páginas A4</strong> (' + totalPhysicalSheets + ' hoja(s) física(s) imprimiendo por ambas caras · Volteo por borde largo)</div>',
     '    </div>',
     '    <div class="no-print-controls">',
-    '      <button type="button" id="btnCol1" class="btn-mode active" onclick="document.body.classList.remove(\'grid-2col-steps\');document.getElementById(\'btnCol1\').classList.add(\'active\');document.getElementById(\'btnCol2\').classList.remove(\'active\');">📘 4 Pasos/Pág (Legible Óptimo)</button>',
-    '      <button type="button" id="btnCol2" class="btn-mode" onclick="document.body.classList.add(\'grid-2col-steps\');document.getElementById(\'btnCol2\').classList.add(\'active\');document.getElementById(\'btnCol1\').classList.remove(\'active\');">📗 2 Columnas (Ultra-Compacto)</button>',
+    '      <button type="button" id="btnCol2" class="btn-mode active" onclick="document.body.classList.add(\'grid-2col-steps\');document.getElementById(\'btnCol2\').classList.add(\'active\');document.getElementById(\'btnCol1\').classList.remove(\'active\');">📗 2 Columnas (6 Pasos/Pág · Por Defecto)</button>',
+    '      <button type="button" id="btnCol1" class="btn-mode" onclick="document.body.classList.remove(\'grid-2col-steps\');document.getElementById(\'btnCol1\').classList.add(\'active\');document.getElementById(\'btnCol2\').classList.remove(\'active\');">📘 1 Columna (Amplio)</button>',
     '      <button type="button" class="btn-mode" onclick="document.body.classList.toggle(\'hide-spine-marks\');">📏 Mostrar/Ocultar Guía de Lomo</button>',
     '      <button type="button" class="btn-print" onclick="window.print()">🖨️ Imprimir DIN A4 Doble Cara / PDF</button>',
     '    </div>',
