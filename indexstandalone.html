@@ -11828,11 +11828,12 @@ async function executeZipExport() {
 }
 
 // =========================================================================
-// IMPORTAR / EXPORTAR PROYECTO (.LASCA / .JSON)
+// IMPORTAR / EXPORTAR PROYECTO (.LASCA / .JSON) E INTEGRACIÓN OKF
 // =========================================================================
 function exportProjectFile() {
   const payload = {
-    version: '2.7',
+    okfVersion: '1.3.0',
+    version: '3.0.6',
     modelName: state.modelName,
     unit: state.unit,
     constructionMode: state.constructionMode,
@@ -11846,6 +11847,13 @@ function exportProjectFile() {
     puzzleRibOffsetsBMM: state.puzzleRibOffsetsBMM,
     puzzleMaterialThicknessMM: state.puzzleMaterialThicknessMM,
     puzzleSlotClearanceMM: state.puzzleSlotClearanceMM,
+    puzzleSimplifyCutLine: state.puzzleSimplifyCutLine,
+    puzzleSimplifyMode: state.puzzleSimplifyMode,
+    puzzleSimplifyToleranceMM: state.puzzleSimplifyToleranceMM,
+    puzzleSimplifySmoothPasses: state.puzzleSimplifySmoothPasses,
+    puzzleHideSeriesA: state.puzzleHideSeriesA,
+    puzzleHideSeriesB: state.puzzleHideSeriesB,
+    puzzleHiddenRibs: state.puzzleHiddenRibs,
     splitModelEnabled: state.splitModelEnabled,
     splitMode: state.splitMode,
     splitMaxPartWidthMM: state.splitMaxPartWidthMM,
@@ -11918,160 +11926,228 @@ function exportProjectFile() {
   triggerBrowserDownload(blob, state.modelName + '.lasca');
 }
 
+function applyOkfProjectConfig(data) {
+  if (!data || typeof data !== 'object') return false;
+
+  // Permitir recetas OKF ligeras basadas en presetModel ('torus' | 'vase' | 'gear' | 'crystal')
+  // o recetas que incluyen la malla completa en baseVertices
+  if (Array.isArray(data.baseVertices) && data.baseVertices.length >= 9 && data.dimsMM) {
+    state.baseVertices = new Float32Array(data.baseVertices);
+    state.dimsMM = {
+      x: Number(data.dimsMM.x) || 100,
+      y: Number(data.dimsMM.y) || 100,
+      z: Number(data.dimsMM.z) || 100
+    };
+  } else if (typeof data.presetModel === 'string' && typeof loadPresetModel === 'function' && typeof THREE !== 'undefined') {
+    loadPresetModel(data.presetModel);
+    if (data.dimsMM && typeof data.dimsMM === 'object') {
+      state.dimsMM = {
+        x: Number(data.dimsMM.x) || state.dimsMM.x,
+        y: Number(data.dimsMM.y) || state.dimsMM.y,
+        z: Number(data.dimsMM.z) || state.dimsMM.z
+      };
+    }
+  } else if (data.dimsMM && typeof data.dimsMM === 'object') {
+    state.dimsMM = {
+      x: Number(data.dimsMM.x) || (state.dimsMM && state.dimsMM.x) || 100,
+      y: Number(data.dimsMM.y) || (state.dimsMM && state.dimsMM.y) || 100,
+      z: Number(data.dimsMM.z) || (state.dimsMM && state.dimsMM.z) || 100
+    };
+  }
+
+  if (typeof data.modelName === 'string' && data.modelName.trim()) {
+    state.modelName = data.modelName.trim();
+  }
+  if (typeof data.maxDimensionMM === 'number' && data.maxDimensionMM > 0 && state.dimsMM) {
+    const curMax = Math.max(state.dimsMM.x || 1, state.dimsMM.y || 1, state.dimsMM.z || 1);
+    if (curMax > 0) {
+      const factor = data.maxDimensionMM / curMax;
+      state.dimsMM = {
+        x: Math.round(state.dimsMM.x * factor * 100) / 100,
+        y: Math.round(state.dimsMM.y * factor * 100) / 100,
+        z: Math.round(state.dimsMM.z * factor * 100) / 100
+      };
+    }
+  }
+
+  if (data.constructionMode === 'puzzle3d' || data.constructionMode === 'stacked') {
+    state.constructionMode = data.constructionMode;
+  }
+  if (data.puzzleAxes === 'xy' || data.puzzleAxes === 'xz' || data.puzzleAxes === 'yz') {
+    state.puzzleAxes = data.puzzleAxes;
+  }
+  if (typeof data.puzzleCountA === 'number') state.puzzleCountA = data.puzzleCountA;
+  if (typeof data.puzzleCountB === 'number') state.puzzleCountB = data.puzzleCountB;
+  if (typeof data.puzzleStartOffsetAMM === 'number') state.puzzleStartOffsetAMM = data.puzzleStartOffsetAMM;
+  if (typeof data.puzzleStartOffsetBMM === 'number') state.puzzleStartOffsetBMM = data.puzzleStartOffsetBMM;
+  if (data.puzzleStartMode === 'start' || data.puzzleStartMode === 'symmetric' || data.puzzleStartMode === 'shift') {
+    state.puzzleStartMode = data.puzzleStartMode;
+  }
+  if (data.puzzleRibOffsetsAMM && typeof data.puzzleRibOffsetsAMM === 'object') {
+    state.puzzleRibOffsetsAMM = data.puzzleRibOffsetsAMM;
+  }
+  if (data.puzzleRibOffsetsBMM && typeof data.puzzleRibOffsetsBMM === 'object') {
+    state.puzzleRibOffsetsBMM = data.puzzleRibOffsetsBMM;
+  }
+  if (typeof data.puzzleMaterialThicknessMM === 'number') state.puzzleMaterialThicknessMM = data.puzzleMaterialThicknessMM;
+  if (typeof data.puzzleSlotClearanceMM === 'number') state.puzzleSlotClearanceMM = data.puzzleSlotClearanceMM;
+  if (typeof data.puzzleSimplifyCutLine === 'boolean') state.puzzleSimplifyCutLine = data.puzzleSimplifyCutLine;
+  if (data.puzzleSimplifyMode === 'rdp' || data.puzzleSimplifyMode === 'smooth' || data.puzzleSimplifyMode === 'bridge' || data.puzzleSimplifyMode === 'convex') {
+    state.puzzleSimplifyMode = data.puzzleSimplifyMode;
+  }
+  if (typeof data.puzzleSimplifyToleranceMM === 'number') state.puzzleSimplifyToleranceMM = data.puzzleSimplifyToleranceMM;
+  if (typeof data.puzzleSimplifySmoothPasses === 'number') state.puzzleSimplifySmoothPasses = data.puzzleSimplifySmoothPasses;
+  if (typeof data.puzzleHideSeriesA === 'boolean') state.puzzleHideSeriesA = data.puzzleHideSeriesA;
+  if (typeof data.puzzleHideSeriesB === 'boolean') state.puzzleHideSeriesB = data.puzzleHideSeriesB;
+  if (data.puzzleHiddenRibs && typeof data.puzzleHiddenRibs === 'object') {
+    state.puzzleHiddenRibs = data.puzzleHiddenRibs;
+  }
+  if (typeof syncConstructionModeUI === 'function') syncConstructionModeUI();
+
+  if (typeof data.splitModelEnabled === 'boolean') state.splitModelEnabled = data.splitModelEnabled;
+  if (data.splitMode === 'max_size' || data.splitMode === 'grid') state.splitMode = data.splitMode;
+  if (typeof data.splitMaxPartWidthMM === 'number') state.splitMaxPartWidthMM = data.splitMaxPartWidthMM;
+  if (typeof data.splitMaxPartHeightMM === 'number') state.splitMaxPartHeightMM = data.splitMaxPartHeightMM;
+  if (typeof data.splitCols === 'number') state.splitCols = data.splitCols;
+  if (typeof data.splitRows === 'number') state.splitRows = data.splitRows;
+  if (data.splitJointType) state.splitJointType = data.splitJointType;
+  if (typeof data.splitJointDepthMM === 'number') state.splitJointDepthMM = data.splitJointDepthMM;
+  if (typeof data.splitStaggerLayers === 'boolean') state.splitStaggerLayers = data.splitStaggerLayers;
+  if (typeof syncSplitModelUI === 'function') syncSplitModelUI();
+
+  if (data.axis === 'x' || data.axis === 'y' || data.axis === 'z') state.axis = data.axis;
+  if (data.mode === 'count' || data.mode === 'thickness') state.mode = data.mode;
+  if (typeof data.sliceCount === 'number') state.sliceCount = data.sliceCount;
+  if (typeof data.thickness === 'number') state.thickness = data.thickness;
+  if (typeof data.rodCount === 'number') state.rodCount = data.rodCount;
+  if (typeof data.rodDiameter === 'number') state.rodDiameter = data.rodDiameter;
+
+  if (typeof data.slicerFrameEnabled === 'boolean') state.slicerFrameEnabled = data.slicerFrameEnabled;
+  if (data.slicerFrameFit) state.slicerFrameFit = data.slicerFrameFit;
+  if (data.slicerFrameShape) state.slicerFrameShape = data.slicerFrameShape;
+  if (data.slicerFrameLaserMode) state.slicerFrameLaserMode = data.slicerFrameLaserMode;
+  if (data.slicerFrameStyle) state.slicerFrameStyle = data.slicerFrameStyle;
+  if (typeof data.slicerFrameThicknessMM === 'number') state.slicerFrameThicknessMM = data.slicerFrameThicknessMM;
+  if (typeof data.slicerFrameMarginMM === 'number') state.slicerFrameMarginMM = data.slicerFrameMarginMM;
+  if (typeof data.slicerFrameRadiusMM === 'number') state.slicerFrameRadiusMM = data.slicerFrameRadiusMM;
+  if (typeof data.slicerFrameKeyhole === 'boolean') state.slicerFrameKeyhole = data.slicerFrameKeyhole;
+  if (typeof data.slicerFrameKeyholeDiamMM === 'number') state.slicerFrameKeyholeDiamMM = data.slicerFrameKeyholeDiamMM;
+  if (typeof syncSlicerFrameUI === 'function') syncSlicerFrameUI();
+
+  if (typeof data.tabsEnabled === 'boolean') state.tabsEnabled = data.tabsEnabled;
+  if (data.tabMode === 'count' || data.tabMode === 'spacing') state.tabMode = data.tabMode;
+  if (typeof data.tabCount === 'number') state.tabCount = data.tabCount;
+  if (typeof data.tabSpacingMM === 'number') state.tabSpacingMM = data.tabSpacingMM;
+  if (typeof data.tabWidthMM === 'number') state.tabWidthMM = data.tabWidthMM;
+  if (typeof data.tabApplyToHoles === 'boolean') state.tabApplyToHoles = data.tabApplyToHoles;
+  if (typeof data.tabShowMarkers === 'boolean') state.tabShowMarkers = data.tabShowMarkers;
+  if (typeof syncHoldingTabsUI === 'function') syncHoldingTabsUI();
+
+  if (typeof data.filterSmallIslands === 'boolean') state.filterSmallIslands = data.filterSmallIslands;
+  if (typeof data.minIslandSizeMM === 'number') state.minIslandSizeMM = data.minIslandSizeMM;
+  if (data.minIslandCriteria) state.minIslandCriteria = data.minIslandCriteria;
+  if (typeof data.fillInternalHoles === 'boolean') state.fillInternalHoles = data.fillInternalHoles;
+  if (data.fillHolesMode) state.fillHolesMode = data.fillHolesMode;
+  if (typeof data.fillHolesMaxSizeMM === 'number') state.fillHolesMaxSizeMM = data.fillHolesMaxSizeMM;
+
+  if (typeof data.includeLabels === 'boolean' && typeof setIncludeLabels === 'function') setIncludeLabels(data.includeLabels);
+  if (typeof data.includeNextSliceGuide === 'boolean' && typeof setIncludeNextGuide === 'function') setIncludeNextGuide(data.includeNextSliceGuide);
+  if (typeof data.includePrevSliceGuide === 'boolean' && typeof setIncludePrevGuide === 'function') setIncludePrevGuide(data.includePrevSliceGuide);
+  if (data.upperGuideStyle) {
+    state.upperGuideStyle = data.upperGuideStyle;
+    const upStyleEl = document.getElementById('guideUpperStyleSelect');
+    if (upStyleEl) upStyleEl.value = data.upperGuideStyle;
+  }
+  if (data.lowerGuideStyle) {
+    state.lowerGuideStyle = data.lowerGuideStyle;
+    const lowStyleEl = document.getElementById('guideLowerStyleSelect');
+    if (lowStyleEl) lowStyleEl.value = data.lowerGuideStyle;
+  }
+  if (typeof data.guideOnlyOuter === 'boolean') {
+    state.guideOnlyOuter = data.guideOnlyOuter;
+    const onlyOuterEl = document.getElementById('guideOnlyOuterCheck');
+    if (onlyOuterEl) onlyOuterEl.checked = data.guideOnlyOuter;
+  }
+  if (typeof data.guideClipToSlice === 'boolean') {
+    state.guideClipToSlice = data.guideClipToSlice;
+    const clipCheckEl = document.getElementById('guideClipCheck');
+    if (clipCheckEl) clipCheckEl.checked = data.guideClipToSlice;
+  }
+  if (typeof data.boardWidthMM === 'number') state.boardWidthMM = data.boardWidthMM;
+  if (typeof data.boardHeightMM === 'number') state.boardHeightMM = data.boardHeightMM;
+  if (typeof data.nestSpacingMM === 'number') {
+    state.nestSpacingMM = data.nestSpacingMM;
+    const spEl = document.getElementById('nestSpacingInput');
+    if (spEl) spEl.value = data.nestSpacingMM;
+  }
+  if (typeof data.nestMarginMM === 'number') {
+    state.nestMarginMM = data.nestMarginMM;
+    const mgEl = document.getElementById('nestMarginInput');
+    if (mgEl) mgEl.value = data.nestMarginMM;
+  }
+  if (typeof data.nestAllowRotate === 'boolean') {
+    state.nestAllowRotate = data.nestAllowRotate;
+    const rotEl = document.getElementById('nestRotateCheck');
+    if (rotEl) rotEl.checked = data.nestAllowRotate;
+  }
+  if (typeof data.nestUseInnerHoles === 'boolean') {
+    state.nestUseInnerHoles = data.nestUseInnerHoles;
+    const holesEl = document.getElementById('nestUseHolesCheck');
+    if (holesEl) holesEl.checked = data.nestUseInnerHoles;
+  }
+  if (typeof data.nestClipOversized === 'boolean' && typeof setNestClipOversized === 'function') {
+    setNestClipOversized(data.nestClipOversized);
+  }
+  if (typeof data.nestEngraveSliceNum === 'boolean' && typeof setNestEngraveNum === 'function') setNestEngraveNum(data.nestEngraveSliceNum);
+  if (typeof data.nestEngraveGuideType === 'boolean' && typeof setNestEngraveGuideType === 'function') setNestEngraveGuideType(data.nestEngraveGuideType);
+  if (typeof data.carrierWidthMM === 'number') state.carrierWidthMM = data.carrierWidthMM;
+  if (typeof data.carrierHeightMM === 'number') state.carrierHeightMM = data.carrierHeightMM;
+  if (typeof data.carrierSpacingMM === 'number') state.carrierSpacingMM = data.carrierSpacingMM;
+  if (typeof data.carrierMarginMM === 'number') state.carrierMarginMM = data.carrierMarginMM;
+  if (typeof data.carrierAllowRotate === 'boolean') state.carrierAllowRotate = data.carrierAllowRotate;
+  if (typeof data.carrierCutBoardBorders === 'boolean') state.carrierCutBoardBorders = data.carrierCutBoardBorders;
+  if (typeof data.carrierCutOuterBorder === 'boolean') state.carrierCutOuterBorder = data.carrierCutOuterBorder;
+  if (typeof data.carrierEngraveBoardLabels === 'boolean') state.carrierEngraveBoardLabels = data.carrierEngraveBoardLabels;
+  if (typeof data.nestingEnabled === 'boolean' && typeof setNestingEnabled === 'function') setNestingEnabled(data.nestingEnabled);
+  if (typeof data.carrierEnabled === 'boolean' && typeof setCarrierEnabled === 'function') {
+    setCarrierEnabled(data.carrierEnabled);
+  }
+  if (typeof syncCarrierInputsUI === 'function') syncCarrierInputsUI();
+  if (typeof syncCarrierUIState === 'function') syncCarrierUIState();
+
+  const rodCountEl = document.getElementById('rodCountSelect');
+  if (rodCountEl) rodCountEl.value = String(state.rodCount);
+  const rodDiamEl = document.getElementById('rodDiameterInput');
+  if (rodDiamEl) rodDiamEl.value = state.rodDiameter;
+  if (typeof setDisplayUnit === 'function') setDisplayUnit(data.unit || state.unit || 'mm');
+  if (state.baseVertices && state.baseVertices.length >= 9) {
+    if (typeof setSliceAxis === 'function') setSliceAxis(state.axis);
+    if (typeof setSliceMode === 'function') setSliceMode(state.mode);
+    if (typeof recomputeAllSlices === 'function') recomputeAllSlices();
+  } else if (state.slices && state.slices.length > 0 && typeof applyIslandFilterToExistingSlices === 'function') {
+    applyIslandFilterToExistingSlices();
+  }
+
+  if (Array.isArray(data.selectedIndices)) {
+    const setSel = new Set(data.selectedIndices);
+    state.slices.forEach((s) => { s.selected = setSel.has(s.index); });
+    if (typeof renderSliceStripUI === 'function') renderSliceStripUI();
+    if (typeof update3DSlicesTransforms === 'function' && state.baseVertices) update3DSlicesTransforms();
+  }
+  if (typeof resetCamera3D === 'function' && state.baseVertices) resetCamera3D();
+  return true;
+}
+
+if (typeof window !== 'undefined') {
+  window.applyOkfProjectConfig = applyOkfProjectConfig;
+}
+
 function importProjectFile(file) {
   const reader = new FileReader();
   reader.onload = (ev) => {
     try {
       const data = JSON.parse(ev.target.result);
-      if (!data.baseVertices || !data.dimsMM) return;
-      state.modelName = data.modelName || 'proyecto_importado';
-      state.baseVertices = new Float32Array(data.baseVertices);
-      state.dimsMM = data.dimsMM;
-      state.constructionMode = data.constructionMode === 'puzzle3d' ? 'puzzle3d' : 'stacked';
-      if (data.puzzleAxes === 'xy' || data.puzzleAxes === 'xz' || data.puzzleAxes === 'yz') {
-        state.puzzleAxes = data.puzzleAxes;
-      }
-      if (typeof data.puzzleCountA === 'number') state.puzzleCountA = data.puzzleCountA;
-      if (typeof data.puzzleCountB === 'number') state.puzzleCountB = data.puzzleCountB;
-      if (typeof data.puzzleStartOffsetAMM === 'number') state.puzzleStartOffsetAMM = data.puzzleStartOffsetAMM;
-      if (typeof data.puzzleStartOffsetBMM === 'number') state.puzzleStartOffsetBMM = data.puzzleStartOffsetBMM;
-      if (data.puzzleStartMode === 'start' || data.puzzleStartMode === 'symmetric' || data.puzzleStartMode === 'shift') {
-        state.puzzleStartMode = data.puzzleStartMode;
-      }
-      if (data.puzzleRibOffsetsAMM && typeof data.puzzleRibOffsetsAMM === 'object') {
-        state.puzzleRibOffsetsAMM = data.puzzleRibOffsetsAMM;
-      }
-      if (data.puzzleRibOffsetsBMM && typeof data.puzzleRibOffsetsBMM === 'object') {
-        state.puzzleRibOffsetsBMM = data.puzzleRibOffsetsBMM;
-      }
-      if (typeof data.puzzleMaterialThicknessMM === 'number') state.puzzleMaterialThicknessMM = data.puzzleMaterialThicknessMM;
-      if (typeof data.puzzleSlotClearanceMM === 'number') state.puzzleSlotClearanceMM = data.puzzleSlotClearanceMM;
-      if (typeof syncConstructionModeUI === 'function') syncConstructionModeUI();
-
-      if (typeof data.splitModelEnabled === 'boolean') state.splitModelEnabled = data.splitModelEnabled;
-      if (data.splitMode === 'max_size' || data.splitMode === 'grid') state.splitMode = data.splitMode;
-      if (typeof data.splitMaxPartWidthMM === 'number') state.splitMaxPartWidthMM = data.splitMaxPartWidthMM;
-      if (typeof data.splitMaxPartHeightMM === 'number') state.splitMaxPartHeightMM = data.splitMaxPartHeightMM;
-      if (typeof data.splitCols === 'number') state.splitCols = data.splitCols;
-      if (typeof data.splitRows === 'number') state.splitRows = data.splitRows;
-      if (data.splitJointType) state.splitJointType = data.splitJointType;
-      if (typeof data.splitJointDepthMM === 'number') state.splitJointDepthMM = data.splitJointDepthMM;
-      if (typeof data.splitStaggerLayers === 'boolean') state.splitStaggerLayers = data.splitStaggerLayers;
-      if (typeof syncSplitModelUI === 'function') syncSplitModelUI();
-
-      state.axis = data.axis || 'z';
-      state.mode = data.mode || 'count';
-      state.sliceCount = data.sliceCount || 24;
-      state.thickness = data.thickness || 5;
-      state.rodCount = data.rodCount || 0;
-      state.rodDiameter = data.rodDiameter || 4;
-      if (typeof data.slicerFrameEnabled === 'boolean') state.slicerFrameEnabled = data.slicerFrameEnabled;
-      if (data.slicerFrameFit) state.slicerFrameFit = data.slicerFrameFit;
-      if (data.slicerFrameShape) state.slicerFrameShape = data.slicerFrameShape;
-      if (data.slicerFrameLaserMode) state.slicerFrameLaserMode = data.slicerFrameLaserMode;
-      if (data.slicerFrameStyle) state.slicerFrameStyle = data.slicerFrameStyle;
-      if (typeof data.slicerFrameThicknessMM === 'number') state.slicerFrameThicknessMM = data.slicerFrameThicknessMM;
-      if (typeof data.slicerFrameMarginMM === 'number') state.slicerFrameMarginMM = data.slicerFrameMarginMM;
-      if (typeof data.slicerFrameRadiusMM === 'number') state.slicerFrameRadiusMM = data.slicerFrameRadiusMM;
-      if (typeof data.slicerFrameKeyhole === 'boolean') state.slicerFrameKeyhole = data.slicerFrameKeyhole;
-      if (typeof data.slicerFrameKeyholeDiamMM === 'number') state.slicerFrameKeyholeDiamMM = data.slicerFrameKeyholeDiamMM;
-      if (typeof syncSlicerFrameUI === 'function') syncSlicerFrameUI();
-      if (typeof data.tabsEnabled === 'boolean') state.tabsEnabled = data.tabsEnabled;
-      if (data.tabMode === 'count' || data.tabMode === 'spacing') state.tabMode = data.tabMode;
-      if (typeof data.tabCount === 'number') state.tabCount = data.tabCount;
-      if (typeof data.tabSpacingMM === 'number') state.tabSpacingMM = data.tabSpacingMM;
-      if (typeof data.tabWidthMM === 'number') state.tabWidthMM = data.tabWidthMM;
-      if (typeof data.tabApplyToHoles === 'boolean') state.tabApplyToHoles = data.tabApplyToHoles;
-      if (typeof data.tabShowMarkers === 'boolean') state.tabShowMarkers = data.tabShowMarkers;
-      syncHoldingTabsUI();
-
-      if (typeof data.filterSmallIslands === 'boolean') state.filterSmallIslands = data.filterSmallIslands;
-      if (typeof data.minIslandSizeMM === 'number') state.minIslandSizeMM = data.minIslandSizeMM;
-      if (data.minIslandCriteria) state.minIslandCriteria = data.minIslandCriteria;
-      if (typeof data.fillInternalHoles === 'boolean') state.fillInternalHoles = data.fillInternalHoles;
-      if (data.fillHolesMode) state.fillHolesMode = data.fillHolesMode;
-      if (typeof data.fillHolesMaxSizeMM === 'number') state.fillHolesMaxSizeMM = data.fillHolesMaxSizeMM;
-
-      if (typeof data.includeLabels === 'boolean') setIncludeLabels(data.includeLabels);
-      if (typeof data.includeNextSliceGuide === 'boolean') setIncludeNextGuide(data.includeNextSliceGuide);
-      if (typeof data.includePrevSliceGuide === 'boolean') setIncludePrevGuide(data.includePrevSliceGuide);
-      if (data.upperGuideStyle) {
-        state.upperGuideStyle = data.upperGuideStyle;
-        const upStyleEl = document.getElementById('guideUpperStyleSelect');
-        if (upStyleEl) upStyleEl.value = data.upperGuideStyle;
-      }
-      if (data.lowerGuideStyle) {
-        state.lowerGuideStyle = data.lowerGuideStyle;
-        const lowStyleEl = document.getElementById('guideLowerStyleSelect');
-        if (lowStyleEl) lowStyleEl.value = data.lowerGuideStyle;
-      }
-      if (typeof data.guideOnlyOuter === 'boolean') {
-        state.guideOnlyOuter = data.guideOnlyOuter;
-        const onlyOuterEl = document.getElementById('guideOnlyOuterCheck');
-        if (onlyOuterEl) onlyOuterEl.checked = data.guideOnlyOuter;
-      }
-      if (typeof data.guideClipToSlice === 'boolean') {
-        state.guideClipToSlice = data.guideClipToSlice;
-        const clipCheckEl = document.getElementById('guideClipCheck');
-        if (clipCheckEl) clipCheckEl.checked = data.guideClipToSlice;
-      }
-      if (typeof data.boardWidthMM === 'number') state.boardWidthMM = data.boardWidthMM;
-      if (typeof data.boardHeightMM === 'number') state.boardHeightMM = data.boardHeightMM;
-      if (typeof data.nestSpacingMM === 'number') {
-        state.nestSpacingMM = data.nestSpacingMM;
-        const spEl = document.getElementById('nestSpacingInput');
-        if (spEl) spEl.value = data.nestSpacingMM;
-      }
-      if (typeof data.nestMarginMM === 'number') {
-        state.nestMarginMM = data.nestMarginMM;
-        const mgEl = document.getElementById('nestMarginInput');
-        if (mgEl) mgEl.value = data.nestMarginMM;
-      }
-      if (typeof data.nestAllowRotate === 'boolean') {
-        state.nestAllowRotate = data.nestAllowRotate;
-        const rotEl = document.getElementById('nestRotateCheck');
-        if (rotEl) rotEl.checked = data.nestAllowRotate;
-      }
-      if (typeof data.nestUseInnerHoles === 'boolean') {
-        state.nestUseInnerHoles = data.nestUseInnerHoles;
-        const holesEl = document.getElementById('nestUseHolesCheck');
-        if (holesEl) holesEl.checked = data.nestUseInnerHoles;
-      }
-      if (typeof data.nestClipOversized === 'boolean') {
-        setNestClipOversized(data.nestClipOversized);
-      }
-      if (typeof data.nestEngraveSliceNum === 'boolean') setNestEngraveNum(data.nestEngraveSliceNum);
-      if (typeof data.nestEngraveGuideType === 'boolean') setNestEngraveGuideType(data.nestEngraveGuideType);
-      if (typeof data.carrierWidthMM === 'number') state.carrierWidthMM = data.carrierWidthMM;
-      if (typeof data.carrierHeightMM === 'number') state.carrierHeightMM = data.carrierHeightMM;
-      if (typeof data.carrierSpacingMM === 'number') state.carrierSpacingMM = data.carrierSpacingMM;
-      if (typeof data.carrierMarginMM === 'number') state.carrierMarginMM = data.carrierMarginMM;
-      if (typeof data.carrierAllowRotate === 'boolean') state.carrierAllowRotate = data.carrierAllowRotate;
-      if (typeof data.carrierCutBoardBorders === 'boolean') state.carrierCutBoardBorders = data.carrierCutBoardBorders;
-      if (typeof data.carrierCutOuterBorder === 'boolean') state.carrierCutOuterBorder = data.carrierCutOuterBorder;
-      if (typeof data.carrierEngraveBoardLabels === 'boolean') state.carrierEngraveBoardLabels = data.carrierEngraveBoardLabels;
-      if (typeof data.nestingEnabled === 'boolean') setNestingEnabled(data.nestingEnabled);
-      if (typeof data.carrierEnabled === 'boolean' && typeof setCarrierEnabled === 'function') {
-        setCarrierEnabled(data.carrierEnabled);
-      }
-      if (typeof syncCarrierInputsUI === 'function') syncCarrierInputsUI();
-      if (typeof syncCarrierUIState === 'function') syncCarrierUIState();
-
-      const rodCountEl = document.getElementById('rodCountSelect');
-      if (rodCountEl) rodCountEl.value = String(state.rodCount);
-      const rodDiamEl = document.getElementById('rodDiameterInput');
-      if (rodDiamEl) rodDiamEl.value = state.rodDiameter;
-      setDisplayUnit(data.unit || 'mm');
-      setSliceAxis(state.axis);
-      setSliceMode(state.mode);
-
-      if (Array.isArray(data.selectedIndices)) {
-        const setSel = new Set(data.selectedIndices);
-        state.slices.forEach((s) => { s.selected = setSel.has(s.index); });
-        renderSliceStripUI();
-        update3DSlicesTransforms();
-      }
-      resetCamera3D();
+      applyOkfProjectConfig(data);
     } catch (err) {
       console.error('Error al importar proyecto:', err);
     }

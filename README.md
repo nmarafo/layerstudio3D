@@ -62,7 +62,26 @@
 - **`.SVG` (Corte Láser)**: Escala `1:1` en milímetros, validado XML y organizado por capas semánticas.
 - **`.DXF` (AutoCAD / CNC / Láser)**: Polilíneas, círculos y textos separados por capas y colores estándar CAD.
 - **`.STL` (Impresión 3D)**: Mallas 3D extruidas individualmente por cada lasca o costilla.
-- **`.LASCA` / `.JSON`**: Guardado y recuperación íntegra del estado del proyecto (incluyendo parámetros de Puzzle 3D y micro-uniones).
+- **`.LASCA` / `.JSON` (Compatible con OKF v1.3.0)**: Guardado y recuperación íntegra del estado del proyecto (incluyendo simplificación de líneas de corte en Puzzle 3D, desplazamiento y visibilidad individual de costillas, micro-uniones y recetas OKF).
+
+### 8. Grabado de Imagen por Lámina, Simplificación de Corte en Puzzle 3D e Interfaz por Pestañas (`v3.0.6`)
+- **Grabado Láser de Imagen en Lámina Seleccionada (`🖼️ Grabar Imagen`)**: Permite cargar cualquier imagen (`.PNG`, `.BMP`, `.JPG`, `.WEBP`) sobre la lámina o costilla activa con recorte automático al contorno exterior y a las ranuras de encaje a 90° del Puzzle 3D.
+- **Simplificación de Línea de Corte en Puzzle 3D (`✂️ Simplificar línea de corte`)**: Modos Poligonal Directo (`RDP`), Curva Suave (`Chaikin`), Puente de Concavidades (`Bridge`) y Envolvente Exterior (`Convex`), aplicados antes del tallado de ranuras para mantener intacto el encaje ortogonal.
+- **Movimiento y Visibilidad Individual de Costillas**: Desplazamiento independiente de la costilla seleccionada a lo largo de su eje con recálculo automático de cruces, y botones para ocultar/mostrar ejes o costillas en el visor 3D.
+- **Flujo de Trabajo por Pestañas (`1. Corte` · `2. Limpieza` · `3. Acabado` · `4. Tableros` · `Ver Todo`)**: Tarjetas plegables y revelación progresiva de controles para una interfaz limpia sin perder ninguna función.
+
+---
+
+## 🤖 Estándar OKF (Open Knowledge Framework) para Agentes de IA
+
+Este repositorio incluye una especificación completa **OKF v1.3.0** (`urn:okf:software:layerstudio3d:2026:v3.0.6`) diseñada para que cualquier **Agente de Inteligencia Artificial** (agentes de automatización de navegador DOM/Playwright, asistentes de código o LLMs en NotebookLM, Claude, Gemini o ChatGPT) sepa operar **LayerStudio 3D** de forma autónoma:
+
+| Archivo OKF | Propósito |
+| :--- | :--- |
+| [`okf.json`](okf.json) | Manifiesto raíz legible por máquina con metadatos, mapa de pestañas de la interfaz (`#sidebarTabNav`), catálogo de funciones globales JS (`programmaticApiCatalog`) y estándar cromático láser. |
+| [`okf/arquitectura_okf.md`](okf/arquitectura_okf.md) | Manual técnico y operativo para agentes de IA: pipeline geométrico en `mermaid`, selectores DOM (`#...`), API programática y *playbooks* paso a paso. |
+| [`okf/prompt_maestro_okf_layerstudio3d.md`](okf/prompt_maestro_okf_layerstudio3d.md) | *System Prompt* listo para copiar y pegar en cualquier LLM o proyecto RAG para diseñar recetas de corte láser y operar LayerStudio 3D. |
+| [`schema/schema_layerstudio3d_project.json`](schema/schema_layerstudio3d_project.json) | Esquema formal JSON Schema (Draft 2020-12) para validar archivos `.lasca` y configuraciones ejecutables mediante `window.applyOkfProjectConfig(data)`. |
 
 ---
 
@@ -71,7 +90,7 @@
 1. Abran la aplicación directamente en **[https://nmarafo.github.io/layerstudio3D/](https://nmarafo.github.io/layerstudio3D/)** (servida desde la arquitectura modular optimizada) o la edición monolítica de archivo único en **[https://nmarafo.github.io/layerstudio3D/indexstandalone.html](https://nmarafo.github.io/layerstudio3D/indexstandalone.html)**.
 2. Carguen un modelo `.STL` / `.GLB`, seleccionen uno de los modelos de demostración en la barra superior, o pulsen **🖼️ PNG/BMP → SVG** para convertir cualquier imagen 2D en vectores de corte y grabado láser.
 3. Ajusten las dimensiones de la pieza, el sistema constructivo (**Apilado 1 Eje** o **Puzzle 3D Encajable**) y el grosor del material o número de capas.
-4. *(Opcional)* Activen **5. Distribución en Tablero** para empaquetar todas las islas en tableros de corte y consulten la **🛠️ Guía Ilustrada**.
+4. *(Opcional)* Activen **4. Tableros (Nesting)** para empaquetar todas las piezas en tableros de corte o Plancha Madre y consulten la **🛠️ Guía Ilustrada**.
 5. Descarguen la lasca/tablero actual en `.SVG`, `.DXF` o `.STL`, o pulsen **Exportar .ZIP** para descargar el paquete completo de fabricación junto con la guía ilustrada `.HTML` y `.TXT`.
 
 ---
@@ -86,16 +105,22 @@ El repositorio ofrece dos modalidades sincronizadas:
 layerstudio3D/
 ├── index.html                  # Punto de entrada principal (versión modular optimizada para GitHub Pages)
 ├── indexstandalone.html        # Versión monolítica autocontenida en un único archivo HTML
+├── okf.json                    # Manifiesto raíz Open Knowledge Framework (OKF v1.3.0) para Agentes de IA
+├── okf/
+│   ├── arquitectura_okf.md     # Manual operativo, selectores DOM, API JS y playbooks para Agentes de IA
+│   └── prompt_maestro_okf_layerstudio3d.md # System Prompt oficial para LLMs y asistentes autónomos
+├── schema/
+│   └── schema_layerstudio3d_project.json   # JSON Schema para archivos .lasca y recetas OKF
 ├── css/
 │   └── styles.css              # Estilos personalizados, temas oscuros, barras de desplazamiento e impresión
 ├── js/
 │   ├── state.js                # Estado global reactivo y referencias de escena Three.js
 │   ├── viewer3d.js             # Motor 3D, cámara orbital, cargadores STL/GLB/GLTF y modelos paramétricos
-│   ├── slicer.js               # Motor geométrico de corte planar X/Y/Z, filtro de islas, extrusión y guías
-│   ├── nesting.js              # Empaquetado 2D MaxRects multi-tablero, anidado en huecos y ajuste de texto
+│   ├── slicer.js               # Motor geométrico de corte planar X/Y/Z, Puzzle 3D, simplificación y grabado por lámina
+│   ├── nesting.js              # Empaquetado 2D multi-tablero, anidado en huecos y Plancha Madre
 │   ├── modals-guide.js         # Modal de tablero individual y guía interactiva de corte y montaje (#1 -> #N)
 │   ├── viewer2d.js             # Inspector 2D interactivo en Canvas, zoom/pan, selección de islas y galería
-│   ├── exporters.js            # Exportadores 1:1 (.SVG, .DXF, .STL, .ZIP) y gestión de proyectos (.lasca/.json)
+│   ├── exporters.js            # Exportadores 1:1 (.SVG, .DXF, .STL, .ZIP) y API OKF (.lasca / applyOkfProjectConfig)
 │   └── vectorizer2d.js         # Vectorizador automático PNG/BMP a SVG/DXF de corte y grabado láser + relieve 3D
 ├── LICENSE                     # Licencia GNU AGPL-3.0 con cláusula de atribución (Sección 7b)
 ├── README.md                   # Documentación técnica y guía de uso
