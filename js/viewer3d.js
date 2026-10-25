@@ -226,8 +226,15 @@ function setGeometryAndSlice(bufferGeom, normalizeToDefault) {
     state.dimsMM.z = Number((sizeZ * scale).toFixed(2));
   }
 
+  state._puzzleAxesEvaluatedForCurrentMesh = false;
+  state.puzzleAxesAutoScores = null;
+
   syncDimensionInputsUI();
-  rebuildGhostAndSlices();
+  if (state.constructionMode === 'puzzle3d' && typeof autoSelectBestPuzzleAxes === 'function') {
+    autoSelectBestPuzzleAxes(true);
+  } else {
+    rebuildGhostAndSlices();
+  }
   resetCamera3D();
 }
 
@@ -306,8 +313,15 @@ function setMaxDimensionMM(targetMaxMM) {
   state.dimsMM.x = Math.max(1, state.dimsMM.x * ratio);
   state.dimsMM.y = Math.max(1, state.dimsMM.y * ratio);
   state.dimsMM.z = Math.max(1, state.dimsMM.z * ratio);
+  state._puzzleAxesEvaluatedForCurrentMesh = false;
+  state.puzzleAxesAutoScores = null;
+
   syncDimensionInputsUI();
-  rebuildGhostAndSlices();
+  if (state.constructionMode === 'puzzle3d' && typeof autoSelectBestPuzzleAxes === 'function') {
+    autoSelectBestPuzzleAxes(true);
+  } else {
+    rebuildGhostAndSlices();
+  }
   resetCamera3D();
 }
 
@@ -326,7 +340,58 @@ function onAxisDimChange(axis, valStr) {
   } else {
     state.dimsMM[axis] = Math.max(0.5, newMM);
   }
+  state._puzzleAxesEvaluatedForCurrentMesh = false;
+  state.puzzleAxesAutoScores = null;
+
+  syncDimensionInputsUI();
+  if (state.constructionMode === 'puzzle3d' && typeof autoSelectBestPuzzleAxes === 'function') {
+    autoSelectBestPuzzleAxes(true);
+  } else {
+    rebuildGhostAndSlices();
+  }
+  resetCamera3D();
+}
+
+// Rota 90° la malla base 3D alrededor del eje indicado ('x', 'y' o 'z') e intercambia sus dimensiones correspondientes
+function rotateBaseModel90(axis) {
+  if (!state.baseVertices || state.baseVertices.length === 0) return;
+  const v = state.baseVertices;
+  if (axis === 'x') {
+    for (let i = 0; i < v.length; i += 3) {
+      const y = v[i + 1];
+      const z = v[i + 2];
+      v[i + 1] = -z;
+      v[i + 2] = y;
+    }
+    const tmp = state.dimsMM.y;
+    state.dimsMM.y = state.dimsMM.z;
+    state.dimsMM.z = tmp;
+  } else if (axis === 'y') {
+    for (let i = 0; i < v.length; i += 3) {
+      const x = v[i];
+      const z = v[i + 2];
+      v[i] = z;
+      v[i + 2] = -x;
+    }
+    const tmp = state.dimsMM.x;
+    state.dimsMM.x = state.dimsMM.z;
+    state.dimsMM.z = tmp;
+  } else {
+    for (let i = 0; i < v.length; i += 3) {
+      const x = v[i];
+      const y = v[i + 1];
+      v[i] = -y;
+      v[i + 1] = x;
+    }
+    const tmp = state.dimsMM.x;
+    state.dimsMM.x = state.dimsMM.y;
+    state.dimsMM.y = tmp;
+  }
+  state._puzzleAxesEvaluatedForCurrentMesh = false;
+  state.puzzleAxesAutoScores = null;
   syncDimensionInputsUI();
   rebuildGhostAndSlices();
-  resetCamera3D();
+}
+if (typeof window !== 'undefined') {
+  window.rotateBaseModel90 = rotateBaseModel90;
 }

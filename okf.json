@@ -2,21 +2,22 @@
   "$schema": "https://openknowledgeframework.org/schemas/v1.3.0/okf.schema.json",
   "okfVersion": "1.3.0",
   "metadata": {
-    "id": "urn:okf:software:layerstudio3d:2026:v3.0.6",
+    "id": "urn:okf:software:layerstudio3d:2026:v3.0.12",
     "title": "LayerStudio 3D — Especificación Operativa OKF para Agentes de IA (Corte Láser SVG/DXF, Puzzle 3D, Grabado Vectorial e Impresión 3D STL)",
-    "shortTitle": "OKF-LayerStudio3D-v3.0.6",
-    "description": "Paquete de Conocimiento Abierto (Open Knowledge Framework - OKF v1.3.0) diseñado para que agentes de Inteligencia Artificial (agentes de navegador DOM/Playwright, asistentes de código, sistemas RAG y LLMs como NotebookLM, Claude, Gemini o ChatGPT) comprendan la arquitectura, interfaz de usuario por pestañas, API programática JavaScript, estándar cromático láser y formato de proyectos (.lasca / .json) de LayerStudio 3D.",
-    "version": "3.0.6",
+    "shortTitle": "OKF-LayerStudio3D-v3.0.12",
+    "description": "Paquete de Conocimiento Abierto (Open Knowledge Framework - OKF v1.3.0) diseñado para que agentes de Inteligencia Artificial (agentes de navegador DOM/Playwright, asistentes de código, sistemas RAG y LLMs como NotebookLM, Claude, Gemini o ChatGPT) comprendan la arquitectura, interfaz de usuario por pestañas, API programática JavaScript, estándar cromático láser, reconstrucción automática de envolventes macizas en mallas 3D huecas ('Sin Peana') y formato de proyectos (.lasca / .json) de LayerStudio 3D.",
+    "version": "3.0.12",
     "created": "2026-10-25",
     "modified": "2026-10-25",
     "language": "es-ES",
     "domain": "Manufacturing / CAD-CAM / Laser Cutting / 3D Slicing / Educational FabLab",
     "targetApplication": {
       "name": "LayerStudio 3D",
-      "version": "3.0.6",
+      "version": "3.0.12",
       "entryPointModular": "index.html",
       "entryPointStandalone": "indexstandalone.html",
       "repository": "https://github.com/nmarafo/layerstudio3D",
+      "companionLaserRepository": "https://github.com/nmarafo/laserpc13-90-II",
       "runtime": "Client-Side Browser HTML5 + WebGL (Three.js r128) + Canvas 2D"
     },
     "authors": [
@@ -84,11 +85,11 @@
     },
     {
       "id": "src-slicer-engine",
-      "title": "Motor Geométrico de Intersección 3D, Puzzle 3D, Simplificación y Subdivisión Modular",
+      "title": "Motor Geométrico de Intersección 3D, Reconstrucción de Envolvente Sólida (Mallas Huecas/Sin Peana), Puzzle 3D, Simplificación y Subdivisión Modular",
       "path": "js/slicer.js",
       "format": "javascript",
       "category": "source-code",
-      "summary": "Implementa la intersección plano-malla, encaje ortogonal 90° de costillas Puzzle 3D, simplificación de contornos (RDP, Chaikin, Puente Cóncavo, Envolvente), grabado de imagen por lámina con recorte automático de ranuras y empalmes modulares."
+      "summary": "Implementa la intersección plano-malla con encadenamiento bidireccional de vértices exactos para mallas de alta densidad (>2M triángulos), reconstrucción automática de costillas macizas (buildSolidRibLoopFromSegments) en modelos 3D huecos o con base abierta, encaje ortogonal 90° de costillas Puzzle 3D con limpieza de esquirlas en cumbreras inclinadas, simplificación de contornos (RDP, Chaikin, Puente Cóncavo, Envolvente), grabado de imagen por lámina con recorte automático de ranuras y empalmes modulares."
     },
     {
       "id": "src-nesting-engine",
@@ -100,11 +101,11 @@
     },
     {
       "id": "src-exporters",
-      "title": "Exportadores CAD/CAM (SVG, DXF R12, STL, ZIP, PDF/Impresión y .lasca OKF)",
+      "title": "Exportadores CAD/CAM (SVG, DXF R12, STL, ZIP con PROYECTO_OKF.lasca, PDF/Impresión y .lasca Autónomo Compactado)",
       "path": "js/exporters.js",
       "format": "javascript",
       "category": "source-code",
-      "summary": "Generación vectorial 1:1 en milímetros para corte y grabado láser, exportación STL binario por capa o ensamblado y serialización/deserialización OKF (.lasca)."
+      "summary": "Generación vectorial 1:1 en milímetros para corte y grabado láser (con texto Hershey POLYLINE en capa C00 ACI 5 y corte en C03/C04 ACI 1), exportación STL binario por capa o ensamblado, inclusión automática de PROYECTO_OKF.lasca dentro del paquete .ZIP exportado y compactación 2.5D estanca automática (compactBaseVerticesForLasca) para guardar proyectos .lasca de mallas millonarias en ~5 MB."
     },
     {
       "id": "src-vectorizer-2d",
@@ -260,6 +261,11 @@
         "function": "setPuzzleAxes(pair)",
         "arguments": "pair: 'xy' | 'xz' | 'yz'",
         "description": "En modo 'puzzle3d', selecciona el par de ejes ortogonales para las Series A y B de costillas."
+      },
+      {
+        "function": "autoSelectBestPuzzleAxes(silent)",
+        "arguments": "silent?: boolean",
+        "description": "Evalúa matemáticamente las 3 combinaciones ('xy', 'xz', 'yz') sobre la malla 3D actual según 4 criterios (estabilidad rotacional >=2 ranuras, expresividad de silueta no rectangular, cohesión topológica sin islas sueltas y densidad de cruces) y selecciona automáticamente la combinación óptima."
       },
       {
         "function": "onPuzzleCountChange(series, val)",
@@ -477,7 +483,10 @@
       "Si el agente opera mediante JavaScript en la consola del navegador o Playwright page.evaluate(), prefiera invocar window.applyOkfProjectConfig(configObj) o las funciones globales documentadas en programmaticApiCatalog en lugar de simular decenas de eventos de ratón.",
       "Si el agente opera mediante clics DOM puros, cambie primero a la pestaña adecuada con setSidebarTab('cut' | 'clean' | 'finish' | 'boards' | 'all') o haciendo clic en #sidebarTab_cut, #sidebarTab_clean, #sidebarTab_finish, #sidebarTab_boards o #sidebarTab_all.",
       "En modo Puzzle 3D ('puzzle3d'), recuerde que el grosor del tablero (puzzleMaterialThicknessMM) y la holgura de encaje (puzzleSlotClearanceMM) determinan el ancho exacto de las ranuras a 90°: slotWidth = Math.max(0.2, puzzleMaterialThicknessMM + puzzleSlotClearanceMM).",
-      "En modo Puzzle 3D ('puzzle3d'), tenga siempre en cuenta que lo habitual es grabar las costillas primera y última de los ejes (las fachadas exteriores: ej. X1 y XN en la Serie A, y/o Y1/Z1 y YM/ZM en la Serie B), mientras las costillas intermedias actúan como esqueleto estructural interno. Para ello es especialmente útil la función ya existente de grabar imagen en lasca (activando puzzleEngraveEndRibs: true en applyOkfProjectConfig, llamando a applyEngravingToPuzzleEndRibs() o seleccionando la primera y última costilla de cada eje y aplicando applyDemoImageEngravingToSelectedSlice / handleSliceImageEngraveFile), ya que recorta automáticamente el grabado (#008800 / capa C00) al contorno exterior y evita las ranuras de encaje a 90°."
+      "En modo Puzzle 3D ('puzzle3d'), tenga siempre en cuenta que lo habitual es grabar las costillas primera y última de los ejes (las fachadas exteriores: ej. X1 y XN en la Serie A, y/o Y1/Z1 y YM/ZM en la Serie B), mientras las costillas intermedias actúan como esqueleto estructural interno. Para ello es especialmente útil la función ya existente de grabar imagen en lasca (activando puzzleEngraveEndRibs: true en applyOkfProjectConfig, llamando a applyEngravingToPuzzleEndRibs() o seleccionando la primera y última costilla de cada eje y aplicando applyDemoImageEngravingToSelectedSlice / handleSliceImageEngraveFile), ya que recorta automáticamente el grabado (#008800 / capa C00) al contorno exterior y evita las ranuras de encaje a 90°.",
+      "Cuando procese modelos .STL arquitectónicos, escultóricos o generados por IA que sean cáscaras huecas o tengan la base inferior recortada ('Sin Peana'), mantenga activo fillInternalHoles: true en modo 'puzzle3d'. El motor sliceTrianglesAtPlane detecta automáticamente si la sección transversal es una cáscara hueca o abierta (netArea < 0.38 * bboxArea) y reconstruye la envolvente superior v_max(u) apoyada sobre la cota base (Z = minZ) mediante buildSolidRibLoopFromSegments(), garantizando costillas estructurales macizas y el tallado íntegro de todas las ranuras a 90°.",
+      "En mallas de alta densidad (> 500.000 triángulos), active siempre puzzleSimplifyCutLine: true con puzzleSimplifyMode: 'rdp' y puzzleSimplifyToleranceMM: 0.25 para evitar miles de microsegmentos en la cortadora láser sin perder detalle arquitectónico.",
+      "Todo paquete .ZIP exportado por LayerStudio 3D incluye en su raíz el archivo PROYECTO_OKF.lasca con los metadatos del proyecto (incluyendo puzzleMaterialThicknessMM y boardWidthMM/boardHeightMM), permitiendo que el compilador de la cortadora láser Pérez Camps PC 13/90 II (https://github.com/nmarafo/laserpc13-90-II) autoseleccione el preset de velocidades y potencias del material."
     ]
   }
 }

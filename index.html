@@ -38,17 +38,17 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
 
   <!-- Hoja de estilos principal -->
-  <link rel="stylesheet" href="css/styles.css?v=3.0.11" />
+  <link rel="stylesheet" href="css/styles.css?v=3.0.12" />
 
   <!-- Módulos de la aplicación (cargados en orden de dependencia con defer y cache-busting) -->
-  <script src="js/state.js?v=3.0.11" defer></script>
-  <script src="js/viewer3d.js?v=3.0.11" defer></script>
-  <script src="js/slicer.js?v=3.0.11" defer></script>
-  <script src="js/nesting.js?v=3.0.11" defer></script>
-  <script src="js/modals-guide.js?v=3.0.11" defer></script>
-  <script src="js/viewer2d.js?v=3.0.11" defer></script>
-  <script src="js/exporters.js?v=3.0.11" defer></script>
-  <script src="js/vectorizer2d.js?v=3.0.11" defer></script>
+  <script src="js/state.js?v=3.0.12" defer></script>
+  <script src="js/viewer3d.js?v=3.0.12" defer></script>
+  <script src="js/slicer.js?v=3.0.12" defer></script>
+  <script src="js/nesting.js?v=3.0.12" defer></script>
+  <script src="js/modals-guide.js?v=3.0.12" defer></script>
+  <script src="js/viewer2d.js?v=3.0.12" defer></script>
+  <script src="js/exporters.js?v=3.0.12" defer></script>
+  <script src="js/vectorizer2d.js?v=3.0.12" defer></script>
 </head>
 <body class="h-screen w-screen flex flex-col">
 
@@ -191,6 +191,15 @@
             <button onclick="setMaxDimensionMM(1000)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300">1m</button>
             <button onclick="setMaxDimensionMM(2000)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300">2m</button>
             <button onclick="setMaxDimensionMM(3000)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300">3m</button>
+          </div>
+          <!-- Rotación rápida 90° de la pieza / costillas en X, Y, Z -->
+          <div class="pt-1.5 border-t border-slate-700/50 flex items-center justify-between gap-1">
+            <span class="text-[10px] text-slate-400 shrink-0" title="Rota el modelo 3D y todas las costillas 90° alrededor del eje elegido">Rotar 90°:</span>
+            <div class="grid grid-cols-3 gap-1 flex-1">
+              <button type="button" onclick="rotateBaseModel90('x')" class="py-0.5 px-1.5 bg-slate-900 hover:bg-slate-800 border border-rose-500/40 rounded text-[10px] font-semibold text-rose-300 transition" title="Rotar pieza y costillas 90° en torno al Eje X (intercambia Y ↔ Z)">↻ X 90°</button>
+              <button type="button" onclick="rotateBaseModel90('y')" class="py-0.5 px-1.5 bg-slate-900 hover:bg-slate-800 border border-emerald-500/40 rounded text-[10px] font-semibold text-emerald-300 transition" title="Rotar pieza y costillas 90° en torno al Eje Y (intercambia X ↔ Z)">↻ Y 90°</button>
+              <button type="button" onclick="rotateBaseModel90('z')" class="py-0.5 px-1.5 bg-slate-900 hover:bg-slate-800 border border-sky-500/40 rounded text-[10px] font-semibold text-sky-300 transition" title="Rotar pieza y costillas 90° en planta en torno al Eje Z (intercambia X ↔ Y)">↻ Z 90°</button>
+            </div>
           </div>
         </div>
 
@@ -373,8 +382,18 @@
         <!-- CONTROLES DE MODO PUZZLE 3D ENCAJABLE (2 EJES CON RANURAS A MEDIA MADERA SIN PEGAMENTO) -->
         <div id="puzzle3dControlsBox" class="hidden space-y-2.5 bg-slate-900/80 border border-amber-500/35 rounded-xl p-2.5">
           <div>
-            <label class="text-[10px] text-amber-300 font-bold uppercase block mb-1">Ejes de Cruce (Costillas A × B)</label>
-            <div class="grid grid-cols-3 gap-1">
+            <div class="flex items-center justify-between mb-1 gap-1">
+              <label class="text-[10px] text-amber-300 font-bold uppercase truncate">Ejes de Cruce (2 o 3 Ejes)</label>
+              <div class="flex items-center gap-1 shrink-0">
+                <button type="button" onclick="rotateBaseModel90('x')" class="px-1 py-0.5 rounded bg-slate-950 hover:bg-slate-800 border border-rose-500/35 text-[9px] font-semibold text-rose-300 transition" title="Rotar modelo y costillas 90° en Eje X">↻X</button>
+                <button type="button" onclick="rotateBaseModel90('y')" class="px-1 py-0.5 rounded bg-slate-950 hover:bg-slate-800 border border-emerald-500/35 text-[9px] font-semibold text-emerald-300 transition" title="Rotar modelo y costillas 90° en Eje Y">↻Y</button>
+                <button type="button" onclick="rotateBaseModel90('z')" class="px-1 py-0.5 rounded bg-slate-950 hover:bg-slate-800 border border-sky-500/35 text-[9px] font-semibold text-sky-300 transition" title="Rotar modelo y costillas 90° en Eje Z">↻Z</button>
+                <button type="button" onclick="autoSelectBestPuzzleAxes(false)" class="px-1.5 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-[9px] font-bold text-emerald-300 transition" title="Evalúa matemáticamente X×Y, X×Z e Y×Z (estabilidad de ranuras, silueta no rectangular y cohesión sin islas sueltas) y selecciona la combinación óptima">
+                  🪄 Auto
+                </button>
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-1">
               <button onclick="setPuzzleAxes('xy')" id="puzzleAxesBtn_xy" class="py-1 px-1.5 rounded border border-amber-500 bg-amber-500/20 text-[10px] font-bold text-amber-300 transition" title="Costillas X e Y que encajan verticalmente a lo largo de Z">
                 X × Y (Encaje Z)
               </button>
@@ -384,7 +403,11 @@
               <button onclick="setPuzzleAxes('yz')" id="puzzleAxesBtn_yz" class="py-1 px-1.5 rounded border border-slate-700 bg-slate-950 text-[10px] font-semibold text-slate-300 hover:bg-slate-800 transition" title="Costillas Y y Z que encajan a lo largo de X">
                 Y × Z (Encaje X)
               </button>
+              <button onclick="setPuzzleAxes('xyz')" id="puzzleAxesBtn_xyz" class="py-1 px-1.5 rounded border border-slate-700 bg-slate-950 text-[10px] font-semibold text-slate-300 hover:bg-slate-800 transition" title="Costillas simultáneas en los 3 ejes ortogonales (X × Y × Z) con protección anti-cizalladura de ranuras">
+                X × Y × Z (3 Ejes)
+              </button>
             </div>
+            <div id="puzzleAxesAutoScoreBadge" class="hidden text-[9px] text-emerald-300/90 text-center pt-1 font-mono"></div>
           </div>
 
           <div class="space-y-2 pt-1 border-t border-slate-800">
@@ -416,6 +439,21 @@
                 </div>
               </div>
               <input type="range" id="puzzleCountBSlider" min="2" max="60" value="7" oninput="onPuzzleCountChange('b', this.value)" class="w-full" />
+            </div>
+
+            <!-- Serie C: Número de costillas (exclusiva del modo 3 Ejes X × Y × Z) -->
+            <div id="puzzleSeriesCBox" class="hidden bg-slate-950/60 border border-emerald-500/25 rounded-lg p-2 space-y-1">
+              <div class="flex items-center justify-between text-[11px] mb-0.5 gap-1">
+                <span id="puzzleAxisCLabel" class="text-emerald-300 font-semibold truncate">Costillas Serie C (Eje Z · Plantas ⊞):</span>
+                <div class="flex items-center gap-1 shrink-0">
+                  <button type="button" id="puzzleToggleVisBtn_c" onclick="togglePuzzleSeriesVisibility('c')" class="px-1.5 h-5 flex items-center justify-center rounded bg-emerald-500/15 hover:bg-emerald-500/30 border border-emerald-500/35 text-emerald-300 font-semibold text-[9px] leading-none transition" title="Mostrar u ocultar en la vista todas las costillas de la Serie C">👁️ Ver</button>
+                  <button type="button" onclick="stepPuzzleCount('c', -1)" class="w-5 h-5 flex items-center justify-center rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-emerald-300 font-bold text-xs leading-none transition" title="Bajar 1 costilla en Serie C">−</button>
+                  <input type="number" id="puzzleCountCInput" min="2" max="60" step="1" value="4" onchange="onPuzzleCountChange('c', this.value)" class="w-11 bg-slate-900 border border-emerald-500/40 rounded px-1 py-0.5 text-[11px] text-center font-bold text-emerald-300 font-mono" title="Número de costillas en Serie C (Eje Z)" />
+                  <span id="puzzleCountCLabel" class="hidden font-bold text-emerald-400">4</span>
+                  <button type="button" onclick="stepPuzzleCount('c', 1)" class="w-5 h-5 flex items-center justify-center rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-emerald-300 font-bold text-xs leading-none transition" title="Subir 1 costilla en Serie C">+</button>
+                </div>
+              </div>
+              <input type="range" id="puzzleCountCSlider" min="2" max="60" value="4" oninput="onPuzzleCountChange('c', this.value)" class="w-full accent-emerald-400" />
             </div>
 
             <!-- Desplegable compacto para ajustar el comienzo del laminado en ambos ejes -->
@@ -1106,6 +1144,7 @@
             <div id="viewer3DPuzzleVisBox" class="hidden items-center gap-1 bg-slate-900/90 backdrop-blur border border-slate-700/80 px-2 py-1 rounded-lg">
               <button type="button" id="viewer3DVisBtn_a" onclick="togglePuzzleSeriesVisibility('a')" class="px-1.5 py-0.5 rounded bg-sky-500/15 hover:bg-sky-500/30 border border-sky-500/35 text-[10px] font-semibold text-sky-300 transition" title="Ocultar o mostrar en la vista 3D todas las costillas del 1.er eje">👁️ Eje X</button>
               <button type="button" id="viewer3DVisBtn_b" onclick="togglePuzzleSeriesVisibility('b')" class="px-1.5 py-0.5 rounded bg-amber-500/15 hover:bg-amber-500/30 border border-amber-500/35 text-[10px] font-semibold text-amber-300 transition" title="Ocultar o mostrar en la vista 3D todas las costillas del 2.º eje">👁️ Eje Y</button>
+              <button type="button" id="viewer3DVisBtn_c" onclick="togglePuzzleSeriesVisibility('c')" class="hidden px-1.5 py-0.5 rounded bg-emerald-500/15 hover:bg-emerald-500/30 border border-emerald-500/35 text-[10px] font-semibold text-emerald-300 transition" title="Ocultar o mostrar en la vista 3D todas las costillas del 3.er eje (Z)">👁️ Eje Z</button>
               <button type="button" id="viewer3DVisBtn_rib" onclick="toggleSelectedPuzzleRibVisibility()" class="px-1.5 py-0.5 rounded bg-emerald-500/15 hover:bg-emerald-500/30 border border-emerald-500/35 text-[10px] font-semibold text-emerald-300 transition" title="Ocultar o mostrar en la vista 3D únicamente la costilla seleccionada">👁️ Costilla</button>
               <button type="button" id="viewer3DVisBtn_all" onclick="showAllPuzzleRibsInView()" class="hidden px-1.5 py-0.5 rounded bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-[10px] font-bold text-rose-300 transition" title="Mostrar todas las costillas y ejes ocultos">👁️ Todo</button>
             </div>

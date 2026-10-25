@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/nmarafo/layerstudio3D/schema/schema_layerstudio3d_project.json",
   "title": "LayerStudio 3D Project & OKF Recipe Schema (.lasca / .json)",
-  "description": "Esquema formal JSON para archivos de proyecto .lasca y recetas ligeras OKF ejecutables mediante window.applyOkfProjectConfig(data) en LayerStudio 3D v3.0.6.",
+  "description": "Esquema formal JSON para archivos de proyecto .lasca y recetas ligeras OKF ejecutables mediante window.applyOkfProjectConfig(data) en LayerStudio 3D v3.0.12.",
   "type": "object",
   "properties": {
     "okfVersion": {
@@ -12,7 +12,7 @@
     },
     "version": {
       "type": "string",
-      "default": "3.0.6",
+      "default": "3.0.12",
       "description": "Versión del formato de proyecto LayerStudio 3D."
     },
     "modelName": {
@@ -215,7 +215,8 @@
     },
     "fillInternalHoles": {
       "type": "boolean",
-      "default": true
+      "default": true,
+      "description": "Elimina huecos internos. En modo 'puzzle3d', cuando el modelo 3D es una cáscara hueca o tiene la base abierta ('Sin Peana', netArea < 0.38 * bboxArea), activa además la reconstrucción automática de la envolvente maciza superior hasta la base (buildSolidRibLoopFromSegments)."
     },
     "fillHolesMode": {
       "type": "string",

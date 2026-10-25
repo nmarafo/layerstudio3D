@@ -1708,6 +1708,9 @@ async function executeZipExport() {
     const guiaIlustradaHtml = generateIllustratedAssemblyGuideHTML();
     zip.file('GUIA_ILUSTRADA_MONTAJE.html', guiaIlustradaHtml);
   }
+  if (typeof getOkfRecipePayload === 'function') {
+    zip.file('PROYECTO_OKF.lasca', JSON.stringify(getOkfRecipePayload(false), null, 2));
+  }
 
   const content = await zip.generateAsync({ type: 'blob' });
   const zipSuffix = state.constructionMode === 'puzzle3d'
@@ -1722,10 +1725,74 @@ async function executeZipExport() {
 // =========================================================================
 // IMPORTAR / EXPORTAR PROYECTO (.LASCA / .JSON) E INTEGRACIÓN OKF
 // =========================================================================
+// Compacta baseVertices para archivos .lasca cuando la malla original supera maxTriangles (ej. STLs de >1M triángulos)
+function compactBaseVerticesForLasca(baseVertices, maxTriangles = 36000) {
+  if (!baseVertices || !baseVertices.length) return [];
+  const totalTris = Math.floor(baseVertices.length / 9);
+  if (totalTris <= maxTriangles) {
+    const out = new Array(baseVertices.length);
+    for (let i = 0; i < baseVertices.length; i++) {
+      out[i] = Math.round(baseVertices[i] * 10000) / 10000;
+    }
+    return out;
+  }
+
+  // Reconstrucción 2.5D sólida estanca en rejilla 96 x 128 desde la envolvente superior z_max(x, y) hasta z_min (-0.5)
+  const nx = 96;
+  const ny = 128;
+  const zGrid = new Float32Array(nx * ny).fill(-0.5);
+  const dx = 1.0 / (nx - 1);
+  const dy = 1.0 / (ny - 1);
+
+  for (let i = 0; i < baseVertices.length; i += 3) {
+    const x = baseVertices[i];
+    const y = baseVertices[i + 1];
+    const z = baseVertices[i + 2];
+    const ix = Math.max(0, Math.min(nx - 1, Math.round((x + 0.5) / dx)));
+    const iy = Math.max(0, Math.min(ny - 1, Math.round((y + 0.5) / dy)));
+    const idx = iy * nx + ix;
+    if (z > zGrid[idx]) zGrid[idx] = z;
+  }
+
+  const padW = nx + 2;
+  const padH = ny + 2;
+  const zPad = new Float32Array(padW * padH).fill(-0.5);
+  for (let j = 0; j < ny; j++) {
+    for (let i = 0; i < nx; i++) {
+      zPad[(j + 1) * padW + (i + 1)] = zGrid[j * nx + i];
+    }
+  }
+
+  const out = [];
+  const r4 = (v) => Math.round(v * 10000) / 10000;
+  const baseZ = -0.5;
+
+  for (let j = 0; j < padH - 1; j++) {
+    const y0 = r4(-0.5 + (j - 1) * dy);
+    const y1 = r4(-0.5 + j * dy);
+    for (let i = 0; i < padW - 1; i++) {
+      const z00 = r4(zPad[j * padW + i]);
+      const z10 = r4(zPad[j * padW + (i + 1)]);
+      const z01 = r4(zPad[(j + 1) * padW + i]);
+      const z11 = r4(zPad[(j + 1) * padW + (i + 1)]);
+      if (Math.max(z00, z10, z01, z11) <= baseZ + 0.005) continue;
+      const x0 = r4(-0.5 + (i - 1) * dx);
+      const x1 = r4(-0.5 + i * dx);
+      out.push(
+        x0, y0, z00, x1, y0, z10, x1, y1, z11,
+        x0, y0, z00, x1, y1, z11, x0, y1, z01,
+        x0, y0, baseZ, x1, y1, baseZ, x1, y0, baseZ,
+        x0, y0, baseZ, x0, y1, baseZ, x1, y1, baseZ
+      );
+    }
+  }
+  return out;
+}
+
 function exportProjectFile() {
   const payload = {
     okfVersion: '1.3.0',
-    version: '3.0.6',
+    version: '3.0.7',
     modelName: state.modelName,
     unit: state.unit,
     constructionMode: state.constructionMode,
@@ -1812,7 +1879,7 @@ function exportProjectFile() {
     tabShowMarkers: state.tabShowMarkers,
     dimsMM: state.dimsMM,
     selectedIndices: state.slices.filter((s) => s.selected).map((s) => s.index),
-    baseVertices: Array.from(state.baseVertices || [])
+    baseVertices: compactBaseVerticesForLasca(state.baseVertices)
   };
   const blob = new Blob([JSON.stringify(payload)], { type: 'application/json;charset=utf-8' });
   triggerBrowserDownload(blob, state.modelName + '.lasca');

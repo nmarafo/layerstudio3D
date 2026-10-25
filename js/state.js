@@ -26,18 +26,22 @@ const state = {
   mode: 'count', // 'count' | 'thickness'
   sliceCount: 24,
   thickness: 5,
-  // Configuración de Modalidad Puzzle 3D (Costillas ortogonales con ranuras de encaje sin pegamento)
-  puzzleAxes: 'xy',            // 'xy' (encaje en Z) | 'xz' (encaje en Y) | 'yz' (encaje en X)
+  // Configuración de Modalidad Puzzle 3D (Costillas ortogonales con ranuras de encaje sin pegamento: 2 o 3 ejes)
+  puzzleAxes: 'xy',            // 'xy' (encaje Z) | 'xz' (encaje Y) | 'yz' (encaje X) | 'xyz' (3 Ejes simultáneos X × Y × Z)
   puzzleCountA: 7,             // Nº de costillas en el 1º eje (Serie A)
   puzzleCountB: 7,             // Nº de costillas en el 2º eje (Serie B)
+  puzzleCountC: 4,             // Nº de costillas en el 3º eje (Serie C, cuando puzzleAxes === 'xyz')
   puzzleStartOffsetAMM: 0.0,   // Desplazamiento del comienzo del laminado en el 1º eje (Serie A) en mm
   puzzleStartOffsetBMM: 0.0,   // Desplazamiento del comienzo del laminado en el 2º eje (Serie B) en mm
+  puzzleStartOffsetCMM: 0.0,   // Desplazamiento del comienzo del laminado en el 3º eje (Serie C) en mm
   puzzleStartMode: 'start',    // 'start' (Mover inicio y repartir) | 'symmetric' (Simétrico en ambos extremos) | 'shift' (Desplazar conjunto)
   puzzleRibOffsetsAMM: {},     // Desplazamiento individual en mm por costilla de la Serie A { [seriesIndex]: deltaMM }
   puzzleRibOffsetsBMM: {},     // Desplazamiento individual en mm por costilla de la Serie B { [seriesIndex]: deltaMM }
+  puzzleRibOffsetsCMM: {},     // Desplazamiento individual en mm por costilla de la Serie C { [seriesIndex]: deltaMM }
   puzzleHideSeriesA: false,    // true = oculta en la vista todas las costillas del 1.er eje (Serie A)
   puzzleHideSeriesB: false,    // true = oculta en la vista todas las costillas del 2.º eje (Serie B)
-  puzzleHiddenRibs: { A: {}, B: {} }, // Costillas individuales ocultas en la vista { A: { [seriesIndex]: true }, B: { [seriesIndex]: true } }
+  puzzleHideSeriesC: false,    // true = oculta en la vista todas las costillas del 3.er eje (Serie C)
+  puzzleHiddenRibs: { A: {}, B: {}, C: {} }, // Costillas individuales ocultas en la vista { A, B, C }
   sliceImageEngravings: {},    // Grabado de imagen personalizado por lámina / costilla { [sliceKey]: config }
   sliceEngravePanelOpen: false,// true = muestra el panel de grabado de imagen sobre la lámina seleccionada en el Inspector 2D
   puzzleEngraveEndRibs: false, // true = graba automáticamente la primera y última costilla de los ejes en modo Puzzle 3D

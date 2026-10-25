@@ -28,15 +28,18 @@ function getSliceDisplayCode(slice, islandIdx, totalIslands) {
   return baseCode;
 }
 
-// Devuelve los ejes (axisA, axisB, axisCommon) para la modalidad Puzzle 3D
+// Devuelve los ejes (axisA, axisB, axisC, axisCommon, is3Axes) para la modalidad Puzzle 3D
 function getPuzzleAxesConfig() {
+  if (state.puzzleAxes === 'xyz') {
+    return { axisA: 'x', axisB: 'y', axisC: 'z', axisCommon: 'z', is3Axes: true };
+  }
   if (state.puzzleAxes === 'xz') {
-    return { axisA: 'x', axisB: 'z', axisCommon: 'y' };
+    return { axisA: 'x', axisB: 'z', axisC: null, axisCommon: 'y', is3Axes: false };
   }
   if (state.puzzleAxes === 'yz') {
-    return { axisA: 'y', axisB: 'z', axisCommon: 'x' };
+    return { axisA: 'y', axisB: 'z', axisC: null, axisCommon: 'x', is3Axes: false };
   }
-  return { axisA: 'x', axisB: 'y', axisCommon: 'z' };
+  return { axisA: 'x', axisB: 'y', axisC: null, axisCommon: 'z', is3Axes: false };
 }
 
 // Determina qué eje 2D ('x' o 'y') del plano de una lasca corresponde al eje de cruce (u) y cuál al eje de deslizamiento de la ranura (v)
@@ -67,19 +70,169 @@ function setConstructionMode(mode) {
     state.filterSmallIslands = true;
     state.fillInternalHoles = true;
     updateFilteredIslandsUI();
+    if (!state._puzzleAxesEvaluatedForCurrentMesh && state.baseVertices && state.baseVertices.length > 0) {
+      autoSelectBestPuzzleAxes(true);
+      return;
+    }
   }
   syncConstructionModeUI();
   rebuildGhostAndSlices();
 }
 
 function setPuzzleAxes(axesPair) {
-  if (axesPair === 'xy' || axesPair === 'xz' || axesPair === 'yz') {
+  if (axesPair === 'xy' || axesPair === 'xz' || axesPair === 'yz' || axesPair === 'xyz') {
     state.puzzleAxes = axesPair;
+    state._puzzleAxesEvaluatedForCurrentMesh = true;
   }
   syncConstructionModeUI();
   if (state.constructionMode === 'puzzle3d') {
     rebuildGhostAndSlices();
   }
+}
+
+// Evalúa cuantitativamente un conjunto de costillas Puzzle 3D según 4 criterios geométricos y estructurales (0..100 pts)
+function computePuzzleAxesCandidateScore(slices, totalSlots) {
+  let activeCount = 0;
+  let multiSlotCount = 0;      // costillas con >= 2 ranuras (estabilidad rotacional)
+  let singleSlotCount = 0;     // costillas con 1 sola ranura (voladizo inestable / giro libre)
+  let zeroSlotActiveCount = 0; // costillas activas con 0 ranuras (piezas sueltas)
+  let extraIslands = 0;        // islas adicionales por fragmentación tras tallar ranuras
+  let boxyRibsCount = 0;       // costillas tipo "peine rectangular" sin silueta (Area / (W*H) > 0.80)
+  let exprSum = 0;
+
+  (slices || []).forEach((s) => {
+    const baseOuters = (s.baseLoops || []).filter((l) => !l.isHole);
+    const finalOuters = (s.loops || []).filter((l) => !l.isHole);
+    if (finalOuters.length === 0) return;
+
+    activeCount++;
+    const sl = (s.slots || []).length;
+    if (sl >= 2) multiSlotCount++;
+    else if (sl === 1) singleSlotCount++;
+    else zeroSlotActiveCount++;
+
+    extraIslands += Math.max(0, finalOuters.length - 1);
+
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, area = 0;
+    baseOuters.forEach((l) => {
+      area += l.absArea || 0;
+      (l.points || []).forEach((p) => {
+        if (p.x < x0) x0 = p.x; if (p.x > x1) x1 = p.x;
+        if (p.y < y0) y0 = p.y; if (p.y > y1) y1 = p.y;
+      });
+    });
+    const bboxA = Math.max(1, (x1 - x0) * (y1 - y0));
+    const rectRatio = Math.min(1, area / bboxA);
+    if (rectRatio > 0.80) boxyRibsCount++;
+    const expr = Math.max(0, 1.0 - Math.abs(rectRatio - 0.58) / 0.52);
+    exprSum += expr;
+  });
+
+  if (activeCount === 0 || !slices || slices.length === 0) {
+    return { totalScore: 0, stabilityPts: 0, silhouettePts: 0, cohesionPts: 0, densityPts: 0, activeCount: 0, multiSlotCount: 0, singleSlotCount: 0, boxyRibsCount: 0, extraIslands: 0, totalSlots: 0 };
+  }
+
+  // 1. Estabilidad rotacional de encajes (35 pts): premia >= 2 ranuras por costilla, penaliza 1 o 0 ranuras
+  const stabilityRatio = Math.max(0, (multiSlotCount - 1.2 * singleSlotCount - 2.5 * zeroSlotActiveCount) / activeCount);
+  const stabilityPts = 35 * stabilityRatio;
+
+  // 2. Expresividad morfológica de silueta / ausencia de "peines rectangulares" (30 pts)
+  const avgExpr = exprSum / activeCount;
+  const boxyPenaltyRatio = boxyRibsCount / activeCount;
+  const silhouettePts = 30 * Math.max(0, avgExpr * (1 - 0.75 * boxyPenaltyRatio));
+
+  // 3. Cohesión topológica / ausencia de islas fragmentadas (20 pts)
+  const cohesionPts = 20 * (1 / (1 + 0.45 * extraIslands));
+
+  // 4. Densidad de cruces y cobertura de costillas activas (15 pts)
+  const coverageRatio = activeCount / slices.length;
+  const slotDensity = Math.min(1, (totalSlots || 0) / Math.max(1, activeCount * 4.5));
+  const densityPts = 15 * (0.5 * coverageRatio + 0.5 * slotDensity);
+
+  const totalScore = Number((stabilityPts + silhouettePts + cohesionPts + densityPts).toFixed(1));
+  return {
+    totalScore,
+    stabilityPts: Number(stabilityPts.toFixed(1)),
+    silhouettePts: Number(silhouettePts.toFixed(1)),
+    cohesionPts: Number(cohesionPts.toFixed(1)),
+    densityPts: Number(densityPts.toFixed(1)),
+    activeCount,
+    multiSlotCount,
+    singleSlotCount,
+    boxyRibsCount,
+    extraIslands,
+    totalSlots: totalSlots || 0
+  };
+}
+
+// Evalúa las 3 combinaciones ('xy', 'xz', 'yz') sobre la malla actual y selecciona automáticamente la combinación óptima
+function autoSelectBestPuzzleAxes(silent = false) {
+  if (!state.baseVertices || state.baseVertices.length === 0) return null;
+  const verts = getScaledTriangles();
+  const countA = Math.max(2, state.puzzleCountA || 7);
+  const countB = Math.max(2, state.puzzleCountB || 7);
+  const candidates = [
+    { pair: 'xy', axisA: 'x', axisB: 'y' },
+    { pair: 'xz', axisA: 'x', axisB: 'z' },
+    { pair: 'yz', axisA: 'y', axisB: 'z' }
+  ];
+
+  const prevMode = state.constructionMode;
+  state.constructionMode = 'puzzle3d';
+  const results = {};
+  let bestPair = state.puzzleAxes || 'xy';
+  let bestScore = -1;
+
+  candidates.forEach((cand) => {
+    const spanA = state.dimsMM[cand.axisA] || 100;
+    const spanB = state.dimsMM[cand.axisB] || 100;
+    const coordInfoA = computePuzzleAxisSliceCoords(spanA, countA, state.puzzleStartOffsetAMM, state.puzzleStartMode, state.puzzleRibOffsetsAMM);
+    const coordInfoB = computePuzzleAxisSliceCoords(spanB, countB, state.puzzleStartOffsetBMM, state.puzzleStartMode, state.puzzleRibOffsetsBMM);
+    const slicesA = [];
+    const slicesB = [];
+
+    for (let i = 0; i < countA; i++) {
+      const coordA = coordInfoA.coords[i];
+      const rawLoops = sliceTrianglesAtPlane(verts, cand.axisA, coordA, spanA);
+      const filtered = filterLoopsByMinIslandSize(rawLoops).loops;
+      slicesA.push({
+        index: i, coord: coordA, sliceAxis: cand.axisA, puzzleSeries: 'A', seriesIndex: i,
+        puzzleCode: cand.axisA.toUpperCase() + (i + 1),
+        rawLoops, rawBaseLoops: filtered, baseLoops: filtered, loops: filtered, slots: [], slotRects: []
+      });
+    }
+    for (let j = 0; j < countB; j++) {
+      const coordB = coordInfoB.coords[j];
+      const rawLoops = sliceTrianglesAtPlane(verts, cand.axisB, coordB, spanB);
+      const filtered = filterLoopsByMinIslandSize(rawLoops).loops;
+      slicesB.push({
+        index: countA + j, coord: coordB, sliceAxis: cand.axisB, puzzleSeries: 'B', seriesIndex: j,
+        puzzleCode: cand.axisB.toUpperCase() + (j + 1),
+        rawLoops, rawBaseLoops: filtered, baseLoops: filtered, loops: filtered, slots: [], slotRects: []
+      });
+    }
+    carveInterlockingPuzzleSlots(slicesA, slicesB, cand.axisA, cand.axisB);
+    const allSlices = slicesA.concat(slicesB);
+    const metrics = computePuzzleAxesCandidateScore(allSlices, state.puzzleTotalSlotsCount);
+    results[cand.pair] = metrics;
+    if (metrics.totalScore > bestScore) {
+      bestScore = metrics.totalScore;
+      bestPair = cand.pair;
+    }
+  });
+
+  state.constructionMode = prevMode;
+  state.puzzleAxes = bestPair;
+  state.puzzleAxesAutoScores = { ...results, bestPair };
+  state._puzzleAxesEvaluatedForCurrentMesh = true;
+
+  syncConstructionModeUI();
+  rebuildGhostAndSlices();
+  return state.puzzleAxesAutoScores;
+}
+if (typeof window !== 'undefined') {
+  window.autoSelectBestPuzzleAxes = autoSelectBestPuzzleAxes;
+  window.computePuzzleAxesCandidateScore = computePuzzleAxesCandidateScore;
 }
 
 function onPuzzleCountChange(which, val) {
@@ -92,6 +245,14 @@ function onPuzzleCountChange(which, val) {
     if (sA) sA.value = n;
     const inA = document.getElementById('puzzleCountAInput');
     if (inA) inA.value = n;
+  } else if (which === 'c') {
+    state.puzzleCountC = n;
+    const lbl = document.getElementById('puzzleCountCLabel');
+    if (lbl) lbl.textContent = n;
+    const sC = document.getElementById('puzzleCountCSlider');
+    if (sC) sC.value = n;
+    const inC = document.getElementById('puzzleCountCInput');
+    if (inC) inC.value = n;
   } else {
     state.puzzleCountB = n;
     const lbl = document.getElementById('puzzleCountBLabel');
@@ -108,7 +269,7 @@ function onPuzzleCountChange(which, val) {
 }
 
 function stepPuzzleCount(which, delta) {
-  const current = which === 'a' ? state.puzzleCountA : state.puzzleCountB;
+  const current = which === 'a' ? state.puzzleCountA : (which === 'c' ? (state.puzzleCountC || 4) : state.puzzleCountB);
   const next = Math.max(2, Math.min(60, (parseInt(current, 10) || 7) + (parseInt(delta, 10) || 0)));
   onPuzzleCountChange(which, next);
 }
@@ -201,14 +362,22 @@ function computePuzzleAxisSliceCoords(span, count, offsetMM, mode, ribOffsetsMap
 function getSelectedPuzzleRibInfo() {
   const cfg = getPuzzleAxesConfig();
   const activeSlice = state.slices && state.slices[state.activeSliceIndex];
-  const series = (activeSlice && activeSlice.puzzleSeries === 'B') ? 'B' : 'A';
-  const count = series === 'A' ? Math.max(2, state.puzzleCountA) : Math.max(2, state.puzzleCountB);
+  const series = (activeSlice && activeSlice.puzzleSeries === 'C')
+    ? 'C'
+    : ((activeSlice && activeSlice.puzzleSeries === 'B') ? 'B' : 'A');
+  const count = series === 'A'
+    ? Math.max(2, state.puzzleCountA)
+    : (series === 'C' ? Math.max(2, state.puzzleCountC || 4) : Math.max(2, state.puzzleCountB));
   const rawIdx = (activeSlice && typeof activeSlice.seriesIndex === 'number') ? activeSlice.seriesIndex : 0;
   const seriesIndex = Math.max(0, Math.min(count - 1, rawIdx));
-  const axis = series === 'A' ? cfg.axisA : cfg.axisB;
+  const axis = series === 'A' ? cfg.axisA : (series === 'C' ? (cfg.axisC || 'z') : cfg.axisB);
   const span = Math.max(10, (state.dimsMM && state.dimsMM[axis]) || 100);
-  const startOff = series === 'A' ? state.puzzleStartOffsetAMM : state.puzzleStartOffsetBMM;
-  const offsetsMap = series === 'A' ? (state.puzzleRibOffsetsAMM || {}) : (state.puzzleRibOffsetsBMM || {});
+  const startOff = series === 'A'
+    ? state.puzzleStartOffsetAMM
+    : (series === 'C' ? (state.puzzleStartOffsetCMM || 0) : state.puzzleStartOffsetBMM);
+  const offsetsMap = series === 'A'
+    ? (state.puzzleRibOffsetsAMM || {})
+    : (series === 'C' ? (state.puzzleRibOffsetsCMM || {}) : (state.puzzleRibOffsetsBMM || {}));
   const coordInfo = computePuzzleAxisSliceCoords(span, count, startOff, state.puzzleStartMode, offsetsMap);
   const baseCoord = coordInfo.baseCoords[seriesIndex];
   const actualCoord = coordInfo.coords[seriesIndex];
@@ -233,7 +402,8 @@ function isSliceHiddenInView(slice) {
   if (state.constructionMode === 'puzzle3d') {
     if (slice.puzzleSeries === 'A' && state.puzzleHideSeriesA) return true;
     if (slice.puzzleSeries === 'B' && state.puzzleHideSeriesB) return true;
-    const ser = slice.puzzleSeries === 'B' ? 'B' : 'A';
+    if (slice.puzzleSeries === 'C' && state.puzzleHideSeriesC) return true;
+    const ser = slice.puzzleSeries === 'C' ? 'C' : (slice.puzzleSeries === 'B' ? 'B' : 'A');
     if (
       state.puzzleHiddenRibs &&
       state.puzzleHiddenRibs[ser] &&
@@ -251,6 +421,8 @@ function togglePuzzleSeriesVisibility(which) {
     state.puzzleHideSeriesA = !state.puzzleHideSeriesA;
   } else if (which === 'b') {
     state.puzzleHideSeriesB = !state.puzzleHideSeriesB;
+  } else if (which === 'c') {
+    state.puzzleHideSeriesC = !state.puzzleHideSeriesC;
   }
   syncPuzzleSelectedRibUI();
   update3DSlicesTransforms();
@@ -260,12 +432,12 @@ function togglePuzzleSeriesVisibility(which) {
 
 function toggleActivePuzzleAxisVisibility() {
   const info = getSelectedPuzzleRibInfo();
-  togglePuzzleSeriesVisibility(info.series === 'B' ? 'b' : 'a');
+  togglePuzzleSeriesVisibility(info.series === 'C' ? 'c' : (info.series === 'B' ? 'b' : 'a'));
 }
 
 function toggleSelectedPuzzleRibVisibility() {
   const info = getSelectedPuzzleRibInfo();
-  if (!state.puzzleHiddenRibs) state.puzzleHiddenRibs = { A: {}, B: {} };
+  if (!state.puzzleHiddenRibs) state.puzzleHiddenRibs = { A: {}, B: {}, C: {} };
   if (!state.puzzleHiddenRibs[info.series]) state.puzzleHiddenRibs[info.series] = {};
   const currentlyHidden = Boolean(state.puzzleHiddenRibs[info.series][info.seriesIndex]);
   if (currentlyHidden) {
@@ -282,7 +454,8 @@ function toggleSelectedPuzzleRibVisibility() {
 function showAllPuzzleRibsInView() {
   state.puzzleHideSeriesA = false;
   state.puzzleHideSeriesB = false;
-  state.puzzleHiddenRibs = { A: {}, B: {} };
+  state.puzzleHideSeriesC = false;
+  state.puzzleHiddenRibs = { A: {}, B: {}, C: {} };
   syncPuzzleSelectedRibUI();
   update3DSlicesTransforms();
   if (typeof renderSliceStripUI === 'function') renderSliceStripUI();
@@ -347,6 +520,13 @@ function syncPuzzleSelectedRibUI() {
       ? 'px-1.5 h-5 flex items-center justify-center rounded bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 font-bold text-[9px] leading-none transition'
       : 'px-1.5 h-5 flex items-center justify-center rounded bg-amber-500/15 hover:bg-amber-500/30 border border-amber-500/35 text-amber-300 font-semibold text-[9px] leading-none transition';
   }
+  const visBtnC = document.getElementById('puzzleToggleVisBtn_c');
+  if (visBtnC && cfg.axisC) {
+    visBtnC.textContent = state.puzzleHideSeriesC ? ('🙈 Eje ' + cfg.axisC.toUpperCase() + ' oculto') : ('👁️ Eje ' + cfg.axisC.toUpperCase());
+    visBtnC.className = state.puzzleHideSeriesC
+      ? 'px-1.5 h-5 flex items-center justify-center rounded bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 font-bold text-[9px] leading-none transition'
+      : 'px-1.5 h-5 flex items-center justify-center rounded bg-emerald-500/15 hover:bg-emerald-500/30 border border-emerald-500/35 text-emerald-300 font-semibold text-[9px] leading-none transition';
+  }
 
   // Sincronizar botones de ocultar/mostrar costilla seleccionada y eje activo
   const isRibIndivHidden = Boolean(
@@ -354,13 +534,17 @@ function syncPuzzleSelectedRibUI() {
     state.puzzleHiddenRibs[info.series] &&
     state.puzzleHiddenRibs[info.series][info.seriesIndex]
   );
-  const isActiveAxisHidden = info.series === 'B' ? Boolean(state.puzzleHideSeriesB) : Boolean(state.puzzleHideSeriesA);
+  const isActiveAxisHidden = info.series === 'C'
+    ? Boolean(state.puzzleHideSeriesC)
+    : (info.series === 'B' ? Boolean(state.puzzleHideSeriesB) : Boolean(state.puzzleHideSeriesA));
   const hasAnyHidden = Boolean(
     state.puzzleHideSeriesA ||
     state.puzzleHideSeriesB ||
+    (cfg.is3Axes && state.puzzleHideSeriesC) ||
     (state.puzzleHiddenRibs && (
       Object.keys(state.puzzleHiddenRibs.A || {}).length > 0 ||
-      Object.keys(state.puzzleHiddenRibs.B || {}).length > 0
+      Object.keys(state.puzzleHiddenRibs.B || {}).length > 0 ||
+      Object.keys(state.puzzleHiddenRibs.C || {}).length > 0
     ))
   );
 
@@ -428,6 +612,16 @@ function syncPuzzleSelectedRibUI() {
       ? 'px-1.5 py-0.5 rounded bg-rose-500/25 hover:bg-rose-500/35 border border-rose-500/50 text-[10px] font-bold text-rose-300 transition'
       : 'px-1.5 py-0.5 rounded bg-amber-500/15 hover:bg-amber-500/30 border border-amber-500/35 text-[10px] font-semibold text-amber-300 transition';
   }
+  const v3dBtnC = document.getElementById('viewer3DVisBtn_c');
+  if (v3dBtnC) {
+    v3dBtnC.classList.toggle('hidden', !cfg.is3Axes);
+    if (cfg.is3Axes && cfg.axisC) {
+      v3dBtnC.textContent = state.puzzleHideSeriesC ? ('🙈 Eje ' + cfg.axisC.toUpperCase()) : ('👁️ Eje ' + cfg.axisC.toUpperCase());
+      v3dBtnC.className = state.puzzleHideSeriesC
+        ? 'px-1.5 py-0.5 rounded bg-rose-500/25 hover:bg-rose-500/35 border border-rose-500/50 text-[10px] font-bold text-rose-300 transition'
+        : 'px-1.5 py-0.5 rounded bg-emerald-500/15 hover:bg-emerald-500/30 border border-emerald-500/35 text-[10px] font-semibold text-emerald-300 transition';
+    }
+  }
   const v3dBtnRib = document.getElementById('viewer3DVisBtn_rib');
   if (v3dBtnRib) {
     v3dBtnRib.textContent = isRibIndivHidden ? ('🙈 ' + info.ribCode) : ('👁️ ' + info.ribCode);
@@ -451,6 +645,9 @@ function onSelectedPuzzleRibCoordChange(val) {
   if (info.series === 'A') {
     if (!state.puzzleRibOffsetsAMM) state.puzzleRibOffsetsAMM = {};
     state.puzzleRibOffsetsAMM[info.seriesIndex] = newDelta;
+  } else if (info.series === 'C') {
+    if (!state.puzzleRibOffsetsCMM) state.puzzleRibOffsetsCMM = {};
+    state.puzzleRibOffsetsCMM[info.seriesIndex] = newDelta;
   } else {
     if (!state.puzzleRibOffsetsBMM) state.puzzleRibOffsetsBMM = {};
     state.puzzleRibOffsetsBMM[info.seriesIndex] = newDelta;
@@ -473,6 +670,8 @@ function resetSelectedPuzzleRibOffset() {
   const info = getSelectedPuzzleRibInfo();
   if (info.series === 'A' && state.puzzleRibOffsetsAMM) {
     delete state.puzzleRibOffsetsAMM[info.seriesIndex];
+  } else if (info.series === 'C' && state.puzzleRibOffsetsCMM) {
+    delete state.puzzleRibOffsetsCMM[info.seriesIndex];
   } else if (info.series === 'B' && state.puzzleRibOffsetsBMM) {
     delete state.puzzleRibOffsetsBMM[info.seriesIndex];
   }
@@ -486,6 +685,7 @@ function resetSelectedPuzzleRibOffset() {
 function resetAllPuzzleRibOffsets() {
   state.puzzleRibOffsetsAMM = {};
   state.puzzleRibOffsetsBMM = {};
+  state.puzzleRibOffsetsCMM = {};
   if (state.constructionMode === 'puzzle3d') {
     rebuildGhostAndSlices();
   }
@@ -575,10 +775,11 @@ function syncConstructionModeUI() {
   if (boxStacked) boxStacked.classList.toggle('hidden', isPuzzle);
   if (boxPuzzle) boxPuzzle.classList.toggle('hidden', !isPuzzle);
   if (badge) {
-    badge.textContent = isPuzzle ? 'Puzzle 3D (2 Ejes)' : 'Apilado 1 Eje';
+    const is3Ax = state.puzzleAxes === 'xyz';
+    badge.textContent = isPuzzle ? (is3Ax ? 'Puzzle 3D (3 Ejes)' : 'Puzzle 3D (2 Ejes)') : 'Apilado 1 Eje';
     badge.className = isPuzzle
       ? 'text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold'
-      : 'text-[9px] px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 font-semibold';
+      : 'text-[9px] px-1.5 py-1 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 font-semibold';
   }
 
   // Ocultar opciones exclusivas de apilado (guías #N+1/#N-1 y varillas) cuando está en modo Puzzle 3D
@@ -598,7 +799,7 @@ function syncConstructionModeUI() {
     legSlots.classList.toggle('flex', isPuzzle);
   }
 
-  ['xy', 'xz', 'yz'].forEach((pair) => {
+  ['xy', 'xz', 'yz', 'xyz'].forEach((pair) => {
     const b = document.getElementById('puzzleAxesBtn_' + pair);
     if (!b) return;
     b.className = state.puzzleAxes === pair
@@ -606,24 +807,49 @@ function syncConstructionModeUI() {
       : 'py-1 px-1.5 rounded border border-slate-700 bg-slate-950 text-[10px] font-semibold text-slate-300 hover:bg-slate-800 transition';
   });
 
+  const autoScoreEl = document.getElementById('puzzleAxesAutoScoreBadge');
+  if (autoScoreEl) {
+    const sc = state.puzzleAxesAutoScores;
+    if (sc && sc.xy && sc.xz && sc.yz) {
+      const fmt = (k, lbl) => {
+        const val = sc[k] ? sc[k].totalScore.toFixed(1) : '0.0';
+        return sc.bestPair === k ? `<strong>${lbl}: ${val}★</strong>` : `${lbl}: ${val}`;
+      };
+      autoScoreEl.innerHTML = `Índice Estructural → ${fmt('xy', 'X×Y')} · ${fmt('xz', 'X×Z')} · ${fmt('yz', 'Y×Z')}`;
+      autoScoreEl.classList.remove('hidden');
+    } else {
+      autoScoreEl.classList.add('hidden');
+    }
+  }
+
   const cfg = getPuzzleAxesConfig();
   const lblA = document.getElementById('puzzleAxisALabel');
   const lblB = document.getElementById('puzzleAxisBLabel');
+  const lblC = document.getElementById('puzzleAxisCLabel');
+  const boxC = document.getElementById('puzzleSeriesCBox');
   if (lblA) lblA.textContent = 'Costillas Serie A (Eje ' + cfg.axisA.toUpperCase() + ' · Ranura ⊔):';
   if (lblB) lblB.textContent = 'Costillas Serie B (Eje ' + cfg.axisB.toUpperCase() + ' · Ranura ⊓):';
+  if (lblC && cfg.axisC) lblC.textContent = 'Costillas Serie C (Eje ' + cfg.axisC.toUpperCase() + ' · Plantas ⊞):';
+  if (boxC) boxC.classList.toggle('hidden', !cfg.is3Axes);
 
   const sA = document.getElementById('puzzleCountASlider');
   const sB = document.getElementById('puzzleCountBSlider');
+  const sC = document.getElementById('puzzleCountCSlider');
   const inA = document.getElementById('puzzleCountAInput');
   const inB = document.getElementById('puzzleCountBInput');
+  const inC = document.getElementById('puzzleCountCInput');
   const cA = document.getElementById('puzzleCountALabel');
   const cB = document.getElementById('puzzleCountBLabel');
+  const cC = document.getElementById('puzzleCountCLabel');
   if (sA) sA.value = state.puzzleCountA;
   if (sB) sB.value = state.puzzleCountB;
+  if (sC) sC.value = state.puzzleCountC || 4;
   if (inA) inA.value = state.puzzleCountA;
   if (inB) inB.value = state.puzzleCountB;
+  if (inC) inC.value = state.puzzleCountC || 4;
   if (cA) cA.textContent = state.puzzleCountA;
   if (cB) cB.textContent = state.puzzleCountB;
+  if (cC) cC.textContent = state.puzzleCountC || 4;
 
   const spanA = Math.max(10, (state.dimsMM && state.dimsMM[cfg.axisA]) || 100);
   const spanB = Math.max(10, (state.dimsMM && state.dimsMM[cfg.axisB]) || 100);
@@ -713,11 +939,14 @@ function syncConstructionModeUI() {
   const slotW = Math.max(0.4, state.puzzleMaterialThicknessMM + state.puzzleSlotClearanceMM);
   const sumBadge = document.getElementById('puzzleSummaryBadge');
   if (sumBadge) {
+    const countC = cfg.is3Axes ? (state.puzzleCountC || 4) : 0;
+    const totalRibs = state.puzzleCountA + state.puzzleCountB + countC;
+    const breakdown = cfg.is3Axes
+      ? (state.puzzleCountA + ' ' + cfg.axisA.toUpperCase() + ' + ' + state.puzzleCountB + ' ' + cfg.axisB.toUpperCase() + ' + ' + countC + ' ' + cfg.axisC.toUpperCase())
+      : (state.puzzleCountA + ' ' + cfg.axisA.toUpperCase() + ' + ' + state.puzzleCountB + ' ' + cfg.axisB.toUpperCase());
     sumBadge.innerHTML =
       'Ancho ranura: <strong>' + slotW.toFixed(2) + ' mm</strong> · ' +
-      (state.puzzleCountA + state.puzzleCountB) + ' costillas (' +
-      state.puzzleCountA + ' ' + cfg.axisA.toUpperCase() + ' + ' +
-      state.puzzleCountB + ' ' + cfg.axisB.toUpperCase() + ')' +
+      totalRibs + ' costillas (' + breakdown + ')' +
       (state.puzzleTotalSlotsCount > 0 ? (' · <strong>' + state.puzzleTotalSlotsCount + ' encajes</strong>') : '') +
       (state.puzzleSimplifyCutLine ? ' · <strong>✂️ Corte simplificado</strong>' : '');
   }
@@ -1460,28 +1689,17 @@ function setPuzzleSimplifyPreset(mode, tolMM) {
   recomputePuzzleCutLineSimplification();
 }
 
-// Talla todas las ranuras de encaje a media madera entre las costillas de la Serie A y las de la Serie B
-function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB) {
+// Talla todas las ranuras de encaje a media madera entre las costillas de la Serie A, Serie B y opcionalmente Serie C (3 Ejes X×Y×Z)
+function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB, slicesC = null, axisC = null) {
   const slotW = Math.max(0.4, state.puzzleMaterialThicknessMM + state.puzzleSlotClearanceMM);
   const halfW = slotW * 0.5;
-  const infoA = getPuzzleSlice2DAxes(axisA, axisB);
-  const infoB = getPuzzleSlice2DAxes(axisB, axisA);
+  const hasC = Boolean(slicesC && slicesC.length > 0 && axisC);
+  const allPuzzleSlices = hasC ? slicesA.concat(slicesB, slicesC) : slicesA.concat(slicesB);
 
   let rawVertsTotal = 0;
   let simpVertsTotal = 0;
 
-  slicesA.forEach((s) => {
-    const rawBase = s.rawBaseLoops || s.baseLoops || s.loops || [];
-    s.rawBaseLoops = rawBase;
-    rawVertsTotal += countLoopsVertices(rawBase);
-    s.baseLoops = state.puzzleSimplifyCutLine ? simplifyPuzzleLoopsList(rawBase) : rawBase.slice();
-    simpVertsTotal += countLoopsVertices(s.baseLoops);
-    s.slots = [];
-    s.puzzleSlots = s.slots;
-    s.slotRects = [];
-  });
-
-  slicesB.forEach((s) => {
+  allPuzzleSlices.forEach((s) => {
     const rawBase = s.rawBaseLoops || s.baseLoops || s.loops || [];
     s.rawBaseLoops = rawBase;
     rawVertsTotal += countLoopsVertices(rawBase);
@@ -1497,13 +1715,17 @@ function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB) {
 
   let totalSlots = 0;
 
-  for (let i = 0; i < slicesA.length; i++) {
-    const sA = slicesA[i];
-    if (!sA.baseLoops || sA.baseLoops.length === 0) continue;
+  const collectPairwiseSlots = (list1, list2, ax1, ax2) => {
+    const infoA = getPuzzleSlice2DAxes(ax1, ax2);
+    const infoB = getPuzzleSlice2DAxes(ax2, ax1);
 
-    for (let j = 0; j < slicesB.length; j++) {
-      const sB = slicesB[j];
-      if (!sB.baseLoops || sB.baseLoops.length === 0) continue;
+    for (let i = 0; i < list1.length; i++) {
+      const sA = list1[i];
+      if (!sA.baseLoops || sA.baseLoops.length === 0) continue;
+
+      for (let j = 0; j < list2.length; j++) {
+        const sB = list2[j];
+        if (!sB.baseLoops || sB.baseLoops.length === 0) continue;
 
       const intervalsA = getSolidIntervalsAlongLine(sA.baseLoops, infoA.uAxis, infoA.vAxis, sB.coord);
       const intervalsB = getSolidIntervalsAlongLine(sB.baseLoops, infoB.uAxis, infoB.vAxis, sA.coord);
@@ -1611,9 +1833,25 @@ function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB) {
       }
     }
   }
+  };
+
+  collectPairwiseSlots(slicesA, slicesB, axisA, axisB);
+  if (hasC) {
+    collectPairwiseSlots(slicesA, slicesC, axisA, axisC);
+    collectPairwiseSlots(slicesB, slicesC, axisB, axisC);
+  }
+
+  const getMaxOuterArea = (loopsList) => {
+    let maxA = 0;
+    for (let i = 0; i < loopsList.length; i++) {
+      if (!loopsList[i].isHole && (loopsList[i].absArea || 0) > maxA) {
+        maxA = loopsList[i].absArea || 0;
+      }
+    }
+    return maxA;
+  };
 
   // Tallar geométricamente todas las ranuras en los contornos 2D de cada costilla estructural
-  const allPuzzleSlices = slicesA.concat(slicesB);
   allPuzzleSlices.forEach((slice) => {
     if (slice.isPuzzleSolidCap) {
       slice.loops = getFullFilledSolidLoops(slice.rawBaseLoops || slice.baseLoops || []);
@@ -1621,10 +1859,47 @@ function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB) {
     }
     let currentLoops = slice.baseLoops.slice();
     for (let r = 0; r < slice.slotRects.length; r++) {
-      currentLoops = subtractSingleRectFromLoops(currentLoops, slice.slotRects[r]);
+      const rect = slice.slotRects[r];
+      if (!hasC) {
+        currentLoops = subtractSingleRectFromLoops(currentLoops, rect);
+      } else {
+        // En modo 3 Ejes (X×Y×Z), si una ranura perpendicular partiría la costilla en dos pedazos grandes,
+        // reducir su profundidad a una muesca de borde del 28% para conservar el alma monolítica de la pieza
+        const maxAreaBefore = getMaxOuterArea(currentLoops);
+        const candidateLoops = subtractSingleRectFromLoops(currentLoops, rect);
+        const maxAreaAfter = getMaxOuterArea(candidateLoops);
+        if (maxAreaBefore > 20 && maxAreaAfter < maxAreaBefore * 0.62 && slice.slots[r]) {
+          const sl = slice.slots[r];
+          const notchSpan = Math.abs(sl.vMouth - sl.vMid) * 0.52;
+          const vInner = sl.openPositive ? (sl.vMouth - notchSpan) : (sl.vMouth + notchSpan);
+          const safeRect = sl.uAxis === 'x'
+            ? {
+                minX: rect.minX,
+                maxX: rect.maxX,
+                minY: sl.openPositive ? vInner : rect.minY,
+                maxY: sl.openPositive ? rect.maxY : vInner
+              }
+            : {
+                minX: sl.openPositive ? vInner : rect.minX,
+                maxX: sl.openPositive ? rect.maxX : vInner,
+                minY: rect.minY,
+                maxY: rect.maxY
+              };
+          sl.rect = safeRect;
+          slice.slotRects[r] = safeRect;
+          currentLoops = subtractSingleRectFromLoops(currentLoops, safeRect);
+        } else {
+          currentLoops = candidateLoops;
+        }
+      }
     }
     if (state.puzzleSimplifyCutLine) {
       currentLoops = cleanCollinearVerticesInLoops(currentLoops, 1e-3);
+    }
+    if (currentLoops.length > 1) {
+      const minSliverArea = Math.max(15.0, slotW * slotW);
+      const filtered = currentLoops.filter((l) => l.isHole || (l.absArea || 0) >= minSliverArea);
+      if (filtered.length > 0) currentLoops = filtered;
     }
     slice.loops = currentLoops;
   });
@@ -2113,12 +2388,43 @@ function rebuildGhostAndSlices() {
       });
     }
 
-    state.slices = slicesA.concat(slicesB);
+    const slicesC = [];
+    if (cfg.is3Axes && cfg.axisC) {
+      const spanC = state.dimsMM[cfg.axisC] || 100;
+      const countC = Math.max(2, state.puzzleCountC || 4);
+      const coordInfoC = computePuzzleAxisSliceCoords(spanC, countC, state.puzzleStartOffsetCMM || 0, state.puzzleStartMode, state.puzzleRibOffsetsCMM);
+      for (let k = 0; k < countC; k++) {
+        const coordC = coordInfoC.coords[k];
+        const rawLoops = sliceTrianglesAtPlane(verts, cfg.axisC, coordC, spanC);
+        const filteredRes = filterLoopsByMinIslandSize(rawLoops);
+        totalRemovedIslands += filteredRes.removedCount;
+        totalFilledHoles += (filteredRes.filledHolesCount || 0);
+        const codeC = cfg.axisC.toUpperCase() + (k + 1);
+
+        slicesC.push({
+          index: countA + countB + k,
+          coord: coordC,
+          sliceAxis: cfg.axisC,
+          puzzleSeries: 'C',
+          seriesIndex: k,
+          puzzleCode: codeC,
+          selected: true,
+          rawLoops: rawLoops,
+          rawBaseLoops: filteredRes.loops,
+          baseLoops: filteredRes.loops,
+          loops: filteredRes.loops,
+          slots: [],
+          slotRects: []
+        });
+      }
+    }
+
+    state.slices = cfg.is3Axes ? slicesA.concat(slicesB, slicesC) : slicesA.concat(slicesB);
     state.slices.forEach((s, idx) => {
       s.index = idx;
     });
 
-    carveInterlockingPuzzleSlots(slicesA, slicesB, cfg.axisA, cfg.axisB);
+    carveInterlockingPuzzleSlots(slicesA, slicesB, cfg.axisA, cfg.axisB, cfg.is3Axes ? slicesC : null, cfg.axisC);
 
     state.thickness = state.puzzleMaterialThicknessMM;
     state.slices.forEach((s) => {
@@ -2323,7 +2629,8 @@ function applyIslandFilterToExistingSlices() {
     const cfg = getPuzzleAxesConfig();
     const slicesA = state.slices.filter((s) => s.puzzleSeries === 'A');
     const slicesB = state.slices.filter((s) => s.puzzleSeries === 'B');
-    carveInterlockingPuzzleSlots(slicesA, slicesB, cfg.axisA, cfg.axisB);
+    const slicesC = cfg.is3Axes ? state.slices.filter((s) => s.puzzleSeries === 'C') : null;
+    carveInterlockingPuzzleSlots(slicesA, slicesB, cfg.axisA, cfg.axisB, slicesC, cfg.axisC);
     state.slices.forEach((s) => {
       s.modelLoops = (s.loops || []).slice();
       s.unsplitLoops = (s.loops || []).slice();
@@ -2552,13 +2859,93 @@ function sliceTrianglesAtPlane(verts, axis, planeVal, spanScale) {
   }
 
   const rawLoops = chainSegmentsBidirectional(segments, spanScale);
-  return classifyLoopsOuterAndHoles(rawLoops);
+  const classified = classifyLoopsOuterAndHoles(rawLoops);
+  if (axis !== 'z' && state.constructionMode === 'puzzle3d' && state.fillInternalHoles && segments.length > 20) {
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, netArea = 0;
+    classified.forEach((l) => {
+      netArea += l.isHole ? -l.absArea : l.absArea;
+      (l.points || []).forEach((p) => {
+        if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+      });
+    });
+    const bboxArea = Math.max(1, (maxX - minX) * (maxY - minY));
+    if (netArea < 0.38 * bboxArea) {
+      const baseZ = -(state.dimsMM && state.dimsMM.z ? state.dimsMM.z : 100) * 0.5;
+      const solidLoops = buildSolidRibLoopFromSegments(segments, baseZ);
+      if (solidLoops.length > 0) return solidLoops;
+    }
+  }
+  return classified;
+}
+
+function buildSolidRibLoopFromSegments(segments, baseY) {
+  if (!segments || segments.length === 0) return [];
+  let uMin = Infinity, uMax = -Infinity;
+  for (let i = 0; i < segments.length; i++) {
+    const p0 = segments[i][0], p1 = segments[i][1];
+    if (p0.x < uMin) uMin = p0.x; if (p0.x > uMax) uMax = p0.x;
+    if (p1.x < uMin) uMin = p1.x; if (p1.x > uMax) uMax = p1.x;
+  }
+  if (!(uMax > uMin + 1.0)) return [];
+
+  const stepU = 0.25;
+  const numBins = Math.max(4, Math.ceil((uMax - uMin) / stepU));
+  const vMaxArr = new Float32Array(numBins + 1).fill(-Infinity);
+
+  for (let i = 0; i < segments.length; i++) {
+    const p0 = segments[i][0], p1 = segments[i][1];
+    const x0 = p0.x, y0 = p0.y, x1 = p1.x, y1 = p1.y;
+    const b0 = Math.max(0, Math.min(numBins, Math.round((x0 - uMin) / stepU)));
+    const b1 = Math.max(0, Math.min(numBins, Math.round((x1 - uMin) / stepU)));
+    if (y0 > vMaxArr[b0]) vMaxArr[b0] = y0;
+    if (y1 > vMaxArr[b1]) vMaxArr[b1] = y1;
+    const lo = Math.min(b0, b1), hi = Math.max(b0, b1);
+    if (hi > lo && Math.abs(x1 - x0) > 1e-6) {
+      for (let b = lo; b <= hi; b++) {
+        const u = uMin + b * stepU;
+        const t = Math.max(0, Math.min(1, (u - x0) / (x1 - x0)));
+        const y = y0 + t * (y1 - y0);
+        if (y > vMaxArr[b]) vMaxArr[b] = y;
+      }
+    }
+  }
+
+  for (let b = 1; b < numBins; b++) {
+    if (vMaxArr[b] === -Infinity && vMaxArr[b - 1] > -Infinity && vMaxArr[b + 1] > -Infinity) {
+      vMaxArr[b] = 0.5 * (vMaxArr[b - 1] + vMaxArr[b + 1]);
+    }
+  }
+
+  const loops = [];
+  let b = 0;
+  while (b <= numBins) {
+    while (b <= numBins && !(vMaxArr[b] > baseY + 1.0)) b++;
+    if (b > numBins) break;
+    const startB = b;
+    while (b <= numBins && vMaxArr[b] > baseY + 1.0) b++;
+    const endB = b - 1;
+    if (endB - startB >= 4) {
+      const uStart = uMin + startB * stepU;
+      const uEnd = uMin + endB * stepU;
+      const pts = [
+        { x: uStart, y: baseY },
+        { x: uEnd, y: baseY }
+      ];
+      for (let k = endB; k >= startB; k--) {
+        pts.push({ x: uMin + k * stepU, y: vMaxArr[k] });
+      }
+      loops.push(pts);
+    }
+  }
+  return classifyLoopsOuterAndHoles(loops);
 }
 
 function chainSegmentsBidirectional(segments, spanScale) {
   const used = new Uint8Array(segments.length);
   const tol = Math.max(0.05, spanScale * 0.0025);
   const tolSq = tol * tol;
+  const exactTolSq = 1e-8;
   const loops = [];
 
   const distSq = (a, b) => {
@@ -2576,25 +2963,45 @@ function chainSegmentsBidirectional(segments, spanScale) {
     while (extended) {
       extended = false;
       const tail = poly[poly.length - 1];
+      const dToStart = poly.length >= 4 ? distSq(poly[0], tail) : Infinity;
+      if (dToStart <= exactTolSq) break;
+
       let bestIdx = -1;
       let bestEnd = 0;
-      let bestD = tolSq;
+      let bestD = Math.min(tolSq, dToStart);
 
       for (let j = 0; j < segments.length; j++) {
         if (used[j]) continue;
         const d0 = distSq(tail, segments[j][0]);
-        if (d0 < bestD) { bestD = d0; bestIdx = j; bestEnd = 0; }
+        if (d0 < bestD) { bestD = d0; bestIdx = j; bestEnd = 0; if (d0 <= exactTolSq) break; }
         const d1 = distSq(tail, segments[j][1]);
-        if (d1 < bestD) { bestD = d1; bestIdx = j; bestEnd = 1; }
+        if (d1 < bestD) { bestD = d1; bestIdx = j; bestEnd = 1; if (d1 <= exactTolSq) break; }
       }
 
       if (bestIdx !== -1) {
         used[bestIdx] = 1;
         poly.push(bestEnd === 0 ? segments[bestIdx][1] : segments[bestIdx][0]);
         extended = true;
-        if (distSq(poly[0], poly[poly.length - 1]) <= tolSq && poly.length >= 4) {
-          break;
-        }
+      }
+    }
+
+    while (distSq(poly[0], poly[poly.length - 1]) > exactTolSq) {
+      const head = poly[0];
+      let bestIdx = -1;
+      let bestEnd = 0;
+      let bestD = tolSq;
+      for (let j = 0; j < segments.length; j++) {
+        if (used[j]) continue;
+        const d0 = distSq(head, segments[j][0]);
+        if (d0 < bestD) { bestD = d0; bestIdx = j; bestEnd = 0; if (d0 <= exactTolSq) break; }
+        const d1 = distSq(head, segments[j][1]);
+        if (d1 < bestD) { bestD = d1; bestIdx = j; bestEnd = 1; if (d1 <= exactTolSq) break; }
+      }
+      if (bestIdx !== -1) {
+        used[bestIdx] = 1;
+        poly.unshift(bestEnd === 0 ? segments[bestIdx][1] : segments[bestIdx][0]);
+      } else {
+        break;
       }
     }
 
@@ -2724,8 +3131,8 @@ function build3DSlicesMesh() {
     const lGeom = new THREE.BufferGeometry();
     lGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(coords), 3));
     if (ax === 'x') {
-      lGeom.rotateY(Math.PI / 2);
       lGeom.rotateZ(Math.PI / 2);
+      lGeom.rotateY(Math.PI / 2);
     } else if (ax === 'y') {
       lGeom.rotateX(Math.PI / 2);
     }
@@ -2756,6 +3163,9 @@ function build3DSlicesMesh() {
       if (slice.puzzleSeries === 'A') {
         const hueA = 0.54 - ((slice.seriesIndex || 0) / Math.max(1, state.puzzleCountA - 1)) * 0.08;
         baseCol = new THREE.Color().setHSL(hueA, slice.isPuzzleSolidCap ? 0.88 : 0.80, slice.isPuzzleSolidCap ? 0.60 : 0.50);
+      } else if (slice.puzzleSeries === 'C') {
+        const hueC = 0.38 - ((slice.seriesIndex || 0) / Math.max(1, (state.puzzleCountC || 4) - 1)) * 0.06;
+        baseCol = new THREE.Color().setHSL(hueC, 0.82, 0.48);
       } else {
         const hueB = 0.11 - ((slice.seriesIndex || 0) / Math.max(1, state.puzzleCountB - 1)) * 0.05;
         baseCol = new THREE.Color().setHSL(hueB, slice.isPuzzleSolidCap ? 0.90 : 0.85, slice.isPuzzleSolidCap ? 0.62 : 0.54);
@@ -2810,8 +3220,8 @@ function build3DSlicesMesh() {
         geom.translate(0, 0, -extrudeDepth / 2);
 
         if (ax === 'x') {
-          geom.rotateY(Math.PI / 2);
           geom.rotateZ(Math.PI / 2);
+          geom.rotateY(Math.PI / 2);
         } else if (ax === 'y') {
           geom.rotateX(Math.PI / 2);
         }
@@ -2873,8 +3283,8 @@ function build3DSlicesMesh() {
     geom.translate(0, 0, -extrudeDepth / 2);
 
     if (ax === 'x') {
-      geom.rotateY(Math.PI / 2);
       geom.rotateZ(Math.PI / 2);
+      geom.rotateY(Math.PI / 2);
     } else if (ax === 'y') {
       geom.rotateX(Math.PI / 2);
     }
@@ -2925,9 +3335,14 @@ function update3DSlicesTransforms() {
       else if (ax === 'y') py = spreadCoord;
       else pz = spreadCoord;
 
-      if (puzzleCfg.axisCommon === 'x') px += slideOffset;
-      else if (puzzleCfg.axisCommon === 'y') py += slideOffset;
-      else pz += slideOffset;
+      if (puzzleCfg.is3Axes) {
+        if (slice.puzzleSeries === 'C') pz += exp * liftSpan * 0.65;
+        else if (slice.puzzleSeries === 'B') py += exp * (state.dimsMM.y || 100) * 0.25;
+      } else {
+        if (puzzleCfg.axisCommon === 'x') px += slideOffset;
+        else if (puzzleCfg.axisCommon === 'y') py += slideOffset;
+        else pz += slideOffset;
+      }
     } else {
       const offset = slice.coord * (1 + exp * 1.4);
       if (ax === 'x') px = offset;

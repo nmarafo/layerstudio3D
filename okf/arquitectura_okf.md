@@ -1,9 +1,10 @@
-# Arquitectura y Manual Operativo OKF para Agentes de IA: LayerStudio 3D (`v3.0.6`)
+# Arquitectura y Manual Operativo OKF para Agentes de IA: LayerStudio 3D (`v3.0.12`)
 
 > **Autor**: Norberto Martín Afonso (`normaafo@gmail.com`)  
 > **Repositorio**: `https://github.com/nmarafo/layerstudio3D`  
+> **Repositorio Compañero (Compilador Láser PC 13/90 II)**: `https://github.com/nmarafo/laserpc13-90-II`  
 > **Licencia**: GNU Affero General Public License v3.0 or later (con cláusula Sección 7b de atribución obligatoria)  
-> **Versión OKF**: `1.3.0` (`urn:okf:software:layerstudio3d:2026:v3.0.6`)
+> **Versión OKF**: `1.3.0` (`urn:okf:software:layerstudio3d:2026:v3.0.12`)
 
 ---
 
@@ -227,9 +228,32 @@ En un **Puzzle 3D (`puzzle3d`)**, lo normal es grabar las **costillas primera y 
    ```
 3. Los vectores de grabado resultantes se almacenan en `slice.engraveLoops` y se exportan automáticamente en color verde `#008800` (grupo SVG `GRABADO_VECTORIAL_IMAGEN` y capa DXF `C00` de prioridad 1).
 
-### Playbook D: Exportar Archivos de Producción
+### Playbook D: Exportar Archivos de Producción y Flujo Directo hacia Cortadora Láser PC 13/90 II
 * **Exportar `.SVG` de todos los tableros o láminas**: `exportAllSVGLayout()`
-* **Exportar `.ZIP` con `.SVG` individuales + hoja de resumen**: `exportZipAllSVGs()`
-* **Exportar `.DXF` (AutoCAD R12) con capas por color**: `exportAllDXFLayout()`
+* **Exportar `.ZIP` completo (con `SVG_Corte_Laser/`, `DXF_Corte_Laser/`, `SVG_Tableros_Anidados/`, `DXF_Tableros_Anidados/`, `STL_3D/`, `GUIA_MONTAJE_INTERACTIVA.html` y `PROYECTO_OKF.lasca`)**: `exportZipBatch()`
+* **Exportar `.DXF` (AutoCAD R12) con capas por color (`C00..C02` `ACI 5` Azul para grabado y `C03..C04` `ACI 1` Rojo para corte)**: `exportAllDXFLayout()`
 * **Exportar `.ZIP` con modelos `.STL` para impresión 3D**: `exportZipAllSTLs()`
-* **Guardar proyecto `.lasca`**: `exportProjectFile()`
+* **Guardar proyecto autónomo `.lasca`**: `exportProjectFile()` (si el modelo supera los `36.000` triángulos, compacta automáticamente la malla mediante `compactBaseVerticesForLasca()` en un sólido estanco 2.5D de `~5 MB` para evitar archivos JSON gigantescos).
+
+---
+
+## 6. Tratamiento Automático de Mallas 3D de Alta Densidad y Modelos Huecos / «Sin Peana»
+
+A raíz de casos reales con modelos arquitectónicos y esculturas generadas por IA o fotogrametría (p. ej. mallas `.STL` de más de `2.000.000` de triángulos con paredes huecas de `0,8 mm` y base inferior recortada a `Z = 0`), **LayerStudio 3D (`v3.0.12`)** incorpora tres salvaguardas geométricas automáticas en [`js/slicer.js`](../js/slicer.js) y [`js/exporters.js`](../js/exporters.js):
+
+1. **Encadenamiento Bidireccional con Prioridad de Vértice Exacto (`chainSegmentsBidirectional`)**:
+   - En mallas con millones de triángulos, la longitud media de los segmentos de intersección plano-triángulo puede ser inferior a `0,15 mm` (menor que la tolerancia de soldadura de brechas).
+   - El algoritmo prioriza siempre la coincidencia exacta de vértice compartido (`exactTolSq = 1e-8`) antes de considerar el cierre del polígono y extiende la cadena tanto por la cola (`tail`) como por la cabeza (`head`), evitando micro-bucles falsos de 3 o 4 aristas.
+2. **Reconstrucción Automática de Costillas Macizas en Mallas Huecas o con Base Abierta (`buildSolidRibLoopFromSegments`)**:
+   - Cuando se diseña un **Puzzle 3D (`constructionMode: 'puzzle3d'`)** con `fillInternalHoles: true` sobre un modelo cuya cáscara interior es hueca o cuya base fue suprimida («Sin Peana»), la sección transversal cruda solo contiene paredes delgadas (`netArea < 0,38 × bboxArea`) donde las ranuras de encaje a 90° no tendrían material donde tallarse.
+   - `sliceTrianglesAtPlane()` detecta automáticamente esta condición (`netArea < 0.38 * bboxArea`) y muestrea el perfil superior envolvente $v_{\max}(u)$ de todos los segmentos intersectados para cerrarlo en línea recta contra la cota base del modelo (`baseY = minZ`), generando costillas estructuralmente macizas y estables.
+3. **Limpieza Automática de Esquirlas en Cumbreras Inclinadas (`carveInterlockingPuzzleSlots`)**:
+   - Cuando una ranura superior a 90° coincide con un tejado o pendiente pronunciada, la sustracción booleana puede seccionar la punta superior en un pequeño triángulo residual suelto. El motor descarta automáticamente tras el booleano cualquier sub-fragmento secundario cuya área sea inferior a $\max(15\text{ mm}^2, \text{slotW}^2)$.
+4. **Contrato de Interoperabilidad con `laserpc13-90-II` (`PROYECTO_OKF.lasca` dentro del `.ZIP`)**:
+   - Todo archivo `.ZIP` generado por `exportZipBatch()` incluye en su raíz `PROYECTO_OKF.lasca`. Al arrastrar ese `.ZIP` al compilador `.OUD`/`.OUE` de la cortadora láser **Pérez Camps PC 13/90 II**, la aplicación lee `puzzleMaterialThicknessMM` y `boardWidthMM × boardHeightMM` y selecciona automáticamente el perfil de velocidades y potencias calibrado para ese material.
+5. **Selección Automática Generalizada de Ejes de Cruce en Puzzle 3D (`autoSelectBestPuzzleAxes`)**:
+   - Al activar el modo `puzzle3d` o pulsar **`🪄 Auto-Elegir`**, LayerStudio 3D simula internamente las tres combinaciones ortogonales (`xy`, `xz`, `yz`) y las puntúa de `0` a `100` mediante `computePuzzleAxesCandidateScore()` según 4 métricas universales:
+     1. **Estabilidad Rotacional de Encajes (`35 pts`)**: Premia que todas las costillas activas tengan $\ge 2$ ranuras y penaliza las costillas en voladizo con `1` sola ranura o `0` ranuras.
+     2. **Expresividad de Silueta / Penalización de «Peines Rectangulares» (`30 pts`)**: Mide el factor de llenado $R = \frac{\text{Área}}{W \times H}$ de cada costilla antes de ranurar y penaliza las series donde las piezas son simples rectángulos planos ($R > 0,80$) sin silueta reconocible.
+     3. **Cohesión Topológica (`20 pts`)**: Penaliza las combinaciones que parten una lámina en múltiples islas desconectadas ($\text{islas} > 1$) tras el tallado booleano de ranuras.
+     4. **Densidad de Cruces y Cobertura Efectiva (`15 pts`)**: Evalúa la proporción de costillas activas y el número total de encajes a 90°.
