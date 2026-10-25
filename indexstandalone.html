@@ -10158,6 +10158,175 @@ function buildSvgCutPathD(pts, isHole, toX, toY, skipTabs = false) {
   return parts.join(' ');
 }
 
+// Fuente vectorial Hershey de trazo único (dominio público) para grabado láser directo en DXF R12 (POLYLINE)
+const HERSHEY_GLYPHS_DXF = {
+  '0': [[[0.15,0],[0.85,0],[1,0.2],[1,0.8],[0.85,1],[0.15,1],[0,0.8],[0,0.2],[0.15,0]], [[0.15,0.8],[0.85,0.2]]],
+  '1': [[[0.2,0.25],[0.5,0],[0.5,1]], [[0.15,1],[0.85,1]]],
+  '2': [[[0,0.2],[0.2,0],[0.8,0],[1,0.2],[1,0.4],[0,1],[1,1]]],
+  '3': [[[0,0.15],[0.2,0],[0.8,0],[1,0.2],[0.8,0.5],[0.4,0.5]], [[0.8,0.5],[1,0.75],[0.8,1],[0.2,1],[0,0.85]]],
+  '4': [[[0.75,1],[0.75,0],[0,0.65],[1,0.65]]],
+  '5': [[[1,0],[0.1,0],[0,0.45],[0.8,0.45],[1,0.65],[1,0.85],[0.8,1],[0.15,1],[0,0.85]]],
+  '6': [[[0.85,0],[0.2,0],[0,0.25],[0,0.85],[0.2,1],[0.8,1],[1,0.8],[1,0.6],[0.8,0.45],[0,0.45]]],
+  '7': [[[0,0],[1,0],[0.35,1]]],
+  '8': [[[0.2,0.5],[0,0.3],[0,0.15],[0.2,0],[0.8,0],[1,0.15],[1,0.3],[0.8,0.5],[0.2,0.5],[0,0.7],[0,0.85],[0.2,1],[0.8,1],[1,0.85],[1,0.7],[0.8,0.5]]],
+  '9': [[[1,0.5],[0.2,0.5],[0,0.35],[0,0.15],[0.2,0],[0.8,0],[1,0.15],[1,0.8],[0.75,1],[0.15,1]]],
+  '#': [[[0.3,0],[0.2,1]], [[0.8,0],[0.7,1]], [[0,0.35],[1,0.35]], [[0,0.68],[1,0.68]]],
+  '[': [[[0.75,0],[0.25,0],[0.25,1],[0.75,1]]],
+  ']': [[[0.25,0],[0.75,0],[0.75,1],[0.25,1]]],
+  '(': [[[0.7,0],[0.3,0.3],[0.3,0.7],[0.7,1]]],
+  ')': [[[0.3,0],[0.7,0.3],[0.7,0.7],[0.3,1]]],
+  '.': [[[0.4,0.88],[0.6,0.88],[0.6,1],[0.4,1],[0.4,0.88]]],
+  ',': [[[0.55,0.85],[0.4,1.1]]],
+  ':': [[[0.45,0.25],[0.55,0.25]], [[0.45,0.8],[0.55,0.8]]],
+  '-': [[[0.15,0.5],[0.85,0.5]]],
+  '+': [[[0.5,0.15],[0.5,0.85]], [[0.15,0.5],[0.85,0.5]]],
+  '=': [[[0.15,0.35],[0.85,0.35]], [[0.15,0.65],[0.85,0.65]]],
+  '_': [[[0,1],[1,1]]],
+  '/': [[[0.15,1],[0.85,0]]],
+  '|': [[[0.5,0],[0.5,1]]],
+  '%': [[[0.1,1],[0.9,0]], [[0.1,0.1],[0.3,0.1],[0.3,0.3],[0.1,0.3],[0.1,0.1]], [[0.7,0.7],[0.9,0.7],[0.9,0.9],[0.7,0.9],[0.7,0.7]]],
+  'A': [[[0,1],[0.5,0],[1,1]], [[0.2,0.65],[0.8,0.65]]],
+  'B': [[[0,1],[0,0],[0.75,0],[1,0.15],[1,0.35],[0.75,0.5],[0,0.5]], [[0.75,0.5],[1,0.65],[1,0.85],[0.75,1],[0,1]]],
+  'C': [[[1,0.2],[0.8,0],[0.2,0],[0,0.2],[0,0.8],[0.2,1],[0.8,1],[1,0.8]]],
+  'D': [[[0,1],[0,0],[0.7,0],[1,0.25],[1,0.75],[0.7,1],[0,1]]],
+  'E': [[[1,0],[0,0],[0,1],[1,1]], [[0,0.5],[0.75,0.5]]],
+  'F': [[[1,0],[0,0],[0,1]], [[0,0.5],[0.75,0.5]]],
+  'G': [[[1,0.2],[0.8,0],[0.2,0],[0,0.2],[0,0.8],[0.2,1],[0.8,1],[1,0.8],[1,0.55],[0.55,0.55]]],
+  'H': [[[0,0],[0,1]], [[1,0],[1,1]], [[0,0.5],[1,0.5]]],
+  'I': [[[0.2,0],[0.8,0]], [[0.5,0],[0.5,1]], [[0.2,1],[0.8,1]]],
+  'J': [[[0.2,0],[0.9,0]], [[0.65,0],[0.65,0.8],[0.4,1],[0.15,1],[0,0.8]]],
+  'K': [[[0,0],[0,1]], [[1,0],[0,0.55],[1,1]]],
+  'L': [[[0,0],[0,1],[1,1]]],
+  'M': [[[0,1],[0,0],[0.5,0.55],[1,0],[1,1]]],
+  'N': [[[0,1],[0,0],[1,1],[1,0]]],
+  'O': [[[0.2,0],[0.8,0],[1,0.2],[1,0.8],[0.8,1],[0.2,1],[0,0.8],[0,0.2],[0.2,0]]],
+  'P': [[[0,1],[0,0],[0.8,0],[1,0.15],[1,0.38],[0.8,0.52],[0,0.52]]],
+  'Q': [[[0.2,0],[0.8,0],[1,0.2],[1,0.8],[0.8,1],[0.2,1],[0,0.8],[0,0.2],[0.2,0]], [[0.55,0.65],[1,1]]],
+  'R': [[[0,1],[0,0],[0.8,0],[1,0.15],[1,0.38],[0.8,0.52],[0,0.52]], [[0.55,0.52],[1,1]]],
+  'S': [[[1,0.18],[0.8,0],[0.2,0],[0,0.18],[0,0.35],[0.2,0.5],[0.8,0.5],[1,0.65],[1,0.85],[0.8,1],[0.2,1],[0,0.82]]],
+  'T': [[[0,0],[1,0]], [[0.5,0],[0.5,1]]],
+  'U': [[[0,0],[0,0.8],[0.2,1],[0.8,1],[1,0.8],[1,0]]],
+  'V': [[[0,0],[0.5,1],[1,0]]],
+  'W': [[[0,0],[0.25,1],[0.5,0.45],[0.75,1],[1,0]]],
+  'X': [[[0,0],[1,1]], [[1,0],[0,1]]],
+  'Y': [[[0,0],[0.5,0.5],[1,0]], [[0.5,0.5],[0.5,1]]],
+  'Z': [[[0,0],[1,0],[0,1],[1,1]]]
+};
+
+// Convierte una cadena de texto en polilíneas abiertas de trazo único en coordenadas cartesianas DXF (Y hacia arriba)
+function hersheyTextToPolylinesDXF(text, tx, ty, fontSize, anchor = 'start', baseline = 'alphabetic') {
+  const paths = [];
+  const fontH = Math.max(0.8, Number(fontSize) * 0.72);
+  const charW = fontH * 0.62;
+  const gapW = fontH * 0.18;
+  const stepX = charW + gapW;
+  const str = String(text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  if (!str.length) return paths;
+  const totalW = str.length * stepX - gapW;
+  const startX = anchor === 'middle' ? (tx - totalW * 0.5) : (anchor === 'end' ? (tx - totalW) : tx);
+  const topY = baseline === 'central' ? (ty + fontH * 0.5) : (ty + fontH * 0.85);
+  for (let ci = 0; ci < str.length; ci++) {
+    const ch = str[ci];
+    if (ch === ' ') continue;
+    const cx0 = startX + ci * stepX;
+    const strokes = HERSHEY_GLYPHS_DXF[ch] || [[[0.1, 0.8], [0.9, 0.8]]];
+    for (let si = 0; si < strokes.length; si++) {
+      const st = strokes[si];
+      paths.push({
+        closed: false,
+        points: st.map(([gx, gy]) => ({
+          x: cx0 + gx * charW,
+          y: topY - gy * fontH
+        }))
+      });
+    }
+  }
+  return paths;
+}
+
+// Convierte un contorno (aplicando micro-uniones si están activas) en polilíneas para DXF R12
+function collectLoopPolylinesWithTabsDXF(targetList, pts, isHole, ox = 0, oy = 0, skipTabs = false) {
+  if (!pts || pts.length < 3) return;
+  const tabRes = computeLoopWithHoldingTabs(pts, isHole, Boolean(skipTabs || pts.isFrame));
+  if (tabRes.isClosed) {
+    targetList.push({
+      closed: true,
+      points: pts.map((p) => ({ x: p.x - ox, y: p.y - oy }))
+    });
+    return;
+  }
+  tabRes.subpaths.forEach((poly) => {
+    if (!poly || poly.length < 2) return;
+    targetList.push({
+      closed: false,
+      points: poly.map((p) => ({ x: p.x - ox, y: p.y - oy }))
+    });
+  });
+}
+
+// Genera una polilínea circular cerrada para perforaciones de varillas guía en DXF R12
+function createCirclePolylineDXF(cx, cy, radius, segments = 24) {
+  const pts = [];
+  for (let i = 0; i < segments; i++) {
+    const ang = (i / segments) * Math.PI * 2;
+    pts.push({
+      x: cx + Math.cos(ang) * radius,
+      y: cy + Math.sin(ang) * radius
+    });
+  }
+  return { closed: true, points: pts };
+}
+
+/**
+ * Construye un documento AutoCAD DXF R12 (AC1009) estándar con entidades POLYLINE continuas.
+ * Capas y colores ACI compatibles con CAD/CAM universal y ordenación por prioridad láser:
+ * - C00, C01, C02 -> ACI 5 (Azul): Grabado de etiquetas, textos vectorizados y líneas guía (Se ejecuta 1.º).
+ * - C03           -> ACI 1 (Rojo): Corte de huecos interiores y perforaciones guía (Se ejecuta 2.º, antes del exterior).
+ * - C04           -> ACI 1 (Rojo): Corte de contornos exteriores y bordes de tablero (Se ejecuta al final).
+ */
+function buildStandardLaserDXF(docW, docH, byLayer) {
+  const layerNames = ['C00', 'C01', 'C02', 'C03', 'C04'];
+  const aciMap = { C00: '5', C01: '5', C02: '5', C03: '1', C04: '1' };
+  const safeW = Math.max(1, Number(docW) || 100);
+  const safeH = Math.max(1, Number(docH) || 100);
+
+  const out = [
+    '0', 'SECTION', '2', 'HEADER',
+    '9', '$ACADVER', '1', 'AC1009',
+    '9', '$INSUNITS', '70', '4',
+    '9', '$EXTMIN', '10', '0.0', '20', '0.0',
+    '9', '$EXTMAX', '10', safeW.toFixed(3), '20', safeH.toFixed(3),
+    '0', 'ENDSEC',
+    '0', 'SECTION', '2', 'TABLES',
+    '0', 'TABLE', '2', 'LAYER', '70', String(layerNames.length)
+  ];
+
+  for (let i = 0; i < layerNames.length; i++) {
+    const lid = layerNames[i];
+    out.push('0', 'LAYER', '2', lid, '70', '0', '62', aciMap[lid], '6', 'CONTINUOUS');
+  }
+  out.push('0', 'ENDTAB', '0', 'ENDSEC', '0', 'SECTION', '2', 'ENTITIES');
+
+  for (let i = 0; i < layerNames.length; i++) {
+    const lid = layerNames[i];
+    const aci = aciMap[lid];
+    const list = (byLayer && byLayer[lid]) ? byLayer[lid] : [];
+    for (let j = 0; j < list.length; j++) {
+      const sp = list[j];
+      if (!sp || !sp.points || sp.points.length < 2) continue;
+      out.push('0', 'POLYLINE', '8', lid, '62', aci, '66', '1', '70', sp.closed ? '1' : '0');
+      for (let k = 0; k < sp.points.length; k++) {
+        const pt = sp.points[k];
+        out.push('0', 'VERTEX', '8', lid, '62', aci, '10', Number(pt.x).toFixed(3), '20', Number(pt.y).toFixed(3), '30', '0.0');
+      }
+      out.push('0', 'SEQEND', '8', lid);
+    }
+  }
+
+  out.push('0', 'ENDSEC', '0', 'EOF');
+  return out.join('\n');
+}
+
 // Añade entidades LINE a un documento DXF aplicando micro-uniones (holding tabs) si están activas (salvo en el marco configurable)
 function pushLoopLinesWithTabsDXF(dxf, pts, isHole, layer, color, ox = 0, oy = 0, skipTabs = false) {
   if (!pts || pts.length < 3) return;
@@ -10617,80 +10786,55 @@ function generateBoardSVG(board) {
   return lines.join('\n');
 }
 
-// Genera el archivo .DXF de un tablero completo con todas sus islas y textos de grabado
+// Genera el archivo .DXF R12 (AC1009) de un tablero completo con polilíneas continuas y textos vectorizados Hershey
 function generateBoardDXF(board) {
-  const dxf = ['0', 'SECTION', '2', 'ENTITIES'];
+  const byLayer = { C00: [], C01: [], C02: [], C03: [], C04: [] };
+  const rodRadius = state.rodDiameter / 2;
 
   board.placements.forEach((pl) => {
-    pushLoopLinesWithTabsDXF(dxf, pl.outerPoints, false, 'CORTE_EXTERIOR', '1', 0, 0, Boolean(pl.isFrame || (pl.island && pl.island.isFrame)));
-    pl.holes.forEach((h) => pushLoopLinesWithTabsDXF(dxf, h.points, true, 'CORTE_INTERIOR', '5', 0, 0, Boolean(h.isFrame)));
+    collectLoopPolylinesWithTabsDXF(
+      byLayer.C04,
+      pl.outerPoints,
+      false,
+      0,
+      0,
+      Boolean(pl.isFrame || (pl.island && pl.island.isFrame))
+    );
+    pl.holes.forEach((h) => {
+      collectLoopPolylinesWithTabsDXF(byLayer.C03, h.points, true, 0, 0, Boolean(h.isFrame));
+    });
     if (pl.engraveLoops && pl.engraveLoops.length > 0) {
       pl.engraveLoops.forEach((el) => {
         if (!el.points || el.points.length < 3) return;
-        for (let i = 0, n = el.points.length; i < n; i++) {
-          const p1 = el.points[i];
-          const p2 = el.points[(i + 1) % n];
-          dxf.push(
-            '0', 'LINE',
-            '8', 'GRABADO_VECTORIAL',
-            '62', '3',
-            '10', p1.x.toFixed(4),
-            '20', p1.y.toFixed(4),
-            '30', '0.0',
-            '11', p2.x.toFixed(4),
-            '21', p2.y.toFixed(4),
-            '31', '0.0'
-          );
-        }
-      });
-    }
-
-    if (state.includePrevSliceGuide && pl.lowerPolys.length > 0) {
-      pl.lowerPolys.forEach((poly) => {
-        for (let i = 0; i < poly.length - 1; i++) {
-          dxf.push(
-            '0', 'LINE',
-            '8', 'GUIA_LASCA_INFERIOR',
-            '62', '6',
-            '10', poly[i].x.toFixed(4),
-            '20', poly[i].y.toFixed(4),
-            '30', '0.0',
-            '11', poly[i + 1].x.toFixed(4),
-            '21', poly[i + 1].y.toFixed(4),
-            '31', '0.0'
-          );
-        }
+        byLayer.C00.push({
+          closed: true,
+          points: el.points.map((p) => ({ x: p.x, y: p.y }))
+        });
       });
     }
 
     if (state.includeNextSliceGuide && pl.upperPolys.length > 0) {
       pl.upperPolys.forEach((poly) => {
-        for (let i = 0; i < poly.length - 1; i++) {
-          dxf.push(
-            '0', 'LINE',
-            '8', 'GUIA_LASCA_SUPERIOR',
-            '62', '30',
-            '10', poly[i].x.toFixed(4),
-            '20', poly[i].y.toFixed(4),
-            '30', '0.0',
-            '11', poly[i + 1].x.toFixed(4),
-            '21', poly[i + 1].y.toFixed(4),
-            '31', '0.0'
-          );
-        }
+        if (!poly || poly.length < 2) return;
+        byLayer.C01.push({
+          closed: false,
+          points: poly.map((p) => ({ x: p.x, y: p.y }))
+        });
+      });
+    }
+
+    if (state.includePrevSliceGuide && pl.lowerPolys.length > 0) {
+      pl.lowerPolys.forEach((poly) => {
+        if (!poly || poly.length < 2) return;
+        byLayer.C02.push({
+          closed: false,
+          points: poly.map((p) => ({ x: p.x, y: p.y }))
+        });
       });
     }
 
     pl.rods.forEach((r) => {
-      dxf.push(
-        '0', 'CIRCLE',
-        '8', 'VARILLAS_GUIA',
-        '62', '5',
-        '10', r.x.toFixed(4),
-        '20', r.y.toFixed(4),
-        '30', '0.0',
-        '40', (state.rodDiameter / 2).toFixed(4)
-      );
+      byLayer.C03.push(createCirclePolylineDXF(r.x, r.y, rodRadius));
     });
 
     const tl = pl.textLayout;
@@ -10700,59 +10844,44 @@ function generateBoardDXF(board) {
       const n = tl.lines.length;
       tl.lines.forEach((lineStr, lIdx) => {
         const lineY = tl.y + ((n - 1) * 0.5 - lIdx) * lineGap;
-        const halfW = (lineStr.length * textH * 0.6) * 0.5;
-        dxf.push(
-          '0', 'TEXT',
-          '8', 'GRABADO_ETIQUETA',
-          '62', '3',
-          '10', (tl.x - halfW).toFixed(4),
-          '20', (lineY - textH * 0.35).toFixed(4),
-          '30', '0.0',
-          '40', textH.toFixed(4),
-          '1', lineStr
-        );
+        byLayer.C00.push(...hersheyTextToPolylinesDXF(lineStr, tl.x, lineY, textH, 'middle', 'central'));
       });
     }
   });
+
+  if (state.includeLabels) {
+    const headerText = 'TABLERO #' + (board.boardIndex + 1) + ' [' + board.width.toFixed(0) + 'x' + board.height.toFixed(0) + 'mm | Islas: ' + board.placements.length + ' | Uso: ' + board.efficiency.toFixed(1) + '%]';
+    const hx = Math.max(2, board.margin);
+    const hy = Math.max(1.5, board.margin * 0.4);
+    byLayer.C00.push(...hersheyTextToPolylinesDXF(headerText, hx, hy, 3.2, 'start', 'alphabetic'));
+  }
 
   // Marco configurable 2D de corte/grabado alrededor del tablero en DXF (sin micro-uniones de sujeción por presión)
   if (state.slicerFrameEnabled && typeof get2DBoardFrameGeometry === 'function') {
     const fGeom = get2DBoardFrameGeometry(0, 0, board.width, board.height, board.placements, true);
     if (fGeom) {
       if (fGeom.outerCutPts && fGeom.outerCutPts.length >= 3) {
-        pushLoopLinesWithTabsDXF(dxf, fGeom.outerCutPts, false, 'CORTE_EXTERIOR', '1', 0, 0, true);
+        collectLoopPolylinesWithTabsDXF(byLayer.C04, fGeom.outerCutPts, false, 0, 0, true);
       }
       if (fGeom.innerCutPts && fGeom.innerCutPts.length >= 3) {
-        pushLoopLinesWithTabsDXF(dxf, fGeom.innerCutPts, true, 'CORTE_INTERIOR', '5', 0, 0, true);
+        collectLoopPolylinesWithTabsDXF(byLayer.C03, fGeom.innerCutPts, true, 0, 0, true);
       }
       if (fGeom.keyholePts && fGeom.keyholePts.length >= 3) {
-        pushLoopLinesWithTabsDXF(dxf, fGeom.keyholePts, true, 'CORTE_INTERIOR', '5', 0, 0, true);
+        collectLoopPolylinesWithTabsDXF(byLayer.C03, fGeom.keyholePts, true, 0, 0, true);
       }
       if (fGeom.engraveLoops && fGeom.engraveLoops.length > 0) {
         fGeom.engraveLoops.forEach((el) => {
           if (!el.points || el.points.length < 3) return;
-          for (let i = 0, n = el.points.length; i < n; i++) {
-            const p1 = el.points[i];
-            const p2 = el.points[(i + 1) % n];
-            dxf.push(
-              '0', 'LINE',
-              '8', 'GRABADO_VECTORIAL',
-              '62', '3',
-              '10', p1.x.toFixed(4),
-              '20', p1.y.toFixed(4),
-              '30', '0.0',
-              '11', p2.x.toFixed(4),
-              '21', p2.y.toFixed(4),
-              '31', '0.0'
-            );
-          }
+          byLayer.C00.push({
+            closed: true,
+            points: el.points.map((p) => ({ x: p.x, y: p.y }))
+          });
         });
       }
     }
   }
 
-  dxf.push('0', 'ENDSEC', '0', 'EOF');
-  return dxf.join('\n');
+  return buildStandardLaserDXF(board.width, board.height, byLayer);
 }
 
 // Genera el archivo .SVG de un Soporte Mayor (Apartado 6) con todos los tableros anidados en su interior
@@ -10989,9 +11118,10 @@ function generateCarrierSVG(carrier) {
   return lines.join('\n');
 }
 
-// Genera el archivo .DXF de un Soporte Mayor (Apartado 6) con todos los tableros e islas anidadas
+// Genera el archivo .DXF R12 (AC1009) de un Soporte Mayor (Apartado 6) con polilíneas continuas y textos vectorizados Hershey
 function generateCarrierDXF(carrier) {
-  const dxf = ['0', 'SECTION', '2', 'ENTITIES'];
+  const byLayer = { C00: [], C01: [], C02: [], C03: [], C04: [] };
+  const rodRadius = state.rodDiameter / 2;
 
   if (state.carrierCutOuterBorder) {
     const outerCarrierRect = [
@@ -11000,7 +11130,7 @@ function generateCarrierDXF(carrier) {
       { x: carrier.width, y: carrier.height },
       { x: 0, y: carrier.height }
     ];
-    pushLoopLinesWithTabsDXF(dxf, outerCarrierRect, false, 'CORTE_EXTERIOR', '1', 0, 0, true);
+    collectLoopPolylinesWithTabsDXF(byLayer.C04, outerCarrierRect, false, 0, 0, true);
   }
 
   carrier.boardPlacements.forEach((bPl) => {
@@ -11008,32 +11138,21 @@ function generateCarrierDXF(carrier) {
       if (bPl.boardFrameGeom) {
         const fg = bPl.boardFrameGeom;
         if (fg.outerCutPts && fg.outerCutPts.length >= 3) {
-          pushLoopLinesWithTabsDXF(dxf, fg.outerCutPts, false, 'CORTE_EXTERIOR', '1', 0, 0, true);
+          collectLoopPolylinesWithTabsDXF(byLayer.C04, fg.outerCutPts, false, 0, 0, true);
         }
         if (fg.innerCutPts && fg.innerCutPts.length >= 3) {
-          pushLoopLinesWithTabsDXF(dxf, fg.innerCutPts, true, 'CORTE_INTERIOR', '5', 0, 0, true);
+          collectLoopPolylinesWithTabsDXF(byLayer.C03, fg.innerCutPts, true, 0, 0, true);
         }
         if (fg.keyholePts && fg.keyholePts.length >= 3) {
-          pushLoopLinesWithTabsDXF(dxf, fg.keyholePts, true, 'CORTE_INTERIOR', '5', 0, 0, true);
+          collectLoopPolylinesWithTabsDXF(byLayer.C03, fg.keyholePts, true, 0, 0, true);
         }
         if (fg.engraveLoops && fg.engraveLoops.length > 0) {
           fg.engraveLoops.forEach((el) => {
             if (!el.points || el.points.length < 3) return;
-            for (let i = 0, n = el.points.length; i < n; i++) {
-              const p1 = el.points[i];
-              const p2 = el.points[(i + 1) % n];
-              dxf.push(
-                '0', 'LINE',
-                '8', 'GRABADO_VECTORIAL',
-                '62', '3',
-                '10', p1.x.toFixed(4),
-                '20', p1.y.toFixed(4),
-                '30', '0.0',
-                '11', p2.x.toFixed(4),
-                '21', p2.y.toFixed(4),
-                '31', '0.0'
-              );
-            }
+            byLayer.C00.push({
+              closed: true,
+              points: el.points.map((p) => ({ x: p.x, y: p.y }))
+            });
           });
         }
       } else {
@@ -11043,95 +11162,69 @@ function generateCarrierDXF(carrier) {
           { x: bPl.x + bPl.w, y: bPl.y + bPl.h },
           { x: bPl.x, y: bPl.y + bPl.h }
         ];
-        pushLoopLinesWithTabsDXF(dxf, rectPts, false, 'CORTE_EXTERIOR', '1', 0, 0, true);
+        collectLoopPolylinesWithTabsDXF(byLayer.C04, rectPts, false, 0, 0, true);
       }
+    } else if (bPl.boardFrameGeom && bPl.boardFrameGeom.engraveLoops) {
+      bPl.boardFrameGeom.engraveLoops.forEach((el) => {
+        if (!el.points || el.points.length < 3) return;
+        byLayer.C00.push({
+          closed: true,
+          points: el.points.map((p) => ({ x: p.x, y: p.y }))
+        });
+      });
     }
 
     if (state.carrierEngraveBoardLabels) {
       const padLbl = Math.max(2.5, (bPl.board.margin || 4) * 0.55);
-      dxf.push(
-        '0', 'TEXT',
-        '8', 'GRABADO_ETIQUETA',
-        '62', '3',
-        '10', (bPl.x + padLbl).toFixed(4),
-        '20', (bPl.y + bPl.h - padLbl - 3.2).toFixed(4),
-        '30', '0.0',
-        '40', '3.2000',
-        '1', 'TABLERO #' + (bPl.boardIndex + 1)
-      );
+      const bLblText = 'TABLERO #' + (bPl.boardIndex + 1) + ' (' + bPl.w.toFixed(0) + 'x' + bPl.h.toFixed(0) + 'mm)';
+      byLayer.C00.push(...hersheyTextToPolylinesDXF(bLblText, bPl.x + padLbl, bPl.y + bPl.h - padLbl, 3.4, 'start', 'alphabetic'));
     }
 
     bPl.transformedPlacements.forEach((pl) => {
-      pushLoopLinesWithTabsDXF(dxf, pl.outerPoints, false, 'CORTE_EXTERIOR', '1', 0, 0, Boolean(pl.isFrame || (pl.island && pl.island.isFrame)));
-      pl.holes.forEach((h) => pushLoopLinesWithTabsDXF(dxf, h.points, true, 'CORTE_INTERIOR', '5', 0, 0, Boolean(h.isFrame)));
+      collectLoopPolylinesWithTabsDXF(
+        byLayer.C04,
+        pl.outerPoints,
+        false,
+        0,
+        0,
+        Boolean(pl.isFrame || (pl.island && pl.island.isFrame))
+      );
+      pl.holes.forEach((h) => {
+        collectLoopPolylinesWithTabsDXF(byLayer.C03, h.points, true, 0, 0, Boolean(h.isFrame));
+      });
 
       if (pl.engraveLoops && pl.engraveLoops.length > 0) {
         pl.engraveLoops.forEach((el) => {
           if (!el.points || el.points.length < 3) return;
-          for (let i = 0, n = el.points.length; i < n; i++) {
-            const p1 = el.points[i];
-            const p2 = el.points[(i + 1) % n];
-            dxf.push(
-              '0', 'LINE',
-              '8', 'GRABADO_VECTORIAL',
-              '62', '3',
-              '10', p1.x.toFixed(4),
-              '20', p1.y.toFixed(4),
-              '30', '0.0',
-              '11', p2.x.toFixed(4),
-              '21', p2.y.toFixed(4),
-              '31', '0.0'
-            );
-          }
-        });
-      }
-
-      if (state.includePrevSliceGuide && pl.lowerPolys.length > 0) {
-        pl.lowerPolys.forEach((poly) => {
-          for (let i = 0; i < poly.length - 1; i++) {
-            dxf.push(
-              '0', 'LINE',
-              '8', 'GUIA_LASCA_INFERIOR',
-              '62', '6',
-              '10', poly[i].x.toFixed(4),
-              '20', poly[i].y.toFixed(4),
-              '30', '0.0',
-              '11', poly[i + 1].x.toFixed(4),
-              '21', poly[i + 1].y.toFixed(4),
-              '31', '0.0'
-            );
-          }
+          byLayer.C00.push({
+            closed: true,
+            points: el.points.map((p) => ({ x: p.x, y: p.y }))
+          });
         });
       }
 
       if (state.includeNextSliceGuide && pl.upperPolys.length > 0) {
         pl.upperPolys.forEach((poly) => {
-          for (let i = 0; i < poly.length - 1; i++) {
-            dxf.push(
-              '0', 'LINE',
-              '8', 'GUIA_LASCA_SUPERIOR',
-              '62', '30',
-              '10', poly[i].x.toFixed(4),
-              '20', poly[i].y.toFixed(4),
-              '30', '0.0',
-              '11', poly[i + 1].x.toFixed(4),
-              '21', poly[i + 1].y.toFixed(4),
-              '31', '0.0'
-            );
-          }
+          if (!poly || poly.length < 2) return;
+          byLayer.C01.push({
+            closed: false,
+            points: poly.map((p) => ({ x: p.x, y: p.y }))
+          });
+        });
+      }
+
+      if (state.includePrevSliceGuide && pl.lowerPolys.length > 0) {
+        pl.lowerPolys.forEach((poly) => {
+          if (!poly || poly.length < 2) return;
+          byLayer.C02.push({
+            closed: false,
+            points: poly.map((p) => ({ x: p.x, y: p.y }))
+          });
         });
       }
 
       pl.rods.forEach((r) => {
-        dxf.push(
-          '0', 'CIRCLE',
-          '8', 'VARILLAS_GUIA',
-          '62', '5',
-          '10', r.x.toFixed(4),
-          '20', r.y.toFixed(4),
-          '30', '0.0',
-          '40', (state.rodDiameter / 2).toFixed(4)
-        );
+        byLayer.C03.push(createCirclePolylineDXF(r.x, r.y, rodRadius));
       });
 
       const tl = pl.textLayout;
@@ -11141,157 +11234,155 @@ function generateCarrierDXF(carrier) {
         const n = tl.lines.length;
         tl.lines.forEach((lineStr, lIdx) => {
           const lineY = tl.y + ((n - 1) * 0.5 - lIdx) * lineGap;
-          const halfW = (lineStr.length * textH * 0.6) * 0.5;
-          dxf.push(
-            '0', 'TEXT',
-            '8', 'GRABADO_ETIQUETA',
-            '62', '3',
-            '10', (tl.x - halfW).toFixed(4),
-            '20', (lineY - textH * 0.35).toFixed(4),
-            '30', '0.0',
-            '40', textH.toFixed(4),
-            '1', lineStr
-          );
+          byLayer.C00.push(...hersheyTextToPolylinesDXF(lineStr, tl.x, lineY, textH, 'middle', 'central'));
         });
       }
     });
   });
 
-  dxf.push('0', 'ENDSEC', '0', 'EOF');
-  return dxf.join('\n');
+  if (state.includeLabels) {
+    const headerText = 'SOPORTE MAYOR #' + (carrier.carrierIndex + 1) + ' [' + carrier.width.toFixed(0) + 'x' + carrier.height.toFixed(0) + 'mm | Tableros: ' + carrier.boardPlacements.length + ' | Islas: ' + carrier.totalIslands + ' | Uso: ' + carrier.efficiency.toFixed(1) + '%]';
+    const hx = Math.max(2, carrier.margin);
+    const hy = Math.max(1.5, carrier.margin * 0.4);
+    byLayer.C00.push(...hersheyTextToPolylinesDXF(headerText, hx, hy, 3.6, 'start', 'alphabetic'));
+  }
+
+  return buildStandardLaserDXF(carrier.width, carrier.height, byLayer);
 }
 
+// Genera el archivo .DXF R12 (AC1009) de una lámina/costilla individual con polilíneas continuas y textos Hershey
 function generateSliceDXF(slice, idx) {
+  const sliceAxis = slice.sliceAxis || state.axis;
   const upperSlice = typeof idx === 'number' ? getAdjacentSlice(idx, 'next') : null;
   const lowerSlice = typeof idx === 'number' ? getAdjacentSlice(idx, 'prev') : null;
   // Origen global basado en el tamaño total de la pieza para mantener la misma referencia en todos los DXF
-  const b = getModelBounds2D(slice.sliceAxis || state.axis);
+  const b = getModelBounds2D(sliceAxis);
+  const cutBounds = getSliceBounds2D(slice);
   const ox = b.minX;
   const oy = b.minY;
-  const dxf = ['0', 'SECTION', '2', 'ENTITIES'];
+  const docW = b.width;
+  const docH = b.height;
+  const byLayer = { C00: [], C01: [], C02: [], C03: [], C04: [] };
 
   (slice.loops || []).forEach((loop) => {
     if (!loop.points || loop.points.length < 3) return;
-    const layer = loop.isHole ? 'CORTE_INTERIOR' : 'CORTE_EXTERIOR';
-    const color = loop.isHole ? '5' : '1';
-    pushLoopLinesWithTabsDXF(dxf, loop.points, loop.isHole, layer, color, ox, oy, Boolean(loop.isFrame));
+    const target = loop.isHole ? byLayer.C03 : byLayer.C04;
+    collectLoopPolylinesWithTabsDXF(target, loop.points, loop.isHole, ox, oy, Boolean(loop.isFrame));
   });
 
   if (state.slicerFrameEnabled && typeof get2DBoardFrameGeometry === 'function') {
     const fGeom = get2DBoardFrameGeometry(b.minX, b.minY, b.maxX, b.maxY, slice.loops, false);
     if (fGeom) {
       if (fGeom.outerCutPts && fGeom.outerCutPts.length >= 3) {
-        pushLoopLinesWithTabsDXF(dxf, fGeom.outerCutPts, false, 'CORTE_EXTERIOR', '1', ox, oy, true);
+        collectLoopPolylinesWithTabsDXF(byLayer.C04, fGeom.outerCutPts, false, ox, oy, true);
       }
       if (fGeom.innerCutPts && fGeom.innerCutPts.length >= 3) {
-        pushLoopLinesWithTabsDXF(dxf, fGeom.innerCutPts, true, 'CORTE_INTERIOR', '5', ox, oy, true);
+        collectLoopPolylinesWithTabsDXF(byLayer.C03, fGeom.innerCutPts, true, ox, oy, true);
       }
       if (fGeom.keyholePts && fGeom.keyholePts.length >= 3) {
-        pushLoopLinesWithTabsDXF(dxf, fGeom.keyholePts, true, 'CORTE_INTERIOR', '5', ox, oy, true);
+        collectLoopPolylinesWithTabsDXF(byLayer.C03, fGeom.keyholePts, true, ox, oy, true);
       }
       if (fGeom.engraveLoops && fGeom.engraveLoops.length > 0) {
         fGeom.engraveLoops.forEach((el) => {
           if (!el.points || el.points.length < 3) return;
-          for (let i = 0, n = el.points.length; i < n; i++) {
-            const p1 = el.points[i];
-            const p2 = el.points[(i + 1) % n];
-            dxf.push(
-              '0', 'LINE',
-              '8', 'GRABADO_VECTORIAL',
-              '62', '3',
-              '10', (p1.x - ox).toFixed(4),
-              '20', (p1.y - oy).toFixed(4),
-              '30', '0.0',
-              '11', (p2.x - ox).toFixed(4),
-              '21', (p2.y - oy).toFixed(4),
-              '31', '0.0'
-            );
-          }
+          byLayer.C00.push({
+            closed: true,
+            points: el.points.map((p) => ({ x: p.x - ox, y: p.y - oy }))
+          });
         });
       }
     }
   }
 
-  if (slice.engraveLoops && slice.engraveLoops.length > 0) {
+  if (slice.hatchPolylines && slice.hatchPolylines.length > 0 && slice.engraveStyle === 'vector_hatch') {
+    slice.hatchPolylines.forEach((seg) => {
+      if (!seg || seg.length < 2) return;
+      byLayer.C00.push({
+        closed: false,
+        points: seg.map((p) => ({ x: p.x - ox, y: p.y - oy }))
+      });
+    });
+  } else if (slice.engraveLoops && slice.engraveLoops.length > 0) {
     slice.engraveLoops.forEach((el) => {
       if (!el.points || el.points.length < 3) return;
-      for (let i = 0, n = el.points.length; i < n; i++) {
-        const p1 = el.points[i];
-        const p2 = el.points[(i + 1) % n];
-        dxf.push(
-          '0', 'LINE',
-          '8', 'GRABADO_VECTORIAL',
-          '62', '3',
-          '10', (p1.x - ox).toFixed(4),
-          '20', (p1.y - oy).toFixed(4),
-          '30', '0.0',
-          '11', (p2.x - ox).toFixed(4),
-          '21', (p2.y - oy).toFixed(4),
-          '31', '0.0'
-        );
-      }
+      byLayer.C00.push({
+        closed: true,
+        points: el.points.map((p) => ({ x: p.x - ox, y: p.y - oy }))
+      });
     });
   }
 
-  // Incluir guía de la lámina INFERIOR (#N-1) en capa independiente DXF si está activada
-  if (lowerSlice && lowerSlice.loops) {
-    const lowerPolys = getGuidePolylinesForSlice(slice, lowerSlice);
-    lowerPolys.forEach((poly) => {
-      for (let i = 0; i < poly.length - 1; i++) {
-        const p1 = poly[i];
-        const p2 = poly[i + 1];
-        dxf.push(
-          '0', 'LINE',
-          '8', 'GUIA_LASCA_INFERIOR',
-          '62', '6', // Color magenta/violeta en AutoCAD/DXF
-          '10', (p1.x - ox).toFixed(4),
-          '20', (p1.y - oy).toFixed(4),
-          '30', '0.0',
-          '11', (p2.x - ox).toFixed(4),
-          '21', (p2.y - oy).toFixed(4),
-          '31', '0.0'
-        );
-      }
+  if (slice.fineEdgeLoops && slice.fineEdgeLoops.length > 0) {
+    slice.fineEdgeLoops.forEach((fl) => {
+      if (!fl.points || fl.points.length < 3) return;
+      byLayer.C00.push({
+        closed: true,
+        points: fl.points.map((p) => ({ x: p.x - ox, y: p.y - oy }))
+      });
     });
   }
 
-  // Incluir guía de la lámina SUPERIOR (#N+1) en capa independiente DXF si está activada
+  let hasUpperGuide = false;
   if (upperSlice && upperSlice.loops) {
     const upperPolys = getGuidePolylinesForSlice(slice, upperSlice);
     upperPolys.forEach((poly) => {
-      for (let i = 0; i < poly.length - 1; i++) {
-        const p1 = poly[i];
-        const p2 = poly[i + 1];
-        dxf.push(
-          '0', 'LINE',
-          '8', 'GUIA_LASCA_SUPERIOR',
-          '62', '30', // Color naranja en AutoCAD/DXF
-          '10', (p1.x - ox).toFixed(4),
-          '20', (p1.y - oy).toFixed(4),
-          '30', '0.0',
-          '11', (p2.x - ox).toFixed(4),
-          '21', (p2.y - oy).toFixed(4),
-          '31', '0.0'
-        );
-      }
+      if (!poly || poly.length < 2) return;
+      hasUpperGuide = true;
+      byLayer.C01.push({
+        closed: false,
+        points: poly.map((p) => ({ x: p.x - ox, y: p.y - oy }))
+      });
+    });
+  }
+
+  let hasLowerGuide = false;
+  if (lowerSlice && lowerSlice.loops) {
+    const lowerPolys = getGuidePolylinesForSlice(slice, lowerSlice);
+    lowerPolys.forEach((poly) => {
+      if (!poly || poly.length < 2) return;
+      hasLowerGuide = true;
+      byLayer.C02.push({
+        closed: false,
+        points: poly.map((p) => ({ x: p.x - ox, y: p.y - oy }))
+      });
     });
   }
 
   const rods = getAlignmentHoles2D(slice);
+  const rodRadius = state.rodDiameter / 2;
   rods.forEach((h) => {
-    dxf.push(
-      '0', 'CIRCLE',
-      '8', 'VARILLAS_GUIA',
-      '62', '5',
-      '10', (h.x - ox).toFixed(4),
-      '20', (h.y - oy).toFixed(4),
-      '30', '0.0',
-      '40', (state.rodDiameter / 2).toFixed(4)
-    );
+    byLayer.C03.push(createCirclePolylineDXF(h.x - ox, h.y - oy, rodRadius));
   });
 
-  dxf.push('0', 'ENDSEC', '0', 'EOF');
-  return dxf.join('\n');
+  if (state.includeLabels) {
+    const displayCode = slice.puzzleCode ? slice.puzzleCode : ('#' + (idx + 1));
+    const fontSize = Math.max(2.5, Math.min(docW, docH) * 0.028);
+    let guideNotes = '';
+    if (slice.puzzleCode && slice.puzzleSlots) {
+      guideNotes += ' | Ranuras:' + slice.puzzleSlots.length;
+    } else {
+      if (hasUpperGuide && upperSlice) guideNotes += ' | Sup:#' + (upperSlice.index + 1);
+      if (hasLowerGuide && lowerSlice) guideNotes += ' | Inf:#' + (lowerSlice.index + 1);
+    }
+    const labelText = displayCode + ' [' + sliceAxis.toUpperCase() + ':' + slice.coord.toFixed(1) + 'mm | Corte:' + cutBounds.width.toFixed(1) + 'x' + cutBounds.height.toFixed(1) + 'mm | Doc:' + docW.toFixed(1) + 'x' + docH.toFixed(1) + 'mm' + guideNotes + ']';
+    const labelPad = Math.max(2, Math.min(docW, docH) * 0.025);
+    byLayer.C00.push(...hersheyTextToPolylinesDXF(labelText, labelPad, labelPad * 0.6, fontSize, 'start', 'alphabetic'));
+
+    const sliceIslands = extractIslandsFromSlices([slice]);
+    sliceIslands.forEach((isl) => {
+      const tl = isl.textLayout;
+      if (!tl || !tl.lines || tl.lines.length === 0 || tl.fontSizeMM <= 0.04) return;
+      const textH = tl.fontSizeMM;
+      const lineGap = textH * 1.12;
+      const n = tl.lines.length;
+      tl.lines.forEach((lineStr, lIdx) => {
+        const lineY = tl.y + ((n - 1) * 0.5 - lIdx) * lineGap;
+        byLayer.C00.push(...hersheyTextToPolylinesDXF(lineStr, tl.x - ox, lineY - oy, textH, 'middle', 'central'));
+      });
+    });
+  }
+
+  return buildStandardLaserDXF(docW, docH, byLayer);
 }
 
 function generateSliceSTL(slice, idx) {
@@ -11549,6 +11640,58 @@ function generateSectorSliceSVG(slice, idx, sectorCode, sectorCol, sectorRow) {
   return lines.join('\n');
 }
 
+// Genera un archivo DXF R12 (AC1009) individual acotado al bloque de un Conjunto Modular (con textos Hershey)
+function generateSectorSliceDXF(slice, idx, sectorCode, sectorCol, sectorRow) {
+  if (typeof idx === 'string') {
+    sectorCode = idx;
+    idx = slice && typeof slice.index === 'number' ? slice.index : 0;
+  }
+  const g = slice.splitGrid || getSliceSplitGrid(slice.sliceAxis || state.axis, idx);
+  if (typeof sectorCol !== 'number' || typeof sectorRow !== 'number') {
+    const matchLoop = (slice.loops || []).find((l) => l.sectorCode === sectorCode);
+    sectorCol = matchLoop && typeof matchLoop.sectorCol === 'number' ? matchLoop.sectorCol : 0;
+    sectorRow = matchLoop && typeof matchLoop.sectorRow === 'number' ? matchLoop.sectorRow : 0;
+  }
+  const yCellIdx = (g.rows - 1) - sectorRow;
+  const cellMinX = sectorCol === 0 ? g.minX : g.xCuts[sectorCol - 1];
+  const cellMaxX = sectorCol === g.cols - 1 ? g.maxX : g.xCuts[sectorCol];
+  const cellMinY = yCellIdx === 0 ? g.minY : g.yCuts[yCellIdx - 1];
+  const cellMaxY = yCellIdx === g.rows - 1 ? g.maxY : g.yCuts[yCellIdx];
+
+  const pad = state.splitJointType !== 'straight' ? Math.max(2, Number(state.splitJointDepthMM) || 6) + 2 : 0;
+  const minX = cellMinX - pad;
+  const minY = cellMinY - pad;
+  const docW = Math.max(10, (cellMaxX - cellMinX) + pad * 2);
+  const docH = Math.max(10, (cellMaxY - cellMinY) + pad * 2);
+
+  const sectorLoops = (slice.loops || []).filter((l) => l.sectorCode === sectorCode);
+  const byLayer = { C00: [], C01: [], C02: [], C03: [], C04: [] };
+
+  sectorLoops.forEach((loop) => {
+    if (!loop.points || loop.points.length < 3) return;
+    const target = loop.isHole ? byLayer.C03 : byLayer.C04;
+    collectLoopPolylinesWithTabsDXF(target, loop.points, loop.isHole, minX, minY);
+  });
+
+  if (state.includeLabels) {
+    const tempSlice = Object.assign({}, slice, { loops: sectorLoops });
+    const sectorIslands = extractIslandsFromSlices([tempSlice]);
+    sectorIslands.forEach((isl) => {
+      const tl = isl.textLayout;
+      if (!tl || !tl.lines || tl.lines.length === 0 || tl.fontSizeMM <= 0.04) return;
+      const fs = tl.fontSizeMM;
+      const lineStep = fs * 1.12;
+      const n = tl.lines.length;
+      for (let k = 0; k < n; k++) {
+        const yVal = tl.y - (k - (n - 1) * 0.5) * lineStep;
+        byLayer.C00.push(...hersheyTextToPolylinesDXF(tl.lines[k], tl.x - minX, yVal - minY, fs, 'middle', 'central'));
+      }
+    });
+  }
+
+  return buildStandardLaserDXF(docW, docH, byLayer);
+}
+
 async function executeZipExport() {
   const scopeEl = document.querySelector('input[name="exportScope"]:checked');
   const scope = scopeEl ? scopeEl.value : 'selected';
@@ -11630,6 +11773,7 @@ async function executeZipExport() {
 
   // Si la Subdivisión Modular 3D está activa, generamos también una carpeta organizada por Conjunto (Conjunto_A1, Conjunto_A2, etc.)
   const folderModularSVG = (wantSVG && state.splitModelEnabled) ? zip.folder('SVG_Conjuntos_Modulares') : null;
+  const folderModularDXF = (wantDXF && state.splitModelEnabled) ? zip.folder('DXF_Conjuntos_Modulares') : null;
 
   targetSlices.forEach((slice) => {
     const idx = slice.index;
@@ -11643,7 +11787,7 @@ async function executeZipExport() {
     if (folderDXF) folderDXF.file(fname + '.dxf', generateSliceDXF(slice, idx));
     if (folderSTL) folderSTL.file(fname + '.stl', generateSliceSTL(slice, idx));
 
-    if (folderModularSVG && slice.splitGrid && slice.splitGrid.totalParts > 1) {
+    if ((folderModularSVG || folderModularDXF) && slice.splitGrid && slice.splitGrid.totalParts > 1) {
       const seenSectors = new Map();
       (slice.loops || []).forEach((l) => {
         if (!l.isHole && l.sectorCode && !seenSectors.has(l.sectorCode)) {
@@ -11651,11 +11795,17 @@ async function executeZipExport() {
         }
       });
       seenSectors.forEach((sec) => {
-        const secFolder = folderModularSVG.folder('Conjunto_' + sec.code);
-        const secFname = slice.puzzleCode
-          ? ('costilla_' + slice.puzzleCode + '_' + sec.code + '.svg')
-          : ('lasca_' + numStr + '_' + sec.code + '.svg');
-        secFolder.file(secFname, generateSectorSliceSVG(slice, idx, sec.code, sec.col, sec.row));
+        const secBase = slice.puzzleCode
+          ? ('costilla_' + slice.puzzleCode + '_' + sec.code)
+          : ('lasca_' + numStr + '_' + sec.code);
+        if (folderModularSVG) {
+          const secFolderSvg = folderModularSVG.folder('Conjunto_' + sec.code);
+          secFolderSvg.file(secBase + '.svg', generateSectorSliceSVG(slice, idx, sec.code, sec.col, sec.row));
+        }
+        if (folderModularDXF) {
+          const secFolderDxf = folderModularDXF.folder('Conjunto_' + sec.code);
+          secFolderDxf.file(secBase + '.dxf', generateSectorSliceDXF(slice, idx, sec.code, sec.col, sec.row));
+        }
       });
     }
   });
@@ -14272,33 +14422,71 @@ function generateVectorizedImageSVG() {
 
 function generateVectorizedImageDXF() {
   const res = vec2dState.result;
-  let dxf = '0\nSECTION\n2\nHEADER\n9\n$INSUNITS\n70\n4\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n';
+  const totW = Math.max(vec2dState.widthMM, res.totalWidthMM || vec2dState.widthMM);
+  const totH = Math.max(vec2dState.heightMM, res.totalHeightMM || vec2dState.heightMM);
+  const padMM = Math.max(2, Number(vec2dState.cutOffsetMM) + 2);
+  const docW = Math.max(10, totW + padMM * 2);
+  const docH = Math.max(10, totH + padMM * 2);
+  const cx = docW * 0.5;
+  const cy = docH * 0.5;
 
-  const appendClosedPoly = (pts, layer, colorCode) => {
+  const byLayer = { C00: [], C01: [], C02: [], C03: [], C04: [] };
+
+  const pushLoopToLayer = (pts, layerKey) => {
     if (!pts || pts.length < 3) return;
-    dxf += '0\nLWPOLYLINE\n8\n' + layer + '\n62\n' + colorCode + '\n90\n' + pts.length + '\n70\n1\n';
-    pts.forEach((p) => {
-      dxf += '10\n' + p.x.toFixed(4) + '\n20\n' + p.y.toFixed(4) + '\n';
+    byLayer[layerKey].push({
+      closed: true,
+      points: pts.map((p) => ({ x: p.x + cx, y: p.y + cy }))
     });
   };
 
-  res.outerCutLoops.forEach((l) => appendClosedPoly(l.points, 'CORTE_EXTERIOR', 1));
-  res.holeCutLoops.forEach((l) => appendClosedPoly(l.points, 'CORTE_INTERIOR', 5));
-  res.engraveLoops.forEach((l) => appendClosedPoly(l.points, 'GRABADO_VECTORIAL', 3));
-  if (res.frameEngraveLoops) {
-    res.frameEngraveLoops.forEach((l) => appendClosedPoly(l.points, 'GRABADO_MARCO', 3));
-  }
-  if (vec2dState.detectFineEdges) {
-    res.fineEdgeLoops.forEach((l) => appendClosedPoly(l.points, 'GRABADO_DETALLE', 30));
-  }
   if (vec2dState.engraveStyle === 'vector_hatch') {
-    res.hatchPolylines.forEach((seg) => {
-      dxf += '0\nLINE\n8\nGRABADO_TRAMA\n62\n3\n10\n' + seg[0].x.toFixed(4) + '\n20\n' + seg[0].y.toFixed(4) + '\n11\n' + seg[1].x.toFixed(4) + '\n21\n' + seg[1].y.toFixed(4) + '\n';
+    (res.hatchPolylines || []).forEach((seg) => {
+      if (!seg || seg.length < 2) return;
+      byLayer.C00.push({
+        closed: false,
+        points: seg.map((p) => ({ x: p.x + cx, y: p.y + cy }))
+      });
     });
+  } else {
+    (res.engraveLoops || []).forEach((l) => pushLoopToLayer(l.points, 'C00'));
   }
 
-  dxf += '0\nENDSEC\n0\nEOF\n';
-  return dxf;
+  if (res.frameEngraveLoops) {
+    res.frameEngraveLoops.forEach((l) => pushLoopToLayer(l.points, 'C00'));
+  }
+  if (vec2dState.detectFineEdges) {
+    (res.fineEdgeLoops || []).forEach((l) => pushLoopToLayer(l.points, 'C01'));
+  }
+  (res.holeCutLoops || []).forEach((l) => pushLoopToLayer(l.points, 'C03'));
+  (res.outerCutLoops || []).forEach((l) => pushLoopToLayer(l.points, 'C04'));
+
+  if (typeof buildStandardLaserDXF === 'function') {
+    return buildStandardLaserDXF(docW, docH, byLayer);
+  }
+
+  const layerNames = ['C00', 'C01', 'C02', 'C03', 'C04'];
+  const aciMap = { C00: '5', C01: '5', C02: '5', C03: '1', C04: '1' };
+  const out = [
+    '0', 'SECTION', '2', 'HEADER',
+    '9', '$ACADVER', '1', 'AC1009',
+    '9', '$INSUNITS', '70', '4',
+    '0', 'ENDSEC',
+    '0', 'SECTION', '2', 'ENTITIES'
+  ];
+  layerNames.forEach((lid) => {
+    const aci = aciMap[lid];
+    byLayer[lid].forEach((sp) => {
+      if (!sp.points || sp.points.length < 2) return;
+      out.push('0', 'POLYLINE', '8', lid, '62', aci, '66', '1', '70', sp.closed ? '1' : '0');
+      sp.points.forEach((pt) => {
+        out.push('0', 'VERTEX', '8', lid, '62', aci, '10', pt.x.toFixed(3), '20', pt.y.toFixed(3), '30', '0.0');
+      });
+      out.push('0', 'SEQEND', '8', lid);
+    });
+  });
+  out.push('0', 'ENDSEC', '0', 'EOF');
+  return out.join('\n');
 }
 
 function triggerVectorizerFileDownload(blob, filename) {

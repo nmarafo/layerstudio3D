@@ -2339,33 +2339,71 @@ function generateVectorizedImageSVG() {
 
 function generateVectorizedImageDXF() {
   const res = vec2dState.result;
-  let dxf = '0\nSECTION\n2\nHEADER\n9\n$INSUNITS\n70\n4\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n';
+  const totW = Math.max(vec2dState.widthMM, res.totalWidthMM || vec2dState.widthMM);
+  const totH = Math.max(vec2dState.heightMM, res.totalHeightMM || vec2dState.heightMM);
+  const padMM = Math.max(2, Number(vec2dState.cutOffsetMM) + 2);
+  const docW = Math.max(10, totW + padMM * 2);
+  const docH = Math.max(10, totH + padMM * 2);
+  const cx = docW * 0.5;
+  const cy = docH * 0.5;
 
-  const appendClosedPoly = (pts, layer, colorCode) => {
+  const byLayer = { C00: [], C01: [], C02: [], C03: [], C04: [] };
+
+  const pushLoopToLayer = (pts, layerKey) => {
     if (!pts || pts.length < 3) return;
-    dxf += '0\nLWPOLYLINE\n8\n' + layer + '\n62\n' + colorCode + '\n90\n' + pts.length + '\n70\n1\n';
-    pts.forEach((p) => {
-      dxf += '10\n' + p.x.toFixed(4) + '\n20\n' + p.y.toFixed(4) + '\n';
+    byLayer[layerKey].push({
+      closed: true,
+      points: pts.map((p) => ({ x: p.x + cx, y: p.y + cy }))
     });
   };
 
-  res.outerCutLoops.forEach((l) => appendClosedPoly(l.points, 'CORTE_EXTERIOR', 1));
-  res.holeCutLoops.forEach((l) => appendClosedPoly(l.points, 'CORTE_INTERIOR', 5));
-  res.engraveLoops.forEach((l) => appendClosedPoly(l.points, 'GRABADO_VECTORIAL', 3));
-  if (res.frameEngraveLoops) {
-    res.frameEngraveLoops.forEach((l) => appendClosedPoly(l.points, 'GRABADO_MARCO', 3));
-  }
-  if (vec2dState.detectFineEdges) {
-    res.fineEdgeLoops.forEach((l) => appendClosedPoly(l.points, 'GRABADO_DETALLE', 30));
-  }
   if (vec2dState.engraveStyle === 'vector_hatch') {
-    res.hatchPolylines.forEach((seg) => {
-      dxf += '0\nLINE\n8\nGRABADO_TRAMA\n62\n3\n10\n' + seg[0].x.toFixed(4) + '\n20\n' + seg[0].y.toFixed(4) + '\n11\n' + seg[1].x.toFixed(4) + '\n21\n' + seg[1].y.toFixed(4) + '\n';
+    (res.hatchPolylines || []).forEach((seg) => {
+      if (!seg || seg.length < 2) return;
+      byLayer.C00.push({
+        closed: false,
+        points: seg.map((p) => ({ x: p.x + cx, y: p.y + cy }))
+      });
     });
+  } else {
+    (res.engraveLoops || []).forEach((l) => pushLoopToLayer(l.points, 'C00'));
   }
 
-  dxf += '0\nENDSEC\n0\nEOF\n';
-  return dxf;
+  if (res.frameEngraveLoops) {
+    res.frameEngraveLoops.forEach((l) => pushLoopToLayer(l.points, 'C00'));
+  }
+  if (vec2dState.detectFineEdges) {
+    (res.fineEdgeLoops || []).forEach((l) => pushLoopToLayer(l.points, 'C01'));
+  }
+  (res.holeCutLoops || []).forEach((l) => pushLoopToLayer(l.points, 'C03'));
+  (res.outerCutLoops || []).forEach((l) => pushLoopToLayer(l.points, 'C04'));
+
+  if (typeof buildStandardLaserDXF === 'function') {
+    return buildStandardLaserDXF(docW, docH, byLayer);
+  }
+
+  const layerNames = ['C00', 'C01', 'C02', 'C03', 'C04'];
+  const aciMap = { C00: '5', C01: '5', C02: '5', C03: '1', C04: '1' };
+  const out = [
+    '0', 'SECTION', '2', 'HEADER',
+    '9', '$ACADVER', '1', 'AC1009',
+    '9', '$INSUNITS', '70', '4',
+    '0', 'ENDSEC',
+    '0', 'SECTION', '2', 'ENTITIES'
+  ];
+  layerNames.forEach((lid) => {
+    const aci = aciMap[lid];
+    byLayer[lid].forEach((sp) => {
+      if (!sp.points || sp.points.length < 2) return;
+      out.push('0', 'POLYLINE', '8', lid, '62', aci, '66', '1', '70', sp.closed ? '1' : '0');
+      sp.points.forEach((pt) => {
+        out.push('0', 'VERTEX', '8', lid, '62', aci, '10', pt.x.toFixed(3), '20', pt.y.toFixed(3), '30', '0.0');
+      });
+      out.push('0', 'SEQEND', '8', lid);
+    });
+  });
+  out.push('0', 'ENDSEC', '0', 'EOF');
+  return out.join('\n');
 }
 
 function triggerVectorizerFileDownload(blob, filename) {
