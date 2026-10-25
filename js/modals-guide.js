@@ -1584,6 +1584,7 @@ function renderAssemblyGuideModalContent() {
 
 // =========================================================================
 // GENERADOR DE GUÍA ILUSTRADA AUTOCONTENIDA EN HTML / IMPRESIÓN PDF
+// OPTIMIZADA PARA IMPRESIÓN DIN A4 A DOBLE CARA (DÚPLEX) Y ENCUADERNACIÓN
 // =========================================================================
 function generateIllustratedAssemblyGuideHTML() {
   if (!state.nestingEnabled || state.nestedBoards.length === 0) {
@@ -1599,33 +1600,36 @@ function generateIllustratedAssemblyGuideHTML() {
     .map((bIdx, i) => '<span class="badge badge-emerald">' + (i + 1) + 'º → Tablero #' + (bIdx + 1) + '</span>')
     .join(' <span style="color:#64748b;font-weight:bold;">➔</span> ');
 
-  let boardsHtml = '';
+  const boardCardsList = [];
   state.nestedBoards.forEach((board, bIdx) => {
     const codes = board.placements.map((pl) => {
       const sNum = pl.island.sliceIndex + 1;
       const baseCode = (isPuzzle && pl.island.puzzleCode) ? pl.island.puzzleCode : ('#' + sNum);
       const code = pl.island.customCode || (pl.island.totalIslandsInSlice > 1 ? (baseCode + '.' + (pl.island.islandIdxInSlice + 1)) : baseCode);
-      return '<span class="chip">' + escapeGuideXml(code + (pl.rotated ? ' (90°↻)' : '')) + '</span>';
+      return '<span class="chip">' + escapeGuideXml(code + (pl.rotated ? '↻' : '')) + '</span>';
     }).join(' ');
 
     const svgBoard = generateBoardIllustrationSVG(board, {
       highlightSliceIndex: null,
       theme: 'light',
-      maxHeightPx: 290
+      maxHeightPx: state.nestedBoards.length > 1 ? 135 : 165
     });
 
-    boardsHtml +=
+    boardCardsList.push(
       '<div class="card board-card">' +
         '<div class="card-header">' +
-          '<div><strong>Tablero #' + (bIdx + 1) + '</strong> — ' + board.placements.length + ' piezas (' + board.width.toFixed(0) + ' × ' + board.height.toFixed(0) + ' mm)</div>' +
-          '<div class="badge badge-amber">Aprovechamiento: ' + board.efficiency.toFixed(1) + '%</div>' +
+          '<div><strong>Tablero #' + (bIdx + 1) + '</strong> — ' + board.placements.length + ' pzs (' + board.width.toFixed(0) + '×' + board.height.toFixed(0) + ' mm)</div>' +
+          '<div class="badge badge-amber">Uso: ' + board.efficiency.toFixed(1) + '%</div>' +
         '</div>' +
         '<div class="svg-box">' + svgBoard + '</div>' +
-        '<div class="chips-row"><strong>Piezas incluidas:</strong> ' + codes + '</div>' +
-      '</div>';
+        '<div class="chips-row"><strong>Piezas:</strong> ' + codes + '</div>' +
+      '</div>'
+    );
   });
 
-  let stepsHtml = '';
+  const boardsHtml = '<div class="boards-grid ' + (state.nestedBoards.length === 1 ? 'single-board' : '') + '">' + boardCardsList.join('') + '</div>';
+
+  const stepCardsList = [];
   activeSlices.forEach((slice, stepIdx) => {
     const sIdx = slice.index;
     const sNum = sIdx + 1;
@@ -1634,28 +1638,28 @@ function generateIllustratedAssemblyGuideHTML() {
     const pls = plan.slicePlacementsMap.get(sIdx) || [];
     const accumH = ((stepIdx + 1) * state.thickness).toFixed(1);
     const roleLabel = isPuzzle
-      ? (slice.puzzleSeries === 'A' ? 'SERIE A ⊔ (Base portante · Ranuras ARRIBA)' : 'SERIE B ⊓ (Cruce transversal · Ranuras ABAJO)')
+      ? (slice.puzzleSeries === 'A' ? 'SERIE A ⊔ (Base · Ranuras ARRIBA)' : 'SERIE B ⊓ (Cruce · Ranuras ABAJO)')
       : (stepIdx === 0
-          ? 'BASE INFERIOR (1ª en colocar)'
-          : (stepIdx === totalSteps - 1 ? 'CIMA SUPERIOR (Última capa)' : 'Capa Intermedia'));
+          ? 'BASE INFERIOR (1ª)'
+          : (stepIdx === totalSteps - 1 ? 'CIMA SUPERIOR (Última)' : 'Capa Intermedia'));
 
     const uniqueBoards = Array.from(new Set(pls.map((p) => p.boardIndex)));
     const locatorSvg = uniqueBoards.map((bIdx) =>
       generateBoardIllustrationSVG(state.nestedBoards[bIdx], {
         highlightSliceIndex: sIdx,
         theme: 'light',
-        maxHeightPx: uniqueBoards.length > 1 ? 120 : 195
+        maxHeightPx: uniqueBoards.length > 1 ? 85 : 118
       })
-    ).join('<div style="height:6px"></div>');
+    ).join('<div style="height:3px"></div>');
 
     const alignSvg = generateStepAlignmentIllustrationSVG(slice, stepIdx, activeSlices, {
       theme: 'light',
-      maxHeightPx: 195
+      maxHeightPx: 118
     });
 
     const stackSvg = generateStepStackElevationSVG(slice, stepIdx, activeSlices, {
       theme: 'light',
-      maxHeightPx: 195
+      maxHeightPx: 118
     });
 
     const rowsHtml = pls.map((p) => {
@@ -1664,14 +1668,14 @@ function generateIllustratedAssemblyGuideHTML() {
         const targets = (slice.puzzleSlots || []).map((sl) => sl.targetCode).join(', ');
         gType = (slice.puzzleSlots ? slice.puzzleSlots.length : 0) + ' ranura(s)' + (targets ? (' → ' + targets) : '');
       } else {
-        gType = (p.hasSup && p.hasInf) ? 'Ambas Guías (Sup+Inf)' : (p.hasSup ? 'Guía Sup (#N+1)' : (p.hasInf ? 'Guía Inf (#N-1)' : 'Sin guía'));
+        gType = (p.hasSup && p.hasInf) ? 'Sup+Inf' : (p.hasSup ? 'Guía Sup (#N+1)' : (p.hasInf ? 'Guía Inf (#N-1)' : 'Sin guía'));
       }
-      const rotStr = p.rotated ? '🔄 Rotada 90° en tablero (enderezar a 0° al montar)' : 'Orientación 0° directa';
+      const rotStr = p.rotated ? '🔄 Girada 90° (enderezar a 0°)' : '0° directa';
       return (
         '<tr>' +
-          '<td><strong>' + escapeGuideXml(p.islandCode) + '</strong></td>' +
-          '<td>Tablero #' + (p.boardIndex + 1) + '</td>' +
-          '<td>(' + p.x.toFixed(1) + ', ' + p.y.toFixed(1) + ') mm</td>' +
+          '<td><strong>Pieza ' + escapeGuideXml(p.islandCode) + '</strong></td>' +
+          '<td><strong>Tablero #' + (p.boardIndex + 1) + '</strong></td>' +
+          '<td>Pos (' + p.x.toFixed(1) + ', ' + p.y.toFixed(1) + ') mm</td>' +
           '<td>' + p.w.toFixed(1) + ' × ' + p.h.toFixed(1) + ' mm</td>' +
           '<td>' + escapeGuideXml(gType) + '</td>' +
           '<td>' + rotStr + '</td>' +
@@ -1680,19 +1684,19 @@ function generateIllustratedAssemblyGuideHTML() {
     }).join('');
 
     const rightMetaHtml = isPuzzle
-      ? ('Cota ' + sliceAxisName + ' = ' + slice.coord.toFixed(2) + ' mm | Ranuras de encaje: <strong>' + (slice.puzzleSlots ? slice.puzzleSlots.length : 0) + '</strong>')
-      : ('Cota ' + sliceAxisName + ' = ' + slice.coord.toFixed(2) + ' mm | Altura acumulada: <strong>' + accumH + ' mm</strong>');
+      ? (sliceAxisName + ' = ' + slice.coord.toFixed(2) + ' mm | Ranuras: <strong>' + (slice.puzzleSlots ? slice.puzzleSlots.length : 0) + '</strong>')
+      : (sliceAxisName + ' = ' + slice.coord.toFixed(2) + ' mm | Alt. acum.: <strong>' + accumH + ' mm</strong>');
 
     const stepInstructionHtml = buildStepInstructionHTML(slice, stepIdx, activeSlices, pls);
 
-    stepsHtml +=
+    stepCardsList.push(
       '<div class="card step-card">' +
         '<div class="card-header">' +
           '<div>' +
-            '<span class="step-num">❑ PASO ' + (stepIdx + 1) + ' DE ' + totalSteps + '</span> ' +
-            '<strong>' + escapeGuideXml(sliceTitle) + '</strong> — <span style="color:#0369a1;font-weight:600;">' + roleLabel + '</span>' +
+            '<span class="step-num">❑ PASO ' + (stepIdx + 1) + ' / ' + totalSteps + '</span> ' +
+            '<strong>' + escapeGuideXml(sliceTitle) + '</strong> — <span style="color:#0369a1;font-weight:700;">' + roleLabel + '</span>' +
           '</div>' +
-          '<div style="font-family:monospace;font-size:12px;color:#334155;">' +
+          '<div style="font-family:monospace;font-size:10.5px;color:#334155;">' +
             rightMetaHtml +
           '</div>' +
         '</div>' +
@@ -1712,23 +1716,23 @@ function generateIllustratedAssemblyGuideHTML() {
           '</div>' +
         '</div>' +
         '<table class="parts-table">' +
-          '<thead><tr><th>Pieza</th><th>Tablero</th><th>Posición (X, Y)</th><th>Dimensiones</th><th>' + (isPuzzle ? 'Ranuras de Encaje' : 'Guías Grabadas') + '</th><th>Orientación en Tablero</th></tr></thead>' +
           '<tbody>' + rowsHtml + '</tbody>' +
         '</table>' +
-      '</div>';
+      '</div>'
+    );
   });
 
   const tabsSummary = state.tabsEnabled
     ? (state.tabMode === 'count'
-        ? (state.tabCount + ' micro-uniones de ' + state.tabWidthMM.toFixed(1) + ' mm por pieza (extracción a presión)')
+        ? (state.tabCount + ' micro-uniones de ' + state.tabWidthMM.toFixed(1) + ' mm por pieza')
         : ('1 micro-unión de ' + state.tabWidthMM.toFixed(1) + ' mm cada ' + state.tabSpacingMM.toFixed(0) + ' mm'))
-    : 'Corte perimetral continuo';
+    : 'Corte continuo';
 
   const splitGridMeta = (state.splitModelEnabled && typeof getSliceSplitGrid === 'function')
     ? getSliceSplitGrid(state.axis, 0)
     : null;
   const splitSummaryHtml = (splitGridMeta && splitGridMeta.totalParts > 1)
-    ? (' · Subdivisión Gran Formato: ' + splitGridMeta.cols + '×' + splitGridMeta.rows + ' (' + splitGridMeta.totalParts + ' conjuntos de ' + (splitGridMeta.partW / 10).toFixed(0) + '×' + (splitGridMeta.partH / 10).toFixed(0) + ' cm)')
+    ? (' · Gran Formato: ' + splitGridMeta.cols + '×' + splitGridMeta.rows + ' (' + splitGridMeta.totalParts + ' bloques)')
     : '';
 
   const modeMetaStr = (isPuzzle
@@ -1737,93 +1741,205 @@ function generateIllustratedAssemblyGuideHTML() {
 
   const laserPriorityBoxHtml =
     '<div class="priority-box">' +
-      '<div style="font-weight:700;font-size:12px;color:#0369a1;margin-bottom:6px;">A) Orden de Prioridad de Capas en la Cortadora Láser (dentro de cada Tablero):</div>' +
+      '<div style="font-weight:700;font-size:10.5px;color:#0369a1;margin-bottom:4px;">A) Orden de Prioridad de Capas en la Cortadora Láser (dentro de cada Tablero):</div>' +
       '<div class="priority-grid">' +
         '<div class="priority-item" style="border-left:3px solid #16a34a;">' +
           '<strong>1º GRABADO TEXTO (#008800 / C00)</strong>' +
-          '<span>Graba primero el código <code>' + (isPuzzle ? 'X1 / Y1' : '#N') + '</code> mientras el tablero está intacto.</span>' +
+          '<span>Graba el código <code>' + (isPuzzle ? 'X1 / Y1' : '#N') + '</code> con el tablero intacto.</span>' +
         '</div>' +
         '<div class="priority-item" style="border-left:3px solid #f59e0b;">' +
           '<strong>' + (isPuzzle ? '2º RANURAS MEDIA MADERA' : '2º GUÍAS PEGADO (#ff8800 / #9900ff)') + '</strong>' +
-          '<span>' + (isPuzzle ? 'Las ranuras de encaje a media madera ya van integradas directamente en el contorno rojo de corte.' : 'Marcado vectorial continuo rápido (alta velocidad, baja potencia) de las siluetas guía.') + '</span>' +
+          '<span>' + (isPuzzle ? 'Ranuras integradas en el contorno rojo.' : 'Marcado superficial rápido de siluetas guía.') + '</span>' +
         '</div>' +
         '<div class="priority-item" style="border-left:3px solid #2563eb;">' +
           '<strong>3º CORTE HUECOS (#0055ff / C03)</strong>' +
-          '<span>Corta siempre los agujeros internos antes de soltar el contorno exterior.</span>' +
+          '<span>Agujeros internos antes de soltar el exterior.</span>' +
         '</div>' +
         '<div class="priority-item" style="border-left:3px solid #dc2626;">' +
           '<strong>4º CORTE EXTERIOR (#ff0000 / C04)</strong>' +
-          '<span>Corta en último lugar el perímetro exterior' + (state.tabsEnabled ? ' (dejando los ' + state.tabWidthMM.toFixed(1) + ' mm de micro-unión para extraer a presión).' : ' de cada pieza.') + '</span>' +
+          '<span>Perímetro exterior en último lugar' + (state.tabsEnabled ? ' (con micro-uniones).' : '.') + '</span>' +
         '</div>' +
       '</div>' +
     '</div>';
+
+  // Construir paginación DIN A4 a doble cara (Anverso Impar = Lomo Izquierdo / Reverso Par = Lomo Derecho)
+  // minimizando el número total de páginas sin perder legibilidad
+  const stepsOnFirstPage = state.nestedBoards.length <= 2 ? 2 : (state.nestedBoards.length <= 4 ? 1 : 0);
+  const stepsPerFullA4Page = 4;
+  const pagesContent = [];
+
+  // Página 1 (Anverso Impar #1): Cabecera + Resumen + Tableros + Primeros pasos que caben en la 1ª cara A4
+  const firstPageSteps = stepCardsList.slice(0, stepsOnFirstPage);
+  let firstPageHtml =
+    '<div class="doc-header-block">' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px;">' +
+        '<h1>Guía de Corte y Montaje: ' + escapeGuideXml(state.modelName) + '</h1>' +
+        '<span style="font-size:10.5px;color:#475569;font-weight:600;">Formato DIN A4 Dúplex Encuadernable · Escala Real</span>' +
+      '</div>' +
+      '<div class="meta-grid">' +
+        '<div class="meta-item"><strong>Dimensiones Pieza</strong>' + state.dimsMM.x.toFixed(1) + ' × ' + state.dimsMM.y.toFixed(1) + ' × ' + state.dimsMM.z.toFixed(1) + ' mm</div>' +
+        '<div class="meta-item"><strong>Sistema Constructivo</strong>' + escapeGuideXml(modeMetaStr) + '</div>' +
+        '<div class="meta-item"><strong>Tableros de Corte</strong>' + state.nestedBoards.length + ' tab. de ' + state.boardWidthMM.toFixed(0) + '×' + state.boardHeightMM.toFixed(0) + ' mm</div>' +
+        '<div class="meta-item"><strong>Sujeción (Tabs)</strong>' + escapeGuideXml(tabsSummary) + '</div>' +
+      '</div>' +
+    '</div>' +
+    '<h2>1. Planos Vectoriales de Tableros y Orden de Corte</h2>' +
+    laserPriorityBoxHtml +
+    '<p style="font-size:10.5px;margin:4px 0 6px 0;"><strong>B) Secuencia recomendada de tableros:</strong> ' + priorityHtml + '</p>' +
+    boardsHtml;
+
+  if (firstPageSteps.length > 0) {
+    firstPageHtml +=
+      '<h2>2. ' + (isPuzzle ? 'Secuencia Ilustrada de Ensamblaje sin Pegamento (Serie A ⊔ → Serie B ⊓)' : ('Secuencia Ilustrada de Montaje Paso a Paso (De Abajo a Arriba: #1 → #' + state.slices.length + ')')) + '</h2>' +
+      '<div class="steps-grid">' + firstPageSteps.join('') + '</div>';
+  }
+  pagesContent.push(firstPageHtml);
+
+  // Páginas siguientes: empaquetar de 4 en 4 pasos por cara DIN A4
+  for (let i = stepsOnFirstPage; i < stepCardsList.length; i += stepsPerFullA4Page) {
+    const chunk = stepCardsList.slice(i, i + stepsPerFullA4Page);
+    let pageChunkHtml = '';
+    if (i === 0) {
+      pageChunkHtml +=
+        '<h2>2. ' + (isPuzzle ? 'Secuencia Ilustrada de Ensamblaje sin Pegamento (Serie A ⊔ → Serie B ⊓)' : ('Secuencia Ilustrada de Montaje Paso a Paso (De Abajo a Arriba: #1 → #' + state.slices.length + ')')) + '</h2>';
+    }
+    pageChunkHtml += '<div class="steps-grid">' + chunk.join('') + '</div>';
+    pagesContent.push(pageChunkHtml);
+  }
+
+  const totalA4Pages = pagesContent.length;
+  const totalPhysicalSheets = Math.ceil(totalA4Pages / 2);
+
+  // Si el total de páginas es impar, añadir indicación en el pie o permitir hoja par limpia
+  const paginatedA4Html = pagesContent.map((contentHtml, idx) => {
+    const pageNum = idx + 1;
+    const isOdd = (pageNum % 2 === 1);
+    const sideClass = isOdd ? 'a4-page-odd' : 'a4-page-even';
+    const sideBadge = isOdd
+      ? 'ANVERSO (Cara Impar · Lomo a la Izquierda ◀)'
+      : 'REVERSO (Cara Par · Lomo a la Derecha ▶)';
+    const isLast = pageNum === totalA4Pages;
+
+    const footerCredits = isLast
+      ? ('<div class="footer">' +
+          '<div><strong>LayerStudio 3D</strong> · Autor: <strong>Norberto Martín Afonso</strong> (&lt;normaafo@gmail.com&gt;) · Licencia GNU AGPL v3.0 (Sección 7b)</div>' +
+          '<div>https://github.com/nmarafo/layerstudio3D · X: @NorbertoMartnAf · GitHub/HF: @nmarafo</div>' +
+        '</div>')
+      : '';
+
+    return (
+      '<section class="a4-sheet ' + sideClass + '">' +
+        '<div class="binding-spine" title="Margen de encuadernación y perforación Dúplex">' +
+          '<span class="punch-hole hole-1"></span>' +
+          '<span class="spine-label">LOMO ENCUADERNACIÓN</span>' +
+          '<span class="punch-hole hole-2"></span>' +
+        '</div>' +
+        '<div class="a4-sheet-inner">' +
+          '<div class="running-header">' +
+            '<span><strong>' + escapeGuideXml(state.modelName) + '</strong> · ' + escapeGuideXml(modeMetaStr) + '</span>' +
+            '<span class="duplex-side-tag">' + sideBadge + '</span>' +
+          '</div>' +
+          '<div class="a4-sheet-body">' +
+            contentHtml +
+            footerCredits +
+          '</div>' +
+          '<div class="running-footer">' +
+            '<span>LayerStudio 3D — Guía Técnica de Taller (DIN A4 Dúplex)</span>' +
+            '<span><strong>Página ' + pageNum + ' de ' + totalA4Pages + '</strong> (Hoja física ' + Math.ceil(pageNum / 2) + ' de ' + totalPhysicalSheets + ')</span>' +
+          '</div>' +
+        '</div>' +
+      '</section>'
+    );
+  }).join('\n');
 
   return [
     '<!DOCTYPE html>',
     '<html lang="es">',
     '<head>',
     '<meta charset="UTF-8" />',
-    '<title>Guía Ilustrada de Montaje — ' + escapeGuideXml(state.modelName) + ' (LayerStudio 3D)</title>',
+    '<title>Guía DIN A4 Dúplex Encuadernable — ' + escapeGuideXml(state.modelName) + ' (LayerStudio 3D)</title>',
     '<style>',
-    '  * { box-sizing: border-box; }',
-    '  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color: #0f172a; background: #f1f5f9; margin: 0; padding: 24px; line-height: 1.45; }',
-    '  .container { max-width: 1120px; margin: 0 auto; background: #ffffff; padding: 28px; border-radius: 14px; border: 1px solid #cbd5e1; box-shadow: 0 4px 20px rgba(15,23,42,0.06); }',
-    '  h1 { margin: 0 0 4px 0; font-size: 22px; color: #0f172a; }',
-    '  h2 { margin: 24px 0 12px 0; font-size: 16px; text-transform: uppercase; letter-spacing: 0.04em; color: #0369a1; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; }',
-    '  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 14px 0; }',
-    '  .meta-item { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px; font-size: 12px; }',
-    '  .meta-item strong { display: block; font-size: 10px; text-transform: uppercase; color: #64748b; }',
-    '  .priority-box { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 12px; margin-bottom: 14px; page-break-inside: avoid; break-inside: avoid; }',
-    '  .priority-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }',
-    '  .priority-item { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px; font-size: 11px; }',
-    '  .priority-item strong { display: block; font-size: 11px; color: #0f172a; margin-bottom: 3px; }',
-    '  .priority-item span { display: block; font-size: 10px; color: #475569; }',
-    '  .card { border: 1px solid #cbd5e1; border-radius: 10px; padding: 14px; margin-bottom: 16px; background: #ffffff; page-break-inside: avoid; break-inside: avoid; }',
-    '  .card-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 10px; font-size: 13px; }',
-    '  .step-num { background: #fef3c7; border: 1px solid #f59e0b; color: #92400e; font-weight: 800; padding: 2px 8px; border-radius: 6px; font-size: 12px; margin-right: 6px; }',
-    '  .step-instruction { background: #f8fafc; border: 1px solid #cbd5e1; border-left: 4px solid #0284c7; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; font-size: 12.5px; color: #1e293b; line-height: 1.5; }',
-    '  .step-instruction code { background: #e2e8f0; padding: 1px 5px; border-radius: 4px; font-family: monospace; font-size: 11px; }',
-    '  .badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }',
+    '  @page { size: A4 portrait; margin: 7mm 7mm 7mm 7mm; }',
+    '  @page :right { margin-left: 14mm; margin-right: 7mm; }',
+    '  @page :left { margin-left: 7mm; margin-right: 14mm; }',
+    '  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }',
+    '  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color: #0f172a; background: #cbd5e1; margin: 0; padding: 16px; line-height: 1.32; }',
+    '  .container { max-width: 210mm; margin: 0 auto; }',
+    '  .no-print-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; background: #0f172a; color: #fff; padding: 10px 16px; border-radius: 10px; margin-bottom: 14px; box-shadow: 0 4px 14px rgba(15,23,42,0.25); }',
+    '  .no-print-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 11px; }',
+    '  .btn-print { background: #0284c7; color: #fff; border: none; padding: 7px 14px; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 12px; }',
+    '  .btn-mode { background: #1e293b; color: #e2e8f0; border: 1px solid #475569; padding: 5px 10px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 11px; }',
+    '  .btn-mode.active { background: #0369a1; border-color: #38bdf8; color: #ffffff; }',
+    '  /* Hoja DIN A4 con lomo alterno (Anverso Impar = Izquierda, Reverso Par = Derecha) */',
+    '  .a4-sheet { position: relative; background: #ffffff; width: 100%; margin: 0 auto 16px auto; border: 1px solid #94a3b8; border-radius: 6px; box-shadow: 0 4px 16px rgba(15,23,42,0.12); page-break-after: always; break-after: page; overflow: hidden; }',
+    '  .a4-sheet:last-child { page-break-after: auto; break-after: auto; }',
+    '  .a4-page-odd { padding: 8mm 8mm 8mm 16mm; }',
+    '  .a4-page-even { padding: 8mm 16mm 8mm 8mm; }',
+    '  .binding-spine { position: absolute; top: 0; bottom: 0; width: 10mm; background: repeating-linear-gradient(45deg, #f8fafc, #f8fafc 4px, #f1f5f9 4px, #f1f5f9 8px); display: flex; flex-direction: column; align-items: center; justify-content: space-around; pointer-events: none; }',
+    '  .a4-page-odd .binding-spine { left: 0; border-right: 1px dashed #94a3b8; }',
+    '  .a4-page-even .binding-spine { right: 0; border-left: 1px dashed #94a3b8; }',
+    '  .spine-label { writing-mode: vertical-rl; text-orientation: mixed; font-size: 7.5px; font-weight: 700; letter-spacing: 0.14em; color: #64748b; }',
+    '  .punch-hole { width: 5mm; height: 5mm; border-radius: 50%; border: 1.2px dashed #64748b; background: #e2e8f0; }',
+    '  body.hide-spine-marks .binding-spine { display: none !important; }',
+    '  .running-header { display: flex; justify-content: space-between; align-items: center; font-size: 9.5px; color: #475569; border-bottom: 1px solid #cbd5e1; padding-bottom: 3px; margin-bottom: 6px; }',
+    '  .a4-page-even .running-header, .a4-page-even .running-footer { flex-direction: row-reverse; }',
+    '  .duplex-side-tag { font-family: monospace; font-weight: 700; color: #0369a1; font-size: 9px; }',
+    '  .running-footer { display: flex; justify-content: space-between; align-items: center; font-size: 9.5px; color: #475569; border-top: 1px solid #cbd5e1; padding-top: 4px; margin-top: 6px; }',
+    '  h1 { margin: 0; font-size: 16px; color: #0f172a; }',
+    '  h2 { margin: 7px 0 5px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; color: #0369a1; border-bottom: 1.5px solid #cbd5e1; padding-bottom: 2px; }',
+    '  .meta-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; margin: 5px 0; }',
+    '  .meta-item { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 5px; padding: 4px 7px; font-size: 10px; }',
+    '  .meta-item strong { display: block; font-size: 8.5px; text-transform: uppercase; color: #64748b; }',
+    '  .priority-box { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 8px; margin-bottom: 6px; page-break-inside: avoid; break-inside: avoid; }',
+    '  .priority-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }',
+    '  .priority-item { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 4px; padding: 4px 6px; font-size: 9.5px; }',
+    '  .priority-item strong { display: block; font-size: 9.5px; color: #0f172a; margin-bottom: 1px; }',
+    '  .priority-item span { display: block; font-size: 8.8px; color: #334155; line-height: 1.25; }',
+    '  .boards-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-bottom: 6px; }',
+    '  .boards-grid.single-board { grid-template-columns: 1fr; }',
+    '  .steps-grid { display: grid; grid-template-columns: 1fr; gap: 6px; }',
+    '  body.grid-2col-steps .steps-grid { grid-template-columns: repeat(2, 1fr); gap: 6px; }',
+    '  body.grid-2col-steps .diagrams-grid { grid-template-columns: repeat(3, 1fr); gap: 3px; }',
+    '  body.grid-2col-steps .step-instruction { font-size: 9.5px; padding: 4px 6px; }',
+    '  .card { border: 1px solid #94a3b8; border-radius: 6px; padding: 6px 8px; background: #ffffff; page-break-inside: avoid; break-inside: avoid; }',
+    '  .card-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px; border-bottom: 1px solid #e2e8f0; padding-bottom: 3px; margin-bottom: 4px; font-size: 11px; }',
+    '  .step-num { background: #fef3c7; border: 1px solid #f59e0b; color: #92400e; font-weight: 800; padding: 1px 6px; border-radius: 4px; font-size: 10px; margin-right: 4px; }',
+    '  .step-instruction { background: #f8fafc; border: 1px solid #cbd5e1; border-left: 3.5px solid #0284c7; border-radius: 5px; padding: 5px 8px; margin-bottom: 5px; font-size: 10.5px; color: #0f172a; line-height: 1.35; }',
+    '  .step-instruction code { background: #e2e8f0; padding: 0 4px; border-radius: 3px; font-family: monospace; font-size: 9.5px; }',
+    '  .badge { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 9.5px; font-weight: 700; }',
     '  .badge-emerald { background: #d1fae5; color: #065f46; border: 1px solid #34d399; }',
     '  .badge-amber { background: #fef3c7; color: #92400e; border: 1px solid #fbbf24; }',
-    '  .chip { display: inline-block; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 4px; padding: 1px 6px; font-family: monospace; font-size: 11px; margin: 2px; }',
-    '  .chips-row { font-size: 11px; color: #334155; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #e2e8f0; }',
-    '  .diagrams-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px; }',
-    '  .diag-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; }',
-    '  .diag-title { font-size: 11px; font-weight: 700; color: #334155; margin-bottom: 6px; text-transform: uppercase; }',
-    '  .parts-table { width: 100%; border-collapse: collapse; font-size: 11px; }',
-    '  .parts-table th, .parts-table td { border: 1px solid #e2e8f0; padding: 5px 8px; text-align: left; }',
-    '  .parts-table th { background: #f8fafc; color: #475569; font-weight: 700; }',
-    '  .footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #cbd5e1; font-size: 11px; color: #475569; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }',
-    '  .no-print-bar { display: flex; justify-content: space-between; align-items: center; background: #0f172a; color: #fff; padding: 10px 18px; border-radius: 10px; margin-bottom: 18px; }',
-    '  .btn-print { background: #0284c7; color: #fff; border: none; padding: 7px 14px; border-radius: 6px; font-weight: 700; cursor: pointer; font-size: 12px; }',
-    '  @media print { body { background: #fff; padding: 0; } .container { border: none; box-shadow: none; padding: 0; max-width: 100%; } .no-print-bar { display: none !important; } }',
+    '  .chip { display: inline-block; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 3px; padding: 0.5px 4px; font-family: monospace; font-size: 9.5px; margin: 1px; }',
+    '  .chips-row { font-size: 9.5px; color: #334155; margin-top: 4px; padding-top: 3px; border-top: 1px dashed #cbd5e1; }',
+    '  .diagrams-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin-bottom: 4px; }',
+    '  .diag-box { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 5px; padding: 4px; }',
+    '  .diag-title { font-size: 9px; font-weight: 700; color: #1e293b; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.02em; }',
+    '  .parts-table { width: 100%; border-collapse: collapse; font-size: 9.8px; }',
+    '  .parts-table td { border: 1px solid #cbd5e1; padding: 2.5px 6px; text-align: left; background: #f8fafc; }',
+    '  .footer { margin-top: 8px; padding-top: 6px; border-top: 1px dashed #94a3b8; font-size: 9.5px; color: #475569; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px; }',
+    '  @media print {',
+    '    body { background: #ffffff; padding: 0; margin: 0; }',
+    '    .container { max-width: 100%; margin: 0; }',
+    '    .no-print-bar { display: none !important; }',
+    '    .a4-sheet { border: none; border-radius: 0; box-shadow: none; margin: 0; width: 100%; }',
+    '  }',
     '</style>',
     '</head>',
     '<body>',
     '<div class="container">',
     '  <div class="no-print-bar">',
-    '    <div><strong>LayerStudio 3D</strong> — Guía Técnica Ilustrada de Corte y Montaje (Planos Vectoriales Automáticos)</div>',
-    '    <button class="btn-print" onclick="window.print()">🖨️ Imprimir / Guardar como PDF</button>',
+    '    <div>',
+    '      <div style="font-size:13px;font-weight:700;">🖨️ Guía DIN A4 Dúplex Encuadernable — ' + escapeGuideXml(state.modelName) + '</div>',
+    '      <div style="font-size:11px;color:#94a3b8;">📄 <strong>' + totalA4Pages + ' páginas A4</strong> (' + totalPhysicalSheets + ' hoja(s) física(s) imprimiendo por ambas caras · Volteo por borde largo)</div>',
+    '    </div>',
+    '    <div class="no-print-controls">',
+    '      <button type="button" id="btnCol1" class="btn-mode active" onclick="document.body.classList.remove(\'grid-2col-steps\');document.getElementById(\'btnCol1\').classList.add(\'active\');document.getElementById(\'btnCol2\').classList.remove(\'active\');">📘 4 Pasos/Pág (Legible Óptimo)</button>',
+    '      <button type="button" id="btnCol2" class="btn-mode" onclick="document.body.classList.add(\'grid-2col-steps\');document.getElementById(\'btnCol2\').classList.add(\'active\');document.getElementById(\'btnCol1\').classList.remove(\'active\');">📗 2 Columnas (Ultra-Compacto)</button>',
+    '      <button type="button" class="btn-mode" onclick="document.body.classList.toggle(\'hide-spine-marks\');">📏 Mostrar/Ocultar Guía de Lomo</button>',
+    '      <button type="button" class="btn-print" onclick="window.print()">🖨️ Imprimir DIN A4 Doble Cara / PDF</button>',
+    '    </div>',
     '  </div>',
-    '  <h1>Guía Ilustrada de Corte y Montaje: ' + escapeGuideXml(state.modelName) + '</h1>',
-    '  <div style="font-size:12px;color:#475569;">Planos generados algorítmicamente a escala real a partir de los tableros anidados y vectores 2D · ' + (isPuzzle ? ('Modo Puzzle 3D Encajable sin pegamento (' + state.puzzleAxes.toUpperCase() + ')') : ('Ensamblaje de abajo a arriba (Eje ' + axisName + ')')) + '</div>',
-    '  <div class="meta-grid">',
-    '    <div class="meta-item"><strong>Dimensiones del Modelo</strong>' + state.dimsMM.x.toFixed(1) + ' × ' + state.dimsMM.y.toFixed(1) + ' × ' + state.dimsMM.z.toFixed(1) + ' mm</div>',
-    '    <div class="meta-item"><strong>Sistema Constructivo</strong>' + escapeGuideXml(modeMetaStr) + '</div>',
-    '    <div class="meta-item"><strong>Tableros de Corte</strong>' + state.nestedBoards.length + ' tablero(s) de ' + state.boardWidthMM.toFixed(0) + ' × ' + state.boardHeightMM.toFixed(0) + ' mm</div>',
-    '    <div class="meta-item"><strong>Sujeción por Presión (Tabs)</strong>' + escapeGuideXml(tabsSummary) + '</div>',
-    '  </div>',
-    '  <h2>1. Planos Vectoriales de Tableros y Orden de Corte</h2>',
-    laserPriorityBoxHtml,
-    '  <p style="font-size:12px;margin:6px 0 12px 0;"><strong>B) Secuencia recomendada de tableros:</strong> ' + priorityHtml + '</p>',
-    boardsHtml,
-    '  <h2>2. ' + (isPuzzle ? 'Secuencia Ilustrada de Ensamblaje sin Pegamento (Serie A ⊔ → Serie B ⊓)' : ('Secuencia Ilustrada de Montaje Paso a Paso (De Abajo a Arriba: #1 → #' + state.slices.length + ')')) + '</h2>',
-    stepsHtml,
-    '  <div class="footer">',
-    '    <div><strong>LayerStudio 3D</strong> · Autor: <strong>Norberto Martín Afonso</strong> (&lt;normaafo@gmail.com&gt;) · Licencia GNU AGPL v3.0 (Sección 7b)</div>',
-    '    <div>Repositorio: https://github.com/nmarafo/layerstudio3D · X: @NorbertoMartnAf · GitHub/HF: @nmarafo</div>',
-    '  </div>',
+    paginatedA4Html,
     '</div>',
     '</body>',
     '</html>'

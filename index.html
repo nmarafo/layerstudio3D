@@ -38,17 +38,17 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
 
   <!-- Hoja de estilos principal -->
-  <link rel="stylesheet" href="css/styles.css?v=3.0.8" />
+  <link rel="stylesheet" href="css/styles.css?v=3.0.9" />
 
   <!-- Módulos de la aplicación (cargados en orden de dependencia con defer y cache-busting) -->
-  <script src="js/state.js?v=3.0.8" defer></script>
-  <script src="js/viewer3d.js?v=3.0.8" defer></script>
-  <script src="js/slicer.js?v=3.0.8" defer></script>
-  <script src="js/nesting.js?v=3.0.8" defer></script>
-  <script src="js/modals-guide.js?v=3.0.8" defer></script>
-  <script src="js/viewer2d.js?v=3.0.8" defer></script>
-  <script src="js/exporters.js?v=3.0.8" defer></script>
-  <script src="js/vectorizer2d.js?v=3.0.8" defer></script>
+  <script src="js/state.js?v=3.0.9" defer></script>
+  <script src="js/viewer3d.js?v=3.0.9" defer></script>
+  <script src="js/slicer.js?v=3.0.9" defer></script>
+  <script src="js/nesting.js?v=3.0.9" defer></script>
+  <script src="js/modals-guide.js?v=3.0.9" defer></script>
+  <script src="js/viewer2d.js?v=3.0.9" defer></script>
+  <script src="js/exporters.js?v=3.0.9" defer></script>
+  <script src="js/vectorizer2d.js?v=3.0.9" defer></script>
 </head>
 <body class="h-screen w-screen flex flex-col">
 
@@ -1502,11 +1502,11 @@
           </div>
         </div>
         <div class="flex flex-wrap items-center gap-1.5">
-          <button onclick="printIllustratedAssemblyGuide()" class="px-2.5 py-1.5 rounded-lg bg-sky-600/25 hover:bg-sky-600/40 border border-sky-500/40 text-sky-300 text-xs font-semibold transition flex items-center gap-1" title="Imprimir o guardar como PDF el manual técnico ilustrado con planos vectoriales">
-            <span>🖨️ Imprimir / PDF Ilustrado</span>
+          <button onclick="printIllustratedAssemblyGuide()" class="px-2.5 py-1.5 rounded-lg bg-sky-600/25 hover:bg-sky-600/40 border border-sky-500/40 text-sky-300 text-xs font-semibold transition flex items-center gap-1" title="Imprimir o guardar como PDF el manual técnico encuadernable en DIN A4 a doble cara (minimiza páginas manteniendo legibilidad)">
+            <span>🖨️ Imprimir / PDF (A4 Dúplex)</span>
           </button>
-          <button onclick="downloadIllustratedAssemblyGuideHtml()" class="px-2.5 py-1.5 rounded-lg bg-amber-500/25 hover:bg-amber-500/40 border border-amber-500/40 text-amber-300 text-xs font-semibold transition flex items-center gap-1" title="Descargar guía ilustrada interactiva autocontenida con diagramas SVG (.html)">
-            <span>⬇ Guía Ilustrada (.HTML)</span>
+          <button onclick="downloadIllustratedAssemblyGuideHtml()" class="px-2.5 py-1.5 rounded-lg bg-amber-500/25 hover:bg-amber-500/40 border border-amber-500/40 text-amber-300 text-xs font-semibold transition flex items-center gap-1" title="Descargar guía ilustrada interactiva autocontenida en formato DIN A4 Dúplex (.html)">
+            <span>⬇ Guía A4 Dúplex (.HTML)</span>
           </button>
           <button onclick="downloadAssemblyGuideTxt()" class="px-2.5 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/35 border border-emerald-500/40 text-emerald-300 text-xs font-semibold transition flex items-center gap-1" title="Descargar resumen en texto plano (.txt)">
             <span>⬇ Texto (.TXT)</span>
