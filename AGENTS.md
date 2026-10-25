@@ -22,7 +22,8 @@ Cuando el usuario solicite crear un proyecto de laminado o **Puzzle 3D** y expor
 
 ## 2. Capacidades Clave de Puzzle 3D (`v3.0.15`) que el Agente Debe Tener en Cuenta
 
-1. **Ejes de Cruce en 2 Ejes (`'xy'`, `'xz'`, `'yz'`) y 3 Ejes Simultáneos (`'xyz'`)**:
+1. **3 Ejes Simultáneos por Defecto (`'xyz'`) y Estándar de Corte `30 × 25 cm` (`300 × 250 mm`)**:
+   - En modo **Puzzle 3D (`'puzzle3d'`)** se utilizan **por defecto los 3 ejes simultáneos (`puzzleAxes: 'xyz'`)** (`Serie A = X`, `Serie B = Y`, `Serie C = Z`) y el tamaño estándar de corte de **`30 × 25 cm` (`300 × 250 mm`)** tanto en tablero (`boardWidthMM: 300`, `boardHeightMM: 250`, `setBoardPresetMM(300, 250)`) como en ajuste rápido de pieza (`setMaxFootprintMM(300, 250)`).
    - Función `autoSelectBestPuzzleAxes()` (botón **`🪄 Auto`**): evalúa matemáticamente `X×Y`, `X×Z` e `Y×Z` (`computePuzzleAxesCandidateScore`, 0..100 pts) evitando «peines rectangulares» sin silueta y voladizos de 1 sola ranura.
    - Modo **`X × Y × Z (3 Ejes)`** (`setPuzzleAxes('xyz')`): activa simultáneamente `Serie A (X)`, `Serie B (Y)` y `Serie C (Z · Plantas ⊞)` (`puzzleCountC`), aplicando protección automática anti-cizalladura para que ninguna costilla quede partida en dos por ranuras perpendiculares.
 2. **Rotación Rápida de 90° del Modelo y las Costillas (`rotateBaseModel90('x' | 'y' | 'z')`)**:

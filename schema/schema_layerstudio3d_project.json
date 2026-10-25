@@ -26,7 +26,12 @@
     },
     "presetModel": {
       "type": "string",
-      "enum": ["torus", "vase", "gear", "crystal"],
+      "enum": [
+        "torus",
+        "vase",
+        "gear",
+        "crystal"
+      ],
       "description": "Opcional. Si no se incluye 'baseVertices', carga automáticamente uno de los 4 modelos paramétricos integrados antes de aplicar la configuración."
     },
     "maxDimensionMM": {
@@ -37,23 +42,36 @@
     },
     "unit": {
       "type": "string",
-      "enum": ["mm", "cm"],
+      "enum": [
+        "mm",
+        "cm"
+      ],
       "default": "mm"
     },
     "constructionMode": {
       "type": "string",
-      "enum": ["stacked", "puzzle3d"],
+      "enum": [
+        "stacked",
+        "puzzle3d"
+      ],
       "default": "stacked",
       "description": "'stacked' para laminado paralelo en 1 eje; 'puzzle3d' para costillas entrelazadas a 90° en 2 ejes."
     },
     "axis": {
       "type": "string",
-      "enum": ["x", "y", "z"],
+      "enum": [
+        "x",
+        "y",
+        "z"
+      ],
       "default": "z"
     },
     "mode": {
       "type": "string",
-      "enum": ["count", "thickness"],
+      "enum": [
+        "count",
+        "thickness"
+      ],
       "default": "count"
     },
     "sliceCount": {
@@ -70,9 +88,14 @@
     },
     "puzzleAxes": {
       "type": "string",
-      "enum": ["xy", "xz", "yz", "xyz"],
-      "default": "xy",
-      "description": "Combinación de ejes ortogonales para el Puzzle 3D: 2 ejes ('xy', 'xz', 'yz') o 3 ejes simultáneos ('xyz')."
+      "enum": [
+        "xy",
+        "xz",
+        "yz",
+        "xyz"
+      ],
+      "default": "xyz",
+      "description": "Ejes de las costillas en modo 'puzzle3d': por defecto 'xyz' (3 ejes simultáneos X×Y×Z con Serie C y protección anti-cizalladura), o 2 ejes 'xy', 'xz', 'yz'."
     },
     "puzzleCountA": {
       "type": "integer",
@@ -107,22 +130,32 @@
     },
     "puzzleStartMode": {
       "type": "string",
-      "enum": ["start", "symmetric", "shift"],
+      "enum": [
+        "start",
+        "symmetric",
+        "shift"
+      ],
       "default": "start"
     },
     "puzzleRibOffsetsAMM": {
       "type": "object",
-      "additionalProperties": { "type": "number" },
+      "additionalProperties": {
+        "type": "number"
+      },
       "description": "Mapa { indiceCostilla: offsetMM } para desplazar individualmente costillas de la Serie A."
     },
     "puzzleRibOffsetsBMM": {
       "type": "object",
-      "additionalProperties": { "type": "number" },
+      "additionalProperties": {
+        "type": "number"
+      },
       "description": "Mapa { indiceCostilla: offsetMM } para desplazar individualmente costillas de la Serie B."
     },
     "puzzleRibOffsetsCMM": {
       "type": "object",
-      "additionalProperties": { "type": "number" },
+      "additionalProperties": {
+        "type": "number"
+      },
       "description": "Mapa { indiceCostilla: offsetMM } para desplazar individualmente costillas de la Serie C (modo 3 ejes 'xyz')."
     },
     "puzzleMaterialThicknessMM": {
@@ -144,7 +177,12 @@
     },
     "puzzleSimplifyMode": {
       "type": "string",
-      "enum": ["rdp", "smooth", "bridge", "convex"],
+      "enum": [
+        "rdp",
+        "smooth",
+        "bridge",
+        "convex"
+      ],
       "default": "rdp"
     },
     "puzzleSimplifyToleranceMM": {
@@ -166,12 +204,22 @@
     },
     "puzzleSelfSupportTarget": {
       "type": "string",
-      "enum": ["outer", "series_b", "series_a", "all", "custom"],
+      "enum": [
+        "outer",
+        "series_b",
+        "series_a",
+        "all",
+        "custom"
+      ],
       "default": "outer"
     },
     "puzzleSelfSupportStyle": {
       "type": "string",
-      "enum": ["trim_union", "arch", "natural"],
+      "enum": [
+        "trim_union",
+        "arch",
+        "natural"
+      ],
       "default": "trim_union"
     },
     "puzzleSelfSupportClearanceMM": {
@@ -202,7 +250,9 @@
     },
     "puzzleHiddenRibs": {
       "type": "object",
-      "additionalProperties": { "type": "boolean" }
+      "additionalProperties": {
+        "type": "boolean"
+      }
     },
     "puzzleEngraveEndRibs": {
       "type": "boolean",
@@ -211,13 +261,22 @@
     },
     "puzzleEngraveEndRibsAxes": {
       "type": "string",
-      "enum": ["both", "A", "B"],
+      "enum": [
+        "both",
+        "A",
+        "B"
+      ],
       "default": "both",
       "description": "Define en qué ejes del Puzzle 3D se graban automáticamente la primera y última costilla: 'both' (Serie A y Serie B), 'A' (solo Serie A) o 'B' (solo Serie B)."
     },
     "puzzleEngraveEndRibsPreset": {
       "type": "string",
-      "enum": ["drawing", "crest", "medallion", "badge"],
+      "enum": [
+        "drawing",
+        "crest",
+        "medallion",
+        "badge"
+      ],
       "default": "drawing",
       "description": "Ilustración integrada para el grabado automático en las costillas extremas (primera y última) cuando no se ha subido un bitmap personalizado."
     },
@@ -239,18 +298,63 @@
       "additionalProperties": {
         "type": "object",
         "properties": {
-          "enabled": { "type": "boolean", "default": true },
-          "presetName": { "type": "string", "enum": ["drawing", "crest", "medallion", "badge"] },
-          "imageName": { "type": "string" },
-          "scalePct": { "type": "number", "default": 75 },
-          "offsetXMM": { "type": "number", "default": 0 },
-          "offsetYMM": { "type": "number", "default": 0 },
-          "rotationDeg": { "type": "number", "default": 0 },
-          "flipX": { "type": "boolean", "default": false },
-          "detectMode": { "type": "string", "enum": ["smart_drawing", "line_art", "global_threshold"], "default": "smart_drawing" },
-          "threshold": { "type": "number", "default": 145 },
-          "invert": { "type": "boolean", "default": false },
-          "clipToSlice": { "type": "boolean", "default": true }
+          "enabled": {
+            "type": "boolean",
+            "default": true
+          },
+          "presetName": {
+            "type": "string",
+            "enum": [
+              "drawing",
+              "crest",
+              "medallion",
+              "badge"
+            ]
+          },
+          "imageName": {
+            "type": "string"
+          },
+          "scalePct": {
+            "type": "number",
+            "default": 75
+          },
+          "offsetXMM": {
+            "type": "number",
+            "default": 0
+          },
+          "offsetYMM": {
+            "type": "number",
+            "default": 0
+          },
+          "rotationDeg": {
+            "type": "number",
+            "default": 0
+          },
+          "flipX": {
+            "type": "boolean",
+            "default": false
+          },
+          "detectMode": {
+            "type": "string",
+            "enum": [
+              "smart_drawing",
+              "line_art",
+              "global_threshold"
+            ],
+            "default": "smart_drawing"
+          },
+          "threshold": {
+            "type": "number",
+            "default": 145
+          },
+          "invert": {
+            "type": "boolean",
+            "default": false
+          },
+          "clipToSlice": {
+            "type": "boolean",
+            "default": true
+          }
         }
       }
     },
@@ -265,7 +369,11 @@
     },
     "minIslandCriteria": {
       "type": "string",
-      "enum": ["max_dim", "min_dim", "area"],
+      "enum": [
+        "max_dim",
+        "min_dim",
+        "area"
+      ],
       "default": "max_dim"
     },
     "fillInternalHoles": {
@@ -275,7 +383,10 @@
     },
     "fillHolesMode": {
       "type": "string",
-      "enum": ["all", "max_size"],
+      "enum": [
+        "all",
+        "max_size"
+      ],
       "default": "all"
     },
     "fillHolesMaxSizeMM": {
@@ -289,7 +400,10 @@
     },
     "splitMode": {
       "type": "string",
-      "enum": ["max_size", "grid"],
+      "enum": [
+        "max_size",
+        "grid"
+      ],
       "default": "max_size"
     },
     "splitMaxPartWidthMM": {
@@ -298,7 +412,7 @@
     },
     "splitMaxPartHeightMM": {
       "type": "number",
-      "default": 200
+      "default": 250
     },
     "splitCols": {
       "type": "integer",
@@ -314,7 +428,12 @@
     },
     "splitJointType": {
       "type": "string",
-      "enum": ["dovetail", "puzzle", "finger", "straight"],
+      "enum": [
+        "dovetail",
+        "puzzle",
+        "finger",
+        "straight"
+      ],
       "default": "dovetail"
     },
     "splitJointDepthMM": {
@@ -339,7 +458,12 @@
     },
     "rodCount": {
       "type": "integer",
-      "enum": [0, 1, 2, 3],
+      "enum": [
+        0,
+        1,
+        2,
+        3
+      ],
       "default": 0
     },
     "rodDiameter": {
@@ -360,11 +484,13 @@
     },
     "boardWidthMM": {
       "type": "number",
-      "default": 600
+      "default": 300,
+      "description": "Ancho del tablero de corte láser en mm (estándar por defecto: 300 mm = 30 cm)."
     },
     "boardHeightMM": {
       "type": "number",
-      "default": 400
+      "default": 250,
+      "description": "Alto del tablero de corte láser en mm (estándar por defecto: 250 mm = 25 cm)."
     },
     "nestSpacingMM": {
       "type": "number",
@@ -401,18 +527,28 @@
     "dimsMM": {
       "type": "object",
       "properties": {
-        "x": { "type": "number" },
-        "y": { "type": "number" },
-        "z": { "type": "number" }
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "z": {
+          "type": "number"
+        }
       }
     },
     "selectedIndices": {
       "type": "array",
-      "items": { "type": "integer" }
+      "items": {
+        "type": "integer"
+      }
     },
     "baseVertices": {
       "type": "array",
-      "items": { "type": "number" },
+      "items": {
+        "type": "number"
+      },
       "description": "Coordenadas planas [x0,y0,z0, x1,y1,z1, ...] de los triángulos de la malla 3D normalizada."
     }
   }

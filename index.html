@@ -187,6 +187,8 @@
           </div>
           <div class="flex gap-1">
             <button onclick="setMaxDimensionMM(100)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300">10cm</button>
+
+            <button onclick="setMaxFootprintMM(300, 250)" class="flex-1 py-0.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 rounded text-[10px] font-bold text-emerald-300" title="Estándar habitual de corte: ajusta la pieza para encajar en 30 × 25 cm (300 × 250 mm)">30×25cm</button>
             <button onclick="setMaxDimensionMM(500)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300">50cm</button>
             <button onclick="setMaxDimensionMM(1000)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300">1m</button>
             <button onclick="setMaxDimensionMM(2000)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[10px] text-slate-300">2m</button>
@@ -236,7 +238,7 @@
                 </div>
                 <div>
                   <span class="text-[10px] text-slate-400 block mb-0.5">Fondo/Alto máx. (mm)</span>
-                  <input type="number" id="splitMaxPartHeightInput" value="300" min="20" max="3000" step="10" onchange="onSplitSettingsChange()" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white font-semibold" />
+                  <input type="number" id="splitMaxPartHeightInput" value="250" min="20" max="3000" step="10" onchange="onSplitSettingsChange()" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white font-semibold" />
                 </div>
               </div>
 
@@ -244,7 +246,7 @@
               <div>
                 <span class="text-[9px] text-slate-400 block mb-1">Medida de tu tablero / bloque base:</span>
                 <div class="grid grid-cols-5 gap-1">
-                  <button onclick="setSplitPartPresetMM(150, 150)" class="py-0.5 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300">15×15cm</button>
+                  <button onclick="setSplitPartPresetMM(300, 250)" class="py-0.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 rounded text-[9px] text-emerald-300 font-bold" title="Estándar habitual de corte: 30 × 25 cm (300 × 250 mm)">30×25cm</button>
                   <button onclick="setSplitPartPresetMM(200, 200)" class="py-0.5 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300">20×20cm</button>
                   <button onclick="setSplitPartPresetMM(300, 300)" class="py-0.5 bg-fuchsia-500/20 hover:bg-fuchsia-500/30 border border-fuchsia-500/40 rounded text-[9px] text-fuchsia-300 font-bold">30×30cm</button>
                   <button onclick="setSplitPartPresetMM(400, 400)" class="py-0.5 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300">40×40cm</button>
@@ -394,7 +396,7 @@
               </div>
             </div>
             <div class="grid grid-cols-2 gap-1">
-              <button onclick="setPuzzleAxes('xy')" id="puzzleAxesBtn_xy" class="py-1 px-1.5 rounded border border-amber-500 bg-amber-500/20 text-[10px] font-bold text-amber-300 transition" title="Costillas X e Y que encajan verticalmente a lo largo de Z">
+              <button onclick="setPuzzleAxes('xy')" id="puzzleAxesBtn_xy" class="py-1 px-1.5 rounded border border-slate-700 bg-slate-950 text-[10px] font-semibold text-slate-300 hover:bg-slate-800 transition" title="Costillas X e Y que encajan verticalmente a lo largo de Z">
                 X × Y (Encaje Z)
               </button>
               <button onclick="setPuzzleAxes('xz')" id="puzzleAxesBtn_xz" class="py-1 px-1.5 rounded border border-slate-700 bg-slate-950 text-[10px] font-semibold text-slate-300 hover:bg-slate-800 transition" title="Costillas X y Z que encajan a lo largo de Y">
@@ -403,7 +405,7 @@
               <button onclick="setPuzzleAxes('yz')" id="puzzleAxesBtn_yz" class="py-1 px-1.5 rounded border border-slate-700 bg-slate-950 text-[10px] font-semibold text-slate-300 hover:bg-slate-800 transition" title="Costillas Y y Z que encajan a lo largo de X">
                 Y × Z (Encaje X)
               </button>
-              <button onclick="setPuzzleAxes('xyz')" id="puzzleAxesBtn_xyz" class="py-1 px-1.5 rounded border border-slate-700 bg-slate-950 text-[10px] font-semibold text-slate-300 hover:bg-slate-800 transition" title="Costillas simultáneas en los 3 ejes ortogonales (X × Y × Z) con protección anti-cizalladura de ranuras">
+              <button onclick="setPuzzleAxes('xyz')" id="puzzleAxesBtn_xyz" class="py-1 px-1.5 rounded border border-amber-500 bg-amber-500/20 text-[10px] font-bold text-amber-300 transition" title="Costillas simultáneas en los 3 ejes ortogonales (X × Y × Z) con protección anti-cizalladura de ranuras">
                 X × Y × Z (3 Ejes)
               </button>
             </div>
@@ -1045,14 +1047,17 @@
             <div class="grid grid-cols-2 gap-1.5">
               <div>
                 <span class="text-[10px] text-slate-300 block mb-0.5">Ancho</span>
-                <input type="number" id="boardWidthInput" value="600" min="0.05" step="any" onkeydown="if(event.key==='Enter') onBoardSettingsChange()" onchange="onBoardSettingsChange()" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white" />
+                <input type="number" id="boardWidthInput" value="300" min="0.05" step="any" onkeydown="if(event.key==='Enter') onBoardSettingsChange()" onchange="onBoardSettingsChange()" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white" />
               </div>
               <div>
                 <span class="text-[10px] text-slate-300 block mb-0.5">Alto</span>
-                <input type="number" id="boardHeightInput" value="400" min="0.05" step="any" onkeydown="if(event.key==='Enter') onBoardSettingsChange()" onchange="onBoardSettingsChange()" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white" />
+                <input type="number" id="boardHeightInput" value="250" min="0.05" step="any" onkeydown="if(event.key==='Enter') onBoardSettingsChange()" onchange="onBoardSettingsChange()" class="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white" />
               </div>
             </div>
-            <div class="flex gap-1 mt-1.5">
+            <div class="grid grid-cols-5 gap-1 mt-1.5">
+
+              <button onclick="setBoardPresetMM(300, 250)" class="py-0.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 rounded text-[9px] text-emerald-300 font-bold" title="Estándar habitual de corte: 30 × 25 cm (300 × 250 mm)">30×25cm</button>
+
               <button onclick="setBoardPresetMM(300, 200)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[9px] text-slate-300">30×20cm</button>
               <button onclick="setBoardPresetMM(600, 400)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[9px] text-slate-300">60×40cm</button>
               <button onclick="setBoardPresetMM(900, 600)" class="flex-1 py-0.5 bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[9px] text-slate-300">90×60cm</button>
@@ -1530,7 +1535,7 @@
           <label class="flex items-center justify-between p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs cursor-pointer">
             <div>
               <span class="font-semibold text-emerald-300 block">🧩 Agrupar piezas en Tableros (Apartado 5)</span>
-              <span id="modalBoardInfoSub" class="text-[10px] text-slate-400">Empaqueta automáticamente en tableros de 600×400 mm</span>
+              <span id="modalBoardInfoSub" class="text-[10px] text-slate-400">Empaqueta automáticamente en tableros de 300×250 mm (30×25 cm)</span>
             </div>
             <input type="checkbox" id="modalNestingEnabledCheck" onchange="setNestingEnabled(this.checked)" class="accent-emerald-500 w-4 h-4" />
           </label>

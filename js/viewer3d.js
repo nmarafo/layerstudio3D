@@ -230,11 +230,7 @@ function setGeometryAndSlice(bufferGeom, normalizeToDefault) {
   state.puzzleAxesAutoScores = null;
 
   syncDimensionInputsUI();
-  if (state.constructionMode === 'puzzle3d' && typeof autoSelectBestPuzzleAxes === 'function') {
-    autoSelectBestPuzzleAxes(true);
-  } else {
-    rebuildGhostAndSlices();
-  }
+  rebuildGhostAndSlices();
   resetCamera3D();
 }
 
@@ -317,12 +313,30 @@ function setMaxDimensionMM(targetMaxMM) {
   state.puzzleAxesAutoScores = null;
 
   syncDimensionInputsUI();
-  if (state.constructionMode === 'puzzle3d' && typeof autoSelectBestPuzzleAxes === 'function') {
-    autoSelectBestPuzzleAxes(true);
-  } else {
-    rebuildGhostAndSlices();
-  }
+  rebuildGhostAndSlices();
   resetCamera3D();
+}
+
+// Escala proporcionalmente la pieza 3D para que sus dos dimensiones mayores encajen dentro de un formato estándar (ej. 300 × 250 mm = 30×25 cm)
+function setMaxFootprintMM(maxLongMM, maxShortMM) {
+  const targetLong = Math.max(maxLongMM || 300, maxShortMM || 250);
+  const targetShort = Math.min(maxLongMM || 300, maxShortMM || 250);
+  const dimsSorted = [state.dimsMM.x || 1, state.dimsMM.y || 1, state.dimsMM.z || 1].sort((a, b) => b - a);
+  const curLong = Math.max(0.001, dimsSorted[0]);
+  const curMid = Math.max(0.001, dimsSorted[1]);
+  const ratio = Math.min(targetLong / curLong, targetShort / curMid);
+  state.dimsMM.x = Number(Math.max(1, state.dimsMM.x * ratio).toFixed(2));
+  state.dimsMM.y = Number(Math.max(1, state.dimsMM.y * ratio).toFixed(2));
+  state.dimsMM.z = Number(Math.max(1, state.dimsMM.z * ratio).toFixed(2));
+  state._puzzleAxesEvaluatedForCurrentMesh = false;
+  state.puzzleAxesAutoScores = null;
+
+  syncDimensionInputsUI();
+  rebuildGhostAndSlices();
+  resetCamera3D();
+}
+if (typeof window !== 'undefined') {
+  window.setMaxFootprintMM = setMaxFootprintMM;
 }
 
 function onAxisDimChange(axis, valStr) {
@@ -344,11 +358,7 @@ function onAxisDimChange(axis, valStr) {
   state.puzzleAxesAutoScores = null;
 
   syncDimensionInputsUI();
-  if (state.constructionMode === 'puzzle3d' && typeof autoSelectBestPuzzleAxes === 'function') {
-    autoSelectBestPuzzleAxes(true);
-  } else {
-    rebuildGhostAndSlices();
-  }
+  rebuildGhostAndSlices();
   resetCamera3D();
 }
 

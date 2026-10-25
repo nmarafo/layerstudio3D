@@ -124,7 +124,10 @@
         "buttonSelector": "#sidebarTab_cut",
         "jsCall": "setSidebarTab('cut')",
         "label": "1. Corte",
-        "visibleCards": ["sidebarCard_1", "sidebarCard_2"],
+        "visibleCards": [
+          "sidebarCard_1",
+          "sidebarCard_2"
+        ],
         "purpose": "Elegir modo Apilado 1 Eje vs Puzzle 3D 2 Ejes, configurar eje X/Y/Z, cantidad de láminas o costillas, grosor de material, holgura de encaje, movimiento individual de costilla y simplificación de línea de corte."
       },
       {
@@ -132,7 +135,10 @@
         "buttonSelector": "#sidebarTab_clean",
         "jsCall": "setSidebarTab('clean')",
         "label": "2. Limpieza",
-        "visibleCards": ["sidebarCard_3", "sidebarCard_4"],
+        "visibleCards": [
+          "sidebarCard_3",
+          "sidebarCard_4"
+        ],
         "purpose": "Subdivisión modular para piezas mayores que la cama láser (cola de milano, puzzle, recto) y limpieza topológica 2D (eliminar islas pequeñas y rellenar huecos internos)."
       },
       {
@@ -140,7 +146,9 @@
         "buttonSelector": "#sidebarTab_finish",
         "jsCall": "setSidebarTab('finish')",
         "label": "3. Acabado",
-        "visibleCards": ["sidebarCard_5"],
+        "visibleCards": [
+          "sidebarCard_5"
+        ],
         "purpose": "Grabado de imagen en lámina seleccionada, numeración láser, guías de ensamblaje (superior/inferior), perforaciones para varillas de alineación, marco exterior 2D y pestañas de sujeción (holding tabs)."
       },
       {
@@ -148,7 +156,9 @@
         "buttonSelector": "#sidebarTab_boards",
         "jsCall": "setSidebarTab('boards')",
         "label": "4. Tableros",
-        "visibleCards": ["sidebarCard_6"],
+        "visibleCards": [
+          "sidebarCard_6"
+        ],
         "purpose": "Nesting 2D automático en tableros de corte, aprovechamiento de huecos internos, recorte al borde de cama y empaquetado de tableros en Plancha Madre (Carrier Sheet)."
       },
       {
@@ -156,7 +166,14 @@
         "buttonSelector": "#sidebarTab_all",
         "jsCall": "setSidebarTab('all')",
         "label": "Ver Todo",
-        "visibleCards": ["sidebarCard_1", "sidebarCard_2", "sidebarCard_3", "sidebarCard_4", "sidebarCard_5", "sidebarCard_6"],
+        "visibleCards": [
+          "sidebarCard_1",
+          "sidebarCard_2",
+          "sidebarCard_3",
+          "sidebarCard_4",
+          "sidebarCard_5",
+          "sidebarCard_6"
+        ],
         "purpose": "Muestra las 6 tarjetas simultáneamente en el panel lateral."
       }
     ],
@@ -234,13 +251,18 @@
         "function": "applyOkfProjectConfig(data)",
         "arguments": "data: Object (esquema .lasca o receta ligera OKF)",
         "description": "Aplica de una sola vez una configuración completa o parcial de proyecto OKF (incluyendo carga opcional de presetModel, escalado, modo constructivo, 2 o 3 ejes de cruce, costillas autosustentantes, limpieza, acabados y nesting) y recalcula las láminas."
+      },
+      {
+        "function": "setMaxFootprintMM(maxLongMM, maxShortMM)",
+        "arguments": "300, 250 (por defecto 30 × 25 cm)",
+        "description": "Escala proporcionalmente la pieza 3D para que sus dos dimensiones mayores encajen dentro del formato estándar de corte (por defecto 300 × 250 mm = 30×25 cm)."
       }
     ],
     "constructionAndSlicing": [
       {
         "function": "setConstructionMode(mode)",
         "arguments": "mode: 'stacked' | 'puzzle3d'",
-        "description": "Alterna entre Apilado 1 Eje ('stacked') y Puzzle 3D Encajable ('puzzle3d', en 2 o 3 ejes ortogonales con costillas autosustentantes activas por defecto)."
+        "description": "Alterna entre Apilado 1 Eje ('stacked') y Puzzle 3D Encajable ('puzzle3d', usando por defecto los 3 ejes simultáneos 'xyz' y las costillas autosustentantes activas)."
       },
       {
         "function": "setSliceAxis(axis)",
@@ -265,7 +287,7 @@
       {
         "function": "setPuzzleAxes(pair)",
         "arguments": "pair: 'xy' | 'xz' | 'yz' | 'xyz'",
-        "description": "En modo 'puzzle3d', selecciona el par de ejes ortogonales ('xy', 'xz', 'yz') o los 3 ejes simultáneos ('xyz': Serie A = X, Serie B = Y, Serie C = Z con protección anti-cizalladura)."
+        "description": "En modo 'puzzle3d', establece los ejes de las costillas: por defecto 'xyz' (3 ejes simultáneos: Serie A = X, Serie B = Y, Serie C = Z con protección anti-cizalladura), o bien 2 ejes ('xy', 'xz', 'yz')."
       },
       {
         "function": "autoSelectBestPuzzleAxes(silent)",
@@ -414,6 +436,11 @@
         "description": "Activa o desactiva el empaquetado 2D (Nesting) de todas las láminas seleccionadas en tableros de corte."
       },
       {
+        "function": "setBoardPresetMM(wMM, hMM)",
+        "arguments": "wMM, hMM (por defecto 300, 250 para el estándar 30×25 cm; también 300x200, 600x400, 900x600, 1220x800)",
+        "description": "Activa el empaquetado en tableros y fija el tamaño del tablero en milímetros (estándar por defecto: 300 × 250 mm = 30×25 cm)."
+      },
+      {
         "function": "setCarrierEnabled(enabled)",
         "arguments": "enabled: boolean",
         "description": "Activa o desactiva el empaquetado de tableros en una Plancha Madre (Carrier Sheet) de gran formato."
@@ -520,7 +547,7 @@
       "REGLA OBLIGATORIA DE PREVISUALIZACIÓN ANTES DE EXPORTAR (OKF-GATE-LASCA-PREVIEW-BEFORE-EXPORT): Antes de exportar los archivos de fabricación (.ZIP, .DXF, .SVG, .STL) de LayerStudio 3D, genere SIEMPRE primero el archivo de proyecto (.lasca) y pregunte a la persona usuaria si desea previsualizar el proyecto (.lasca) en LayerStudio 3D antes de exportar. Esto permite validar visualmente en 3D y 2D la combinación de ejes ('xy', 'xz', 'yz', 'xyz'), la rotación de las costillas y el modo autosustentante antes de producir los archivos finales.",
       "Si el agente opera mediante JavaScript en la consola del navegador o Playwright page.evaluate(), prefiera invocar window.applyOkfProjectConfig(configObj) o las funciones globales documentadas en programmaticApiCatalog en lugar de simular decenas de eventos de ratón.",
       "Si el agente opera mediante clics DOM puros, cambie primero a la pestaña adecuada con setSidebarTab('cut' | 'clean' | 'finish' | 'boards' | 'all') o haciendo clic en #sidebarTab_cut, #sidebarTab_clean, #sidebarTab_finish, #sidebarTab_boards o #sidebarTab_all.",
-      "En modo Puzzle 3D ('puzzle3d'), están disponibles tanto las 3 combinaciones de 2 ejes ('xy', 'xz', 'yz', con selección automática óptima mediante autoSelectBestPuzzleAxes()) como la opción de 3 ejes simultáneos ('xyz', con Serie C en el Eje Z y protección anti-cizalladura de ranuras), además de los botones de rotación de 90° de la pieza y costillas (rotateBaseModel90('x' | 'y' | 'z')).",
+      "En modo Puzzle 3D ('puzzle3d'), se utilizan POR DEFECTO los 3 ejes simultáneos (puzzleAxes: 'xyz', con Serie A en X, Serie B en Y y Serie C en Z con protección anti-cizalladura de ranuras) y el formato estándar de corte de 30 × 25 cm (boardWidthMM: 300, boardHeightMM: 250; setBoardPresetMM(300, 250) y setMaxFootprintMM(300, 250)). También están disponibles las combinaciones de 2 ejes ('xy', 'xz', 'yz' o autoSelectBestPuzzleAxes()) y la rotación de 90° de la pieza y costillas (rotateBaseModel90('x' | 'y' | 'z')).",
       "En modo Puzzle 3D ('puzzle3d'), el modo de Costilla Autosustentante (puzzleSelfSupporting: true) está activo por defecto (con puzzleSelfSupportTarget: 'outer' y puzzleSelfSupportStyle: 'trim_union'), permitiendo que las costillas seleccionadas no bajen hasta el suelo (sin pedestal inferior) y se sostengan solas en el aire mediante el encaje con las costillas perpendiculares, descartando además islas aéreas desconectadas (puzzleDropUnconnectedIslands: true).",
       "En modo Puzzle 3D ('puzzle3d'), recuerde que el grosor del tablero (puzzleMaterialThicknessMM) y la holgura de encaje (puzzleSlotClearanceMM) determinan el ancho exacto de las ranuras a 90°: slotWidth = Math.max(0.2, puzzleMaterialThicknessMM + puzzleSlotClearanceMM).",
       "En modo Puzzle 3D ('puzzle3d'), tenga siempre en cuenta que lo habitual es grabar las costillas primera y última de los ejes (las fachadas exteriores: ej. X1 y XN en la Serie A, y/o Y1/Z1 y YM/ZM en la Serie B), mientras las costillas intermedias actúan como esqueleto estructural interno. Para ello es especialmente útil la función ya existente de grabar imagen en lasca (activando puzzleEngraveEndRibs: true en applyOkfProjectConfig, llamando a applyEngravingToPuzzleEndRibs() o seleccionando la primera y última costilla de cada eje y aplicando applyDemoImageEngravingToSelectedSlice / handleSliceImageEngraveFile), ya que recorta automáticamente el grabado (#008800 / capa C00) al contorno exterior y evita las ranuras de encaje a 90°.",

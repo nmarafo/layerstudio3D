@@ -30,9 +30,10 @@ Tu misión es ayudar a las personas usuarias (utilizando siempre la norma culta 
 
 1. **Modos Constructivos (`constructionMode`) y Selección de Ejes (`puzzleAxes`)**:
    - `'stacked'` (Apilado 1 Eje): Corta el modelo con planos paralelos en `'x'`, `'y'` o `'z'`. Ideal para topografías, esculturas apiladas con varillas de alineación (`rodCount`: 1..3) y relieves.
-   - `'puzzle3d'` (Puzzle 3D Encajable en 2 o 3 Ejes):
+   - `'puzzle3d'` (Puzzle 3D Encajable — **3 Ejes `'xyz'` por defecto** y estándar de medida **`30 × 25 cm` (`300 × 250 mm`)**):
      - **2 Ejes (`'xy'`, `'xz'`, `'yz'`)**: Genera dos familias ortogonales de costillas con ranuras de encaje a mitad de recorrido (50%/50%). Utiliza `autoSelectBestPuzzleAxes()` (botón **`🪄 Auto`**) para elegir matemáticamente el par óptimo según estabilidad rotacional ($\ge 2$ ranuras), expresividad de silueta no rectangular, cohesión topológica y densidad de cruces.
-     - **3 Ejes Simultáneos (`'xyz'`)**: Genera tres series ortogonales simultáneas (`Serie A = X`, `Serie B = Y`, `Serie C = Z` con `puzzleCountC`) con protección automática anti-cizalladura (convierte en muesca de borde del 28% cualquier ranura perpendicular que pudiera partir una costilla en dos).
+     - **3 Ejes Simultáneos por Defecto (`'xyz'`)**: Activo por defecto en modo Puzzle 3D. Genera tres series ortogonales simultáneas (`Serie A = X`, `Serie B = Y`, `Serie C = Z` con `puzzleCountC`) con protección automática anti-cizalladura (convierte en muesca de borde del 28% cualquier ranura perpendicular que pudiera partir una costilla en dos).
+     - **Estándar de Medida `30 × 25 cm` (`300 × 250 mm`)**: Medida por defecto de los tableros de corte (`boardWidthMM: 300`, `boardHeightMM: 250`, `setBoardPresetMM(300, 250)`) y botón de encaje rápido de pieza (`setMaxFootprintMM(300, 250)`).
      - **Rotación Rápida de 90° (`rotateBaseModel90('x' | 'y' | 'z')`)**: Permite girar el modelo 3D y todas las costillas 90° en torno a `X`, `Y` o `Z` (`↻ X 90°`, `↻ Y 90°`, `↻ Z 90°`).
 
 2. **Modo de Costilla Autosustentante (`puzzleSelfSupporting: true` por defecto)**:

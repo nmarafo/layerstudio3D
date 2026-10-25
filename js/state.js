@@ -26,8 +26,8 @@ const state = {
   mode: 'count', // 'count' | 'thickness'
   sliceCount: 24,
   thickness: 5,
-  // Configuración de Modalidad Puzzle 3D (Costillas ortogonales con ranuras de encaje sin pegamento: 2 o 3 ejes)
-  puzzleAxes: 'xy',            // 'xy' (encaje Z) | 'xz' (encaje Y) | 'yz' (encaje X) | 'xyz' (3 Ejes simultáneos X × Y × Z)
+  // Configuración de Modalidad Puzzle 3D (Costillas ortogonales con ranuras de encaje sin pegamento: 3 ejes por defecto)
+  puzzleAxes: 'xyz',           // 'xyz' (3 Ejes simultáneos X × Y × Z por defecto) | 'xy' (encaje Z) | 'xz' (encaje Y) | 'yz' (encaje X)
   puzzleCountA: 7,             // Nº de costillas en el 1º eje (Serie A)
   puzzleCountB: 7,             // Nº de costillas en el 2º eje (Serie B)
   puzzleCountC: 4,             // Nº de costillas en el 3º eje (Serie C, cuando puzzleAxes === 'xyz')
@@ -113,8 +113,8 @@ const state = {
   // Subdivisión Modular del Modelo en Partes / Conjuntos (Gran Formato)
   splitModelEnabled: false,    // true = divide la figura en conjuntos/bloques modulares (ej. bloques de 30x30 cm para armar figuras de 60x60 o 120x120 cm)
   splitMode: 'max_size',       // 'max_size' (según tamaño máx. de parte/tablero) | 'grid' (según cuadrícula manual Columnas x Filas)
-  splitMaxPartWidthMM: 300,    // Ancho máximo por conjunto/parte en mm (ej. 300 mm = 30 cm)
-  splitMaxPartHeightMM: 300,   // Alto máximo por conjunto/parte en mm (ej. 300 mm = 30 cm)
+  splitMaxPartWidthMM: 300,    // Ancho máximo por conjunto/parte en mm (estándar habitual: 300 mm = 30 cm)
+  splitMaxPartHeightMM: 250,   // Alto máximo por conjunto/parte en mm (estándar habitual: 250 mm = 25 cm)
   splitCols: 2,                // Nº de columnas de división en modo 'grid'
   splitRows: 2,                // Nº de filas de división en modo 'grid'
   splitJointType: 'dovetail',  // 'dovetail' (Cola de Milano / Puzzle ⏢) | 'tenon' (Espiga Rectangular ▭) | 'straight' (Corte Recto ∣)
@@ -123,10 +123,10 @@ const state = {
   splitExplodeFactor: 0,       // Separación visual 3D entre conjuntos/bloques (0% a 100%)
   splitTotalPartsCount: 0,     // Total de sub-piezas generadas tras dividir en bloques
   splitTotalJointsCount: 0,    // Total de conectores mecánicos (colas de milano/espigas) tallados
-  // Configuración de Distribución en Tablero (Nesting de islas)
+  // Configuración de Distribución en Tablero (Nesting de islas — estándar por defecto: 30 × 25 cm = 300 × 250 mm)
   nestingEnabled: false,
-  boardWidthMM: 600,
-  boardHeightMM: 400,
+  boardWidthMM: 300,
+  boardHeightMM: 250,
   nestSpacingMM: 3,
   nestMarginMM: 5,
   nestAllowRotate: true,

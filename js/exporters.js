@@ -2489,9 +2489,10 @@ function applyQuickOkfSampleRecipe(sampleId) {
       modelName: 'jarron_puzzle_suavizado',
       maxDimensionMM: 220,
       constructionMode: 'puzzle3d',
-      puzzleAxes: 'xz',
-      puzzleCountA: 8,
-      puzzleCountB: 8,
+      puzzleAxes: 'xyz',
+      puzzleCountA: 7,
+      puzzleCountB: 7,
+      puzzleCountC: 4,
       puzzleMaterialThicknessMM: 4.0,
       puzzleSlotClearanceMM: 0.15,
       puzzleSimplifyCutLine: true,
@@ -2506,8 +2507,8 @@ function applyQuickOkfSampleRecipe(sampleId) {
       filterSmallIslands: true,
       fillInternalHoles: true,
       nestingEnabled: true,
-      boardWidthMM: 600,
-      boardHeightMM: 400
+      boardWidthMM: 300,
+      boardHeightMM: 250
     };
   } else if (sampleId === 'torus_stacked_rods') {
     sample = {
@@ -2524,8 +2525,8 @@ function applyQuickOkfSampleRecipe(sampleId) {
       includeLabels: true,
       includeNextSliceGuide: true,
       nestingEnabled: true,
-      boardWidthMM: 600,
-      boardHeightMM: 400
+      boardWidthMM: 300,
+      boardHeightMM: 250
     };
   } else if (sampleId === 'gear_industrial_frame') {
     sample = {
@@ -2556,7 +2557,7 @@ function copyOkfMasterPromptToClipboard() {
     'Especificación completa: https://nmarafo.github.io/layerstudio3D/okf.json y https://nmarafo.github.io/layerstudio3D/okf/arquitectura_okf.md',
     'REGLA CRÍTICA DE PREVISUALIZACIÓN ANTES DE EXPORTAR: Antes de exportar los archivos finales de corte o fabricación (.ZIP, .DXF, .SVG o .STL), genera SIEMPRE primero el archivo de proyecto (.lasca) y pregunta explícitamente a la persona usuaria si desea previsualizar y validar el proyecto (.lasca) en LayerStudio 3D antes de exportar los archivos definitivos.',
     'Reglas clave en Puzzle 3D (constructionMode: "puzzle3d"):',
-    '- Ejes de cruce: soporta 2 ejes ("xy", "xz", "yz" con autoselección óptima autoSelectBestPuzzleAxes) o 3 ejes simultáneos ("xyz", con Serie C en eje Z y protección anti-cizalladura), así como rotación de 90° de la pieza/costillas con rotateBaseModel90("x"|"y"|"z").',
+    '- Ejes de cruce y medida estándar: en modo Puzzle 3D se utilizan por defecto los 3 ejes simultáneos (puzzleAxes: "xyz", con Serie A en X, Serie B en Y y Serie C en Z con protección anti-cizalladura; o bien 2 ejes "xy"/"xz"/"yz" con autoSelectBestPuzzleAxes), rotación de 90° con rotateBaseModel90("x"|"y"|"z") y el formato estándar habitual de corte de 30 × 25 cm (boardWidthMM: 300, boardHeightMM: 250; setBoardPresetMM(300, 250) / setMaxFootprintMM(300, 250)).',
     '- Modo Costilla Autosustentante (puzzleSelfSupporting: true por defecto): las costillas seleccionadas (puzzleSelfSupportTarget: "outer"|"series_b"|"series_a"|"all"|"custom") no bajan hasta el suelo y se sostienen solas mediante sus ranuras de unión (puzzleSelfSupportStyle: "trim_union"|"arch"|"natural", puzzleSelfSupportClearanceMM: 22.0, puzzleDropUnconnectedIslands: true).',
     '- Grabado en fachadas exteriores: lo habitual es grabar la 1.ª y última costilla de los ejes (X1/XN, Y1/YN o Z1/ZN) usando la función de grabar imagen en lasca (puzzleEngraveEndRibs: true), que recorta el grabado al contorno y a las ranuras a 90°.',
     'Cuando te pida configurar un proyecto de corte láser (.SVG/.DXF) o impresión 3D (.STL), entrégame:',
