@@ -7958,6 +7958,66 @@ function buildAssemblyAndCuttingPlan() {
   };
 }
 
+// Genera el texto instructivo numerado ("1. Aplica adhesivo dentro de... 2. Asienta... 3. Deja hacia arriba...")
+// compartido entre el modal interactivo, la exportación HTML y la impresión PDF
+function buildStepInstructionHTML(slice, stepIdx, activeSlices, pls) {
+  const isPuzzle = state.constructionMode === 'puzzle3d';
+  const sIdx = slice.index;
+  const sNum = sIdx + 1;
+  const sliceTitle = (isPuzzle && slice.puzzleCode) ? ('Costilla ' + escapeGuideXml(slice.puzzleCode)) : ('Lámina #' + sNum);
+  const sliceAxisName = (slice.sliceAxis || state.axis).toUpperCase();
+  const isBase = stepIdx === 0;
+  const isTop = stepIdx === activeSlices.length - 1;
+  const detachHint = state.tabsEnabled
+    ? 'Presiona suavemente la pieza para desprender sus micro-uniones del tablero. '
+    : '';
+
+  if (isPuzzle) {
+    const slotTargets = (slice.puzzleSlots || []).map((sl) => sl.targetCode);
+    const uniqueTargets = Array.from(new Set(slotTargets));
+    if (slice.puzzleSeries === 'A') {
+      return (
+        '1. ' + detachHint + 'Extrae la <strong>' + sliceTitle + '</strong> y colócala en posición vertical paralela al eje ' + sliceAxisName + ' con sus <strong>' + (slice.puzzleSlots ? slice.puzzleSlots.length : 0) + ' ranura(s) abiertas mirando hacia ARRIBA (⊔)</strong>. ' +
+        (uniqueTargets.length > 0
+          ? ('2. Sus ranuras superiores recibirán más adelante por presión (sin pegamento) las costillas transversales: <strong>' + escapeGuideXml(uniqueTargets.join(', ')) + '</strong>.')
+          : '2. Esta costilla exterior no requiere cruces activos.')
+      );
+    }
+    return (
+      '1. ' + detachHint + 'Toma la <strong>' + sliceTitle + '</strong> con sus <strong>' + (slice.puzzleSlots ? slice.puzzleSlots.length : 0) + ' ranura(s) abiertas mirando hacia ABAJO (⊓)</strong>. ' +
+      (uniqueTargets.length > 0
+        ? ('2. Deslízala verticalmente de arriba hacia abajo (↓) encajando sus ranuras a media madera sobre las costillas <strong>' + escapeGuideXml(uniqueTargets.join(', ')) + '</strong> de la Serie A hasta que ambos bordes queden enrasados sin usar pegamento.')
+        : '2. Sitúala en su posición correspondiente del eje ' + sliceAxisName + '.')
+    );
+  }
+
+  if (isBase) {
+    return (
+      '1. ' + detachHint + 'Localiza ' + (pls.length > 1 ? 'las <strong>' + pls.length + ' islas</strong> de ' : 'la pieza de ') + 'la <strong>Lámina #' + sNum + '</strong> resaltada en verde en el plano del tablero inferior y apóyala plana a <strong>0°</strong> sobre la mesa como <strong>BASE INFERIOR</strong>' +
+      (state.rodCount > 0 ? ' (inserta las ' + state.rodCount + ' varillas guía de Ø' + state.rodDiameter + 'mm en sus orificios azules).' : '.') +
+      (state.includeNextSliceGuide && activeSlices.length > 1 ? ' Verás grabada encima la <strong>silueta naranja (Guía Sup)</strong> donde irá pegada la Lámina #' + (activeSlices[1].index + 1) + '.' : '')
+    );
+  }
+
+  if (isTop) {
+    const prevSNumTop = activeSlices[stepIdx - 1].index + 1;
+    return (
+      '1. ' + detachHint + 'Aplica adhesivo en la zona delimitada por la guía naranja de la <strong>Lámina #' + prevSNumTop + '</strong> (ya montada debajo). ' +
+      '2. Coloca encima ' + (pls.length > 1 ? 'las piezas de ' : '') + 'la <strong>Lámina #' + sNum + '</strong> en orientación <strong>0°</strong> haciéndola coincidir con la silueta guía' +
+      (state.includePrevSliceGuide ? ' (verifica el encaje con su guía inferior violeta).' : '.') +
+      ' ¡Con esta capa finalizas la coronación de la pieza!'
+    );
+  }
+
+  const prevSNum = activeSlices[stepIdx - 1].index + 1;
+  const nextSNum = activeSlices[stepIdx + 1].index + 1;
+  return (
+    '1. ' + detachHint + 'Aplica adhesivo dentro de la silueta naranja grabada sobre la <strong>Lámina #' + prevSNum + '</strong> (montada en el paso anterior). ' +
+    '2. Asienta ' + (pls.length > 1 ? 'cada isla de ' : '') + 'la <strong>Lámina #' + sNum + '</strong> a <strong>0°</strong> alineando su contorno con la capa inferior (sombra punteada en el plano central). ' +
+    '3. Deja hacia arriba la cara con la guía naranja <code>[Sup]</code> para recibir después la <strong>Lámina #' + nextSNum + '</strong>.'
+  );
+}
+
 function renderAssemblyGuideModalContent() {
   const container = document.getElementById('assemblyGuideContent');
   const subEl = document.getElementById('assemblyGuideSub');
@@ -8143,47 +8203,7 @@ function renderAssemblyGuideModalContent() {
         roleBadge = '<span class="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-[10px] font-bold">🏁 CIMA SUPERIOR (Última capa)</span>';
       }
 
-      const detachHint = state.tabsEnabled
-        ? 'Presiona suavemente la pieza para desprender sus micro-uniones del tablero. '
-        : '';
-
-      let instructionText = '';
-      if (isPuzzle) {
-        const slotTargets = (slice.puzzleSlots || []).map((sl) => sl.targetCode);
-        const uniqueTargets = Array.from(new Set(slotTargets));
-        if (slice.puzzleSeries === 'A') {
-          instructionText =
-            '1. ' + detachHint + 'Extrae la <strong>' + sliceTitle + '</strong> y colócala en posición vertical paralela al eje ' + sliceAxisName + ' con sus <strong>' + (slice.puzzleSlots ? slice.puzzleSlots.length : 0) + ' ranura(s) abiertas mirando hacia ARRIBA (⊔)</strong>. ' +
-            (uniqueTargets.length > 0
-              ? ('2. Sus ranuras superiores recibirán más adelante por presión (sin pegamento) las costillas transversales: <strong>' + uniqueTargets.join(', ') + '</strong>.')
-              : '2. Esta costilla exterior no requiere cruces activos.');
-        } else {
-          instructionText =
-            '1. ' + detachHint + 'Toma la <strong>' + sliceTitle + '</strong> con sus <strong>' + (slice.puzzleSlots ? slice.puzzleSlots.length : 0) + ' ranura(s) abiertas mirando hacia ABAJO (⊓)</strong>. ' +
-            (uniqueTargets.length > 0
-              ? ('2. Deslízala verticalmente de arriba hacia abajo (↓) encajando sus ranuras a media madera sobre las costillas <strong>' + uniqueTargets.join(', ') + '</strong> de la Serie A hasta que ambos bordes queden enrasados sin usar pegamento.')
-              : '2. Sitúala en su posición correspondiente del eje ' + sliceAxisName + '.');
-        }
-      } else if (isBase) {
-        instructionText =
-          '1. ' + detachHint + 'Localiza ' + (pls.length > 1 ? 'las <strong>' + pls.length + ' islas</strong> de ' : 'la pieza de ') + 'la <strong>Lámina #' + sNum + '</strong> resaltada en verde en el plano del tablero inferior y apóyala plana a <strong>0°</strong> sobre la mesa como <strong>BASE INFERIOR</strong>' +
-          (state.rodCount > 0 ? ' (inserta las ' + state.rodCount + ' varillas guía de Ø' + state.rodDiameter + 'mm en sus orificios azules).' : '.') +
-          (state.includeNextSliceGuide ? ' Verás grabada encima la <strong>silueta naranja (Guía Sup)</strong> donde irá pegada la Lámina #' + (sNum + 1) + '.' : '');
-      } else if (isTop) {
-        const prevSNumTop = activeSlices[stepIdx - 1].index + 1;
-        instructionText =
-          '1. ' + detachHint + 'Aplica adhesivo en la zona delimitada por la guía naranja de la <strong>Lámina #' + prevSNumTop + '</strong> (ya montada debajo). ' +
-          '2. Coloca encima ' + (pls.length > 1 ? 'las piezas de ' : '') + 'la <strong>Lámina #' + sNum + '</strong> en orientación <strong>0°</strong> haciéndola coincidir con la silueta guía' +
-          (state.includePrevSliceGuide ? ' (verifica el encaje con su guía inferior violeta).' : '.') +
-          ' ¡Con esta capa finalizas la coronación de la pieza!';
-      } else {
-        const prevSNum = activeSlices[stepIdx - 1].index + 1;
-        const nextSNum = activeSlices[stepIdx + 1].index + 1;
-        instructionText =
-          '1. ' + detachHint + 'Aplica adhesivo dentro de la silueta naranja grabada sobre la <strong>Lámina #' + prevSNum + '</strong> (montada en el paso anterior). ' +
-          '2. Asienta ' + (pls.length > 1 ? 'cada isla de ' : '') + 'la <strong>Lámina #' + sNum + '</strong> a <strong>0°</strong> alineando su contorno con la capa inferior (sombra punteada en el plano central). ' +
-          '3. Deja hacia arriba la cara con la guía naranja <code>[Sup]</code> para recibir después la <strong>Lámina #' + nextSNum + '</strong>.';
-      }
+      const instructionText = buildStepInstructionHTML(slice, stepIdx, activeSlices, pls);
 
       // Tarjetas de cada isla perteneciente a esta lámina indicando en qué tablero buscarla
       let islandsLocateHTML = '';
@@ -8440,6 +8460,8 @@ function generateIllustratedAssemblyGuideHTML() {
       ? ('Cota ' + sliceAxisName + ' = ' + slice.coord.toFixed(2) + ' mm | Ranuras de encaje: <strong>' + (slice.puzzleSlots ? slice.puzzleSlots.length : 0) + '</strong>')
       : ('Cota ' + sliceAxisName + ' = ' + slice.coord.toFixed(2) + ' mm | Altura acumulada: <strong>' + accumH + ' mm</strong>');
 
+    const stepInstructionHtml = buildStepInstructionHTML(slice, stepIdx, activeSlices, pls);
+
     stepsHtml +=
       '<div class="card step-card">' +
         '<div class="card-header">' +
@@ -8451,6 +8473,7 @@ function generateIllustratedAssemblyGuideHTML() {
             rightMetaHtml +
           '</div>' +
         '</div>' +
+        '<div class="step-instruction">' + stepInstructionHtml + '</div>' +
         '<div class="diagrams-grid">' +
           '<div class="diag-box">' +
             '<div class="diag-title">1. Localización en Tablero (Verde)</div>' +
@@ -8489,6 +8512,29 @@ function generateIllustratedAssemblyGuideHTML() {
     ? ('Puzzle 3D (' + state.puzzleAxes.toUpperCase() + ') · ' + totalSteps + ' costillas (' + state.puzzleMaterialThicknessMM.toFixed(2) + ' mm · ' + state.puzzleTotalSlotsCount + ' ranuras)')
     : ('Eje ' + axisName + ' · ' + totalSteps + ' láminas (' + state.thickness.toFixed(2) + ' mm / capa)')) + splitSummaryHtml;
 
+  const laserPriorityBoxHtml =
+    '<div class="priority-box">' +
+      '<div style="font-weight:700;font-size:12px;color:#0369a1;margin-bottom:6px;">A) Orden de Prioridad de Capas en la Cortadora Láser (dentro de cada Tablero):</div>' +
+      '<div class="priority-grid">' +
+        '<div class="priority-item" style="border-left:3px solid #16a34a;">' +
+          '<strong>1º GRABADO TEXTO (#008800 / C00)</strong>' +
+          '<span>Graba primero el código <code>' + (isPuzzle ? 'X1 / Y1' : '#N') + '</code> mientras el tablero está intacto.</span>' +
+        '</div>' +
+        '<div class="priority-item" style="border-left:3px solid #f59e0b;">' +
+          '<strong>' + (isPuzzle ? '2º RANURAS MEDIA MADERA' : '2º GUÍAS PEGADO (#ff8800 / #9900ff)') + '</strong>' +
+          '<span>' + (isPuzzle ? 'Las ranuras de encaje a media madera ya van integradas directamente en el contorno rojo de corte.' : 'Marcado vectorial continuo rápido (alta velocidad, baja potencia) de las siluetas guía.') + '</span>' +
+        '</div>' +
+        '<div class="priority-item" style="border-left:3px solid #2563eb;">' +
+          '<strong>3º CORTE HUECOS (#0055ff / C03)</strong>' +
+          '<span>Corta siempre los agujeros internos antes de soltar el contorno exterior.</span>' +
+        '</div>' +
+        '<div class="priority-item" style="border-left:3px solid #dc2626;">' +
+          '<strong>4º CORTE EXTERIOR (#ff0000 / C04)</strong>' +
+          '<span>Corta en último lugar el perímetro exterior' + (state.tabsEnabled ? ' (dejando los ' + state.tabWidthMM.toFixed(1) + ' mm de micro-unión para extraer a presión).' : ' de cada pieza.') + '</span>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
   return [
     '<!DOCTYPE html>',
     '<html lang="es">',
@@ -8504,9 +8550,16 @@ function generateIllustratedAssemblyGuideHTML() {
     '  .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 14px 0; }',
     '  .meta-item { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px; font-size: 12px; }',
     '  .meta-item strong { display: block; font-size: 10px; text-transform: uppercase; color: #64748b; }',
+    '  .priority-box { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 12px; margin-bottom: 14px; page-break-inside: avoid; break-inside: avoid; }',
+    '  .priority-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }',
+    '  .priority-item { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px; font-size: 11px; }',
+    '  .priority-item strong { display: block; font-size: 11px; color: #0f172a; margin-bottom: 3px; }',
+    '  .priority-item span { display: block; font-size: 10px; color: #475569; }',
     '  .card { border: 1px solid #cbd5e1; border-radius: 10px; padding: 14px; margin-bottom: 16px; background: #ffffff; page-break-inside: avoid; break-inside: avoid; }',
     '  .card-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 10px; font-size: 13px; }',
     '  .step-num { background: #fef3c7; border: 1px solid #f59e0b; color: #92400e; font-weight: 800; padding: 2px 8px; border-radius: 6px; font-size: 12px; margin-right: 6px; }',
+    '  .step-instruction { background: #f8fafc; border: 1px solid #cbd5e1; border-left: 4px solid #0284c7; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; font-size: 12.5px; color: #1e293b; line-height: 1.5; }',
+    '  .step-instruction code { background: #e2e8f0; padding: 1px 5px; border-radius: 4px; font-family: monospace; font-size: 11px; }',
     '  .badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }',
     '  .badge-emerald { background: #d1fae5; color: #065f46; border: 1px solid #34d399; }',
     '  .badge-amber { background: #fef3c7; color: #92400e; border: 1px solid #fbbf24; }',
@@ -8539,7 +8592,8 @@ function generateIllustratedAssemblyGuideHTML() {
     '    <div class="meta-item"><strong>Sujeción por Presión (Tabs)</strong>' + escapeGuideXml(tabsSummary) + '</div>',
     '  </div>',
     '  <h2>1. Planos Vectoriales de Tableros y Orden de Corte</h2>',
-    '  <p style="font-size:12px;margin:6px 0 12px 0;"><strong>Orden de prioridad de tableros:</strong> ' + priorityHtml + '</p>',
+    laserPriorityBoxHtml,
+    '  <p style="font-size:12px;margin:6px 0 12px 0;"><strong>B) Secuencia recomendada de tableros:</strong> ' + priorityHtml + '</p>',
     boardsHtml,
     '  <h2>2. ' + (isPuzzle ? 'Secuencia Ilustrada de Ensamblaje sin Pegamento (Serie A ⊔ → Serie B ⊓)' : ('Secuencia Ilustrada de Montaje Paso a Paso (De Abajo a Arriba: #1 → #' + state.slices.length + ')')) + '</h2>',
     stepsHtml,
@@ -8688,24 +8742,23 @@ function generateFullAssemblyGuideText() {
     const accumH = (stepIdx + 1) * state.thickness;
     const sliceAxisName = (slice.sliceAxis || state.axis).toUpperCase();
 
+    const plainInstruction = buildStepInstructionHTML(slice, stepIdx, plan.selectedSlices, pls)
+      .replace(/<[^>]+>/g, '');
+
     if (isPuzzle) {
       const seriesRole = slice.puzzleSeries === 'A' ? '[SERIE A ⊔ BASE]' : '[SERIE B ⊓ CRUCE]';
-      const slotTargets = (slice.puzzleSlots || []).map((sl) => sl.targetCode).join(', ');
       lines.push('');
       lines.push('PASO ' + (stepIdx + 1) + ' — COSTILLA ' + (slice.puzzleCode || ('#' + sNum)) + ' ' + seriesRole + ' (Eje ' + sliceAxisName + ' = ' + slice.coord.toFixed(2) + ' mm | Ranuras: ' + (slice.puzzleSlots ? slice.puzzleSlots.length : 0) + ')');
+      lines.push('  ' + plainInstruction);
       pls.forEach((p) => {
         const rotNote = p.rotated ? ' | Cortada rotada 90° en tablero -> Enderezar a 0°' : ' | Orientación 0° directa';
         lines.push('  - Pieza ' + p.islandCode + ': Extraer de TABLERO #' + (p.boardIndex + 1) + ' en pos (' + p.x.toFixed(1) + ', ' + p.y.toFixed(1) + ' mm) | Medida ' + p.w.toFixed(1) + 'x' + p.h.toFixed(1) + ' mm' + rotNote);
       });
-      if (slice.puzzleSeries === 'A') {
-        lines.push('  > Encaje sin cola: Coloca esta costilla base con las ranuras abiertas hacia ARRIBA (⊔). Sus ranuras recibirán: ' + (slotTargets || 'ninguna') + '.');
-      } else {
-        lines.push('  > Encaje sin cola: Desliza esta costilla desde arriba con las ranuras hacia ABAJO (⊓) encajándola a presión en: ' + (slotTargets || 'ninguna') + '.');
-      }
     } else {
       const role = stepIdx === 0 ? '[BASE INFERIOR]' : (stepIdx === plan.selectedSlices.length - 1 ? '[CIMA SUPERIOR]' : '[CAPA INTERMEDIA]');
       lines.push('');
       lines.push('PASO ' + (stepIdx + 1) + ' — LÁMINA #' + sNum + ' ' + role + ' (Cota ' + axisName + ' = ' + slice.coord.toFixed(2) + ' mm | Altura acumulada: ' + accumH.toFixed(1) + ' mm)');
+      lines.push('  ' + plainInstruction);
       if (pls.length === 0) {
         lines.push('  ! Pieza no empaquetada (supera las dimensiones del tablero actual).');
       } else {
@@ -8715,14 +8768,6 @@ function generateFullAssemblyGuideText() {
           const clipNote = p.isClippedToBoard ? (' | RECORTADA AL TABLERO (Orig: ' + p.origWidth.toFixed(1) + 'x' + p.origHeight.toFixed(1) + ' mm)') : '';
           lines.push('  - Isla ' + p.islandCode + ': Extraer de TABLERO #' + (p.boardIndex + 1) + ' en pos (' + p.x.toFixed(1) + ', ' + p.y.toFixed(1) + ' mm) | Medida ' + p.w.toFixed(1) + 'x' + p.h.toFixed(1) + ' mm | ' + gType + rotNote + clipNote);
         });
-      }
-
-      if (stepIdx === 0) {
-        lines.push('  > Montaje: Coloca esta lámina como BASE en la mesa. Usa su guía naranja superior (#N+1) para pegar encima el Paso 2.');
-      } else if (stepIdx === plan.selectedSlices.length - 1) {
-        lines.push('  > Montaje: Pega esta última capa sobre la guía naranja de la Lámina #' + sIdx + ' inferior para coronar la pieza.');
-      } else {
-        lines.push('  > Montaje: Pégala haciendo coincidir su base con la guía naranja de la Lámina #' + sIdx + ' inferior. Deja visible hacia arriba la guía naranja para la Lámina #' + (sNum + 1) + '.');
       }
     }
   });
