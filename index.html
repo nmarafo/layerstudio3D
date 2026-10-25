@@ -20,6 +20,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="LayerStudio 3D — Laminador multicapa X/Y/Z interactivo para Corte Láser (SVG/DXF), Nesting 2D en tableros e Impresión 3D (STL)." />
   <meta name="author" content="Norberto Martín Afonso" />
+  <meta name="okf:version" content="1.3.0" />
+  <meta name="okf:api" content="window.applyOkfProjectConfig" />
+  <link rel="okf-manifest" type="application/json" href="okf.json" title="LayerStudio 3D Open Knowledge Framework (OKF v1.3.0) Manifest for AI Agents" />
   <title>LayerStudio 3D - Laminador Láser y 3D</title>
 
   <!-- Dependencias CDN con preconexión optimizada -->
@@ -96,7 +99,11 @@
         </button>
       </div>
 
-      <!-- Acciones Globales de Salida -->
+      <!-- Acciones Globales de Salida e Integración IA / OKF -->
+      <button id="btnOpenOkfModal" onclick="openOkfAgentModal()" class="px-2.5 py-1.5 rounded-lg bg-fuchsia-500/20 hover:bg-fuchsia-500/30 border border-fuchsia-500/40 text-xs font-semibold text-fuchsia-300 transition flex items-center gap-1.5" title="Abrir Centro de Control OKF para Agentes de IA: copiar Prompt Maestro, generar enlace mágico de GitHub Pages (?okf=...) o pegar recetas JSON de ChatGPT/Gemini/Claude">
+        <span>🤖 IA / OKF</span>
+      </button>
+
       <button onclick="openAssemblyGuideModal()" class="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-xs font-semibold text-amber-300 transition flex items-center gap-1.5" title="Abrir Guía Técnica Ilustrada de Corte y Montaje paso a paso">
         <span>🛠️ Guía Ilustrada</span>
       </button>
@@ -2121,6 +2128,85 @@
           <button onclick="downloadVectorizedSVG()" class="px-4 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white text-xs font-bold shadow-lg shadow-emerald-500/20 transition flex items-center gap-1.5">
             <span>⬇ Descargar .SVG (Corte y Grabado)</span>
           </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL CENTRO DE CONTROL IA / OKF (OPEN KNOWLEDGE FRAMEWORK PARA GITHUB PAGES) -->
+  <div id="okfAgentModal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+      <div class="px-4 py-3 bg-slate-950 border-b border-slate-800 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <span class="w-8 h-8 rounded-lg bg-fuchsia-500/20 border border-fuchsia-500/40 flex items-center justify-center text-base">🤖</span>
+          <div>
+            <h3 class="text-sm font-bold text-white">Centro de Control IA &amp; OKF v1.3.0 (GitHub Pages)</h3>
+            <p class="text-[11px] text-slate-400">Conecten LayerStudio 3D con ChatGPT, Gemini, Claude, NotebookLM o Agentes de Navegador</p>
+          </div>
+        </div>
+        <button onclick="closeOkfAgentModal()" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition">✕ Cerrar</button>
+      </div>
+
+      <div class="p-4 overflow-y-auto space-y-3 text-xs">
+        <div id="okfModalStatusBanner" class="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300">
+          Listo para compartir enlaces mágicos o aplicar recetas JSON generadas por IA.
+        </div>
+
+        <!-- 1. Enlace Mágico de GitHub Pages (?presetModel=...&constructionMode=...) -->
+        <div class="bg-slate-800/60 border border-slate-700 rounded-xl p-3 space-y-2">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <span class="font-bold text-sky-300 uppercase tracking-wider text-[11px]">1. Enlace Mágico Autoconfigurable para GitHub Pages</span>
+            <button type="button" onclick="copyCurrentOkfShareUrl()" class="px-2.5 py-1 rounded-lg bg-sky-500/20 hover:bg-sky-500/35 border border-sky-500/40 text-sky-300 text-[11px] font-bold transition">
+              🔗 Copiar Enlace Mágico
+            </button>
+          </div>
+          <p class="text-[11px] text-slate-300">
+            Cualquier persona o agente de IA que abra este enlace cargará automáticamente el modelo y todos los parámetros de laminado o Puzzle 3D actuales:
+          </p>
+          <input type="text" id="okfShareUrlInput" readonly class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-[11px] text-sky-200 font-mono outline-none" />
+        </div>
+
+        <!-- 2. Recursos OKF públicos en el repositorio / GitHub Pages -->
+        <div class="bg-slate-800/60 border border-slate-700 rounded-xl p-3 space-y-2">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <span class="font-bold text-fuchsia-300 uppercase tracking-wider text-[11px]">2. Instrucciones para tu Chat de IA (Gemini, ChatGPT, Claude, NotebookLM)</span>
+            <button type="button" onclick="copyOkfMasterPromptToClipboard()" class="px-2.5 py-1 rounded-lg bg-fuchsia-500/20 hover:bg-fuchsia-500/35 border border-fuchsia-500/40 text-fuchsia-300 text-[11px] font-bold transition">
+              📋 Copiar Prompt Maestro para IA
+            </button>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 text-[11px]">
+            <a href="okf.json" target="_blank" rel="noopener" class="px-2.5 py-1 rounded bg-slate-900 hover:bg-slate-700 border border-slate-700 text-slate-200 font-mono transition">📄 okf.json</a>
+            <a href="okf/arquitectura_okf.md" target="_blank" rel="noopener" class="px-2.5 py-1 rounded bg-slate-900 hover:bg-slate-700 border border-slate-700 text-slate-200 font-mono transition">📘 okf/arquitectura_okf.md</a>
+            <a href="okf/prompt_maestro_okf_layerstudio3d.md" target="_blank" rel="noopener" class="px-2.5 py-1 rounded bg-slate-900 hover:bg-slate-700 border border-slate-700 text-slate-200 font-mono transition">🧠 okf/prompt_maestro_okf_layerstudio3d.md</a>
+            <a href="schema/schema_layerstudio3d_project.json" target="_blank" rel="noopener" class="px-2.5 py-1 rounded bg-slate-900 hover:bg-slate-700 border border-slate-700 text-slate-200 font-mono transition">📐 schema_layerstudio3d_project.json</a>
+          </div>
+        </div>
+
+        <!-- 3. Editor / Receptor directo de Recetas JSON OKF -->
+        <div class="bg-slate-800/60 border border-slate-700 rounded-xl p-3 space-y-2">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <span class="font-bold text-emerald-300 uppercase tracking-wider text-[11px]">3. Pegar o Editar Receta JSON OKF (`window.applyOkfProjectConfig`)</span>
+            <div class="flex flex-wrap items-center gap-1.5">
+              <button type="button" onclick="applyQuickOkfSampleRecipe('vase_puzzle_smooth')" class="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-700 border border-slate-700 text-[10px] text-amber-300 font-semibold transition" title="Cargar receta de ejemplo: Jarrón en Puzzle 3D 8x8 con línea de corte suavizada">
+                🏺 Ejemplo Puzzle Suavizado
+              </button>
+              <button type="button" onclick="applyQuickOkfSampleRecipe('torus_stacked_rods')" class="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-700 border border-slate-700 text-[10px] text-sky-300 font-semibold transition" title="Cargar receta de ejemplo: Nudo Toroidal apilado con varillas guía">
+                🍩 Ejemplo Apilado + Varillas
+              </button>
+              <button type="button" onclick="applyQuickOkfSampleRecipe('gear_industrial_frame')" class="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-700 border border-slate-700 text-[10px] text-emerald-300 font-semibold transition" title="Cargar receta de ejemplo: Engranaje con Marco 2D de corte y grabado">
+                ⚙️ Ejemplo con Marco 2D
+              </button>
+            </div>
+          </div>
+          <textarea id="okfRecipeTextarea" rows="8" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-[11px] text-emerald-200 font-mono outline-none" placeholder='Peguen aquí el JSON generado por su IA (ej. {"presetModel": "vase", "constructionMode": "puzzle3d", "puzzleCountA": 8, "puzzleCountB": 8, "puzzleSimplifyCutLine": true})'></textarea>
+          <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+            <button type="button" onclick="loadCurrentConfigIntoOkfTextarea()" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-xs font-semibold transition">
+              🔄 Leer Estado Actual de la App
+            </button>
+            <button type="button" id="btnApplyOkfTextarea" onclick="applyOkfRecipeFromTextarea()" class="px-4 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white text-xs font-bold shadow-lg shadow-emerald-500/20 transition">
+              ⚡ Aplicar Receta JSON Ahora
+            </button>
+          </div>
         </div>
       </div>
     </div>

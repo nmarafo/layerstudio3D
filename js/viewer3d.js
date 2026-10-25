@@ -22,6 +22,9 @@ window.addEventListener('DOMContentLoaded', () => {
   setupFileInputs();
   setupCanvas2DInteraction();
   loadPresetModel('torus');
+  if (typeof parseAndApplyOkfFromUrl === 'function') {
+    parseAndApplyOkfFromUrl();
+  }
   window.addEventListener('resize', onWindowResize);
 });
 

@@ -2012,10 +2012,11 @@ function applyOkfProjectConfig(data) {
   const rodDiamEl = document.getElementById('rodDiameterInput');
   if (rodDiamEl) rodDiamEl.value = state.rodDiameter;
   if (typeof setDisplayUnit === 'function') setDisplayUnit(data.unit || state.unit || 'mm');
+  if (typeof syncDimensionInputsUI === 'function' && state.dimsMM) syncDimensionInputsUI();
   if (state.baseVertices && state.baseVertices.length >= 9) {
     if (typeof setSliceAxis === 'function') setSliceAxis(state.axis);
     if (typeof setSliceMode === 'function') setSliceMode(state.mode);
-    if (typeof recomputeAllSlices === 'function') recomputeAllSlices();
+    if (typeof rebuildGhostAndSlices === 'function') rebuildGhostAndSlices();
   } else if (state.slices && state.slices.length > 0 && typeof applyIslandFilterToExistingSlices === 'function') {
     applyIslandFilterToExistingSlices();
   }
@@ -2030,8 +2031,384 @@ function applyOkfProjectConfig(data) {
   return true;
 }
 
+// Genera el objeto ligero de receta OKF (sin el voluminoso array baseVertices por defecto)
+function getOkfRecipePayload(includeVertices = false) {
+  const presetEl = typeof document !== 'undefined' ? document.getElementById('presetSelect') : null;
+  const payload = {
+    okfVersion: '1.3.0',
+    version: '3.0.7',
+    modelName: state.modelName,
+    presetModel: presetEl && presetEl.value ? presetEl.value : 'torus',
+    unit: state.unit,
+    dimsMM: state.dimsMM ? { x: state.dimsMM.x, y: state.dimsMM.y, z: state.dimsMM.z } : { x: 120, y: 120, z: 120 },
+    constructionMode: state.constructionMode,
+    axis: state.axis,
+    mode: state.mode,
+    sliceCount: state.sliceCount,
+    thickness: state.thickness,
+    puzzleAxes: state.puzzleAxes,
+    puzzleCountA: state.puzzleCountA,
+    puzzleCountB: state.puzzleCountB,
+    puzzleStartOffsetAMM: state.puzzleStartOffsetAMM,
+    puzzleStartOffsetBMM: state.puzzleStartOffsetBMM,
+    puzzleStartMode: state.puzzleStartMode,
+    puzzleRibOffsetsAMM: state.puzzleRibOffsetsAMM,
+    puzzleRibOffsetsBMM: state.puzzleRibOffsetsBMM,
+    puzzleMaterialThicknessMM: state.puzzleMaterialThicknessMM,
+    puzzleSlotClearanceMM: state.puzzleSlotClearanceMM,
+    puzzleSimplifyCutLine: state.puzzleSimplifyCutLine,
+    puzzleSimplifyMode: state.puzzleSimplifyMode,
+    puzzleSimplifyToleranceMM: state.puzzleSimplifyToleranceMM,
+    puzzleSimplifySmoothPasses: state.puzzleSimplifySmoothPasses,
+    filterSmallIslands: state.filterSmallIslands,
+    minIslandSizeMM: state.minIslandSizeMM,
+    minIslandCriteria: state.minIslandCriteria,
+    fillInternalHoles: state.fillInternalHoles,
+    fillHolesMode: state.fillHolesMode,
+    fillHolesMaxSizeMM: state.fillHolesMaxSizeMM,
+    splitModelEnabled: state.splitModelEnabled,
+    splitMode: state.splitMode,
+    splitMaxPartWidthMM: state.splitMaxPartWidthMM,
+    splitMaxPartHeightMM: state.splitMaxPartHeightMM,
+    splitJointType: state.splitJointType,
+    splitJointDepthMM: state.splitJointDepthMM,
+    includeLabels: state.includeLabels,
+    includeNextSliceGuide: state.includeNextSliceGuide,
+    includePrevSliceGuide: state.includePrevSliceGuide,
+    rodCount: state.rodCount,
+    rodDiameter: state.rodDiameter,
+    slicerFrameEnabled: state.slicerFrameEnabled,
+    tabsEnabled: state.tabsEnabled,
+    nestingEnabled: state.nestingEnabled,
+    boardWidthMM: state.boardWidthMM,
+    boardHeightMM: state.boardHeightMM,
+    nestSpacingMM: state.nestSpacingMM,
+    nestMarginMM: state.nestMarginMM,
+    nestAllowRotate: state.nestAllowRotate,
+    nestUseInnerHoles: state.nestUseInnerHoles,
+    carrierEnabled: state.carrierEnabled,
+    carrierWidthMM: state.carrierWidthMM,
+    carrierHeightMM: state.carrierHeightMM
+  };
+  if (includeVertices && state.baseVertices) {
+    payload.baseVertices = Array.from(state.baseVertices);
+  }
+  return payload;
+}
+
+// Parsea parámetros OKF desde la URL de GitHub Pages (?okf=... o query params individuales)
+function parseOkfUrlQuery(searchStr) {
+  const raw = typeof searchStr === 'string'
+    ? searchStr
+    : (typeof window !== 'undefined' && window.location ? window.location.search : '');
+  if (!raw || raw.length < 2) return null;
+
+  const q = raw.startsWith('?') ? raw.slice(1) : raw;
+  const pairs = q.split('&');
+  const params = {};
+  for (let i = 0; i < pairs.length; i++) {
+    const eqIdx = pairs[i].indexOf('=');
+    if (eqIdx <= 0) continue;
+    const k = decodeURIComponent(pairs[i].slice(0, eqIdx).trim());
+    const v = decodeURIComponent(pairs[i].slice(eqIdx + 1).replace(/\+/g, ' ').trim());
+    params[k] = v;
+  }
+
+  let result = {};
+  if (params.okf) {
+    try {
+      result = JSON.parse(params.okf);
+    } catch (e1) {
+      try {
+        if (typeof atob === 'function') {
+          result = JSON.parse(atob(params.okf));
+        }
+      } catch (e2) {
+        // Ignorar si no es JSON válido
+      }
+    }
+  }
+
+  const boolKeys = [
+    'puzzleSimplifyCutLine', 'puzzleHideSeriesA', 'puzzleHideSeriesB',
+    'filterSmallIslands', 'fillInternalHoles', 'splitModelEnabled', 'splitStaggerLayers',
+    'includeLabels', 'includeNextSliceGuide', 'includePrevSliceGuide',
+    'slicerFrameEnabled', 'tabsEnabled', 'nestingEnabled', 'nestAllowRotate',
+    'nestUseInnerHoles', 'nestClipOversized', 'carrierEnabled'
+  ];
+  const numKeys = [
+    'maxDimensionMM', 'sliceCount', 'thickness', 'puzzleCountA', 'puzzleCountB',
+    'puzzleStartOffsetAMM', 'puzzleStartOffsetBMM', 'puzzleMaterialThicknessMM',
+    'puzzleSlotClearanceMM', 'puzzleSimplifyToleranceMM', 'puzzleSimplifySmoothPasses',
+    'minIslandSizeMM', 'fillHolesMaxSizeMM', 'splitMaxPartWidthMM', 'splitMaxPartHeightMM',
+    'splitCols', 'splitRows', 'splitJointDepthMM', 'rodCount', 'rodDiameter',
+    'boardWidthMM', 'boardHeightMM', 'nestSpacingMM', 'nestMarginMM',
+    'carrierWidthMM', 'carrierHeightMM'
+  ];
+  const strKeys = [
+    'presetModel', 'modelName', 'unit', 'constructionMode', 'axis', 'mode',
+    'puzzleAxes', 'puzzleStartMode', 'puzzleSimplifyMode', 'minIslandCriteria',
+    'fillHolesMode', 'splitMode', 'splitJointType'
+  ];
+
+  boolKeys.forEach((k) => {
+    if (params[k] !== undefined) {
+      const low = String(params[k]).toLowerCase();
+      result[k] = (low === 'true' || low === '1' || low === 'yes' || low === 'si');
+    }
+  });
+  numKeys.forEach((k) => {
+    if (params[k] !== undefined) {
+      const n = Number(params[k]);
+      if (Number.isFinite(n)) result[k] = n;
+    }
+  });
+  strKeys.forEach((k) => {
+    if (params[k] !== undefined && params[k] !== '') {
+      result[k] = params[k];
+    }
+  });
+
+  return Object.keys(result).length > 0 ? result : null;
+}
+
+function parseAndApplyOkfFromUrl(searchStr) {
+  const cfg = parseOkfUrlQuery(searchStr);
+  if (!cfg) return false;
+  return applyOkfProjectConfig(cfg);
+}
+
+// Construye un enlace directo de GitHub Pages con la receta OKF actual en los parámetros de la URL
+function buildOkfShareUrl(baseUrl) {
+  const base = baseUrl || (typeof window !== 'undefined' && window.location && window.location.origin !== 'null'
+    ? (window.location.origin + window.location.pathname)
+    : 'https://nmarafo.github.io/layerstudio3D/');
+  const presetEl = typeof document !== 'undefined' ? document.getElementById('presetSelect') : null;
+  const preset = presetEl && presetEl.value ? presetEl.value : 'torus';
+  const maxDim = state.dimsMM ? Math.round(Math.max(state.dimsMM.x, state.dimsMM.y, state.dimsMM.z) * 10) / 10 : 120;
+
+  const q = [
+    'presetModel=' + encodeURIComponent(preset),
+    'modelName=' + encodeURIComponent(state.modelName || 'pieza_3d'),
+    'maxDimensionMM=' + encodeURIComponent(maxDim),
+    'constructionMode=' + encodeURIComponent(state.constructionMode)
+  ];
+
+  if (state.constructionMode === 'puzzle3d') {
+    q.push('puzzleAxes=' + encodeURIComponent(state.puzzleAxes));
+    q.push('puzzleCountA=' + encodeURIComponent(state.puzzleCountA));
+    q.push('puzzleCountB=' + encodeURIComponent(state.puzzleCountB));
+    q.push('puzzleMaterialThicknessMM=' + encodeURIComponent(state.puzzleMaterialThicknessMM));
+    q.push('puzzleSlotClearanceMM=' + encodeURIComponent(state.puzzleSlotClearanceMM));
+    if (state.puzzleSimplifyCutLine) {
+      q.push('puzzleSimplifyCutLine=true');
+      q.push('puzzleSimplifyMode=' + encodeURIComponent(state.puzzleSimplifyMode));
+      q.push('puzzleSimplifyToleranceMM=' + encodeURIComponent(state.puzzleSimplifyToleranceMM));
+      q.push('puzzleSimplifySmoothPasses=' + encodeURIComponent(state.puzzleSimplifySmoothPasses));
+    }
+  } else {
+    q.push('axis=' + encodeURIComponent(state.axis));
+    q.push('mode=' + encodeURIComponent(state.mode));
+    q.push('sliceCount=' + encodeURIComponent(state.sliceCount));
+    q.push('thickness=' + encodeURIComponent(state.thickness));
+    if (state.rodCount > 0) {
+      q.push('rodCount=' + encodeURIComponent(state.rodCount));
+      q.push('rodDiameter=' + encodeURIComponent(state.rodDiameter));
+    }
+  }
+
+  if (state.nestingEnabled) {
+    q.push('nestingEnabled=true');
+    q.push('boardWidthMM=' + encodeURIComponent(state.boardWidthMM));
+    q.push('boardHeightMM=' + encodeURIComponent(state.boardHeightMM));
+  }
+  return base + '?' + q.join('&');
+}
+
+// =========================================================================
+// MODAL INTERACTIVO IA / OKF PARA GITHUB PAGES (#okfAgentModal)
+// =========================================================================
+function setOkfStatusFeedback(msg, isError = false) {
+  const el = typeof document !== 'undefined' ? document.getElementById('okfModalStatusBanner') : null;
+  if (!el) return;
+  el.textContent = msg;
+  el.className = isError
+    ? 'text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-rose-500/20 border border-rose-500/40 text-rose-300'
+    : 'text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300';
+}
+
+function loadCurrentConfigIntoOkfTextarea() {
+  const ta = typeof document !== 'undefined' ? document.getElementById('okfRecipeTextarea') : null;
+  const urlInput = typeof document !== 'undefined' ? document.getElementById('okfShareUrlInput') : null;
+  if (ta) {
+    ta.value = JSON.stringify(getOkfRecipePayload(false), null, 2);
+  }
+  if (urlInput) {
+    urlInput.value = buildOkfShareUrl();
+  }
+  setOkfStatusFeedback('Configuración actual de LayerStudio 3D cargada en el editor JSON y enlace mágico generado.');
+}
+
+function openOkfAgentModal() {
+  loadCurrentConfigIntoOkfTextarea();
+  const modal = typeof document !== 'undefined' ? document.getElementById('okfAgentModal') : null;
+  if (modal) {
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+  }
+}
+
+function closeOkfAgentModal() {
+  const modal = typeof document !== 'undefined' ? document.getElementById('okfAgentModal') : null;
+  if (modal) {
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+  }
+}
+
+function applyOkfRecipeFromTextarea() {
+  const ta = typeof document !== 'undefined' ? document.getElementById('okfRecipeTextarea') : null;
+  if (!ta || !ta.value.trim()) {
+    setOkfStatusFeedback('Peguen primero un bloque JSON de receta OKF en el cuadro de texto.', true);
+    return false;
+  }
+  let raw = ta.value.trim();
+  // Extraer bloque JSON si viene dentro de bloques markdown ```json ... ```
+  const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenceMatch && fenceMatch[1]) {
+    raw = fenceMatch[1].trim();
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    const ok = applyOkfProjectConfig(parsed);
+    if (ok) {
+      const urlInput = document.getElementById('okfShareUrlInput');
+      if (urlInput) urlInput.value = buildOkfShareUrl();
+      setOkfStatusFeedback('✅ Receta OKF aplicada correctamente al modelo y láminas recalculadas.');
+      return true;
+    }
+    setOkfStatusFeedback('No se pudo aplicar la receta OKF.', true);
+    return false;
+  } catch (err) {
+    setOkfStatusFeedback('Error de formato JSON: ' + err.message, true);
+    return false;
+  }
+}
+
+function applyQuickOkfSampleRecipe(sampleId) {
+  let sample = null;
+  if (sampleId === 'vase_puzzle_smooth') {
+    sample = {
+      presetModel: 'vase',
+      modelName: 'jarron_puzzle_suavizado',
+      maxDimensionMM: 220,
+      constructionMode: 'puzzle3d',
+      puzzleAxes: 'xz',
+      puzzleCountA: 8,
+      puzzleCountB: 8,
+      puzzleMaterialThicknessMM: 4.0,
+      puzzleSlotClearanceMM: 0.15,
+      puzzleSimplifyCutLine: true,
+      puzzleSimplifyMode: 'smooth',
+      puzzleSimplifyToleranceMM: 1.5,
+      puzzleSimplifySmoothPasses: 2,
+      filterSmallIslands: true,
+      fillInternalHoles: true,
+      nestingEnabled: true,
+      boardWidthMM: 600,
+      boardHeightMM: 400
+    };
+  } else if (sampleId === 'torus_stacked_rods') {
+    sample = {
+      presetModel: 'torus',
+      modelName: 'nudo_toroidal_apilado',
+      maxDimensionMM: 180,
+      constructionMode: 'stacked',
+      axis: 'z',
+      mode: 'count',
+      sliceCount: 22,
+      thickness: 4.0,
+      rodCount: 2,
+      rodDiameter: 4.0,
+      includeLabels: true,
+      includeNextSliceGuide: true,
+      nestingEnabled: true,
+      boardWidthMM: 600,
+      boardHeightMM: 400
+    };
+  } else if (sampleId === 'gear_industrial_frame') {
+    sample = {
+      presetModel: 'gear',
+      modelName: 'engranaje_con_marco_2d',
+      maxDimensionMM: 160,
+      constructionMode: 'stacked',
+      axis: 'z',
+      mode: 'count',
+      sliceCount: 8,
+      thickness: 5.0,
+      slicerFrameEnabled: true,
+      slicerFrameShape: 'rounded_rect',
+      slicerFrameLaserMode: 'cut_and_engrave',
+      nestingEnabled: false
+    };
+  }
+  if (!sample) return false;
+  applyOkfProjectConfig(sample);
+  loadCurrentConfigIntoOkfTextarea();
+  setOkfStatusFeedback('✅ Receta de ejemplo "' + sample.modelName + '" aplicada.');
+  return true;
+}
+
+function copyOkfMasterPromptToClipboard() {
+  const promptText = [
+    'Actúas como el Agente Operador Oficial de LayerStudio 3D (https://nmarafo.github.io/layerstudio3D/) bajo el estándar OKF v1.3.0.',
+    'Especificación completa: https://nmarafo.github.io/layerstudio3D/okf.json y https://nmarafo.github.io/layerstudio3D/okf/arquitectura_okf.md',
+    'Cuando te pida configurar un proyecto de corte láser (.SVG/.DXF) o impresión 3D (.STL), entrégame:',
+    '1) Un bloque JSON compatible con window.applyOkfProjectConfig(data) (con propiedades como presetModel: "torus"|"vase"|"gear"|"crystal", maxDimensionMM, constructionMode: "stacked"|"puzzle3d", puzzleAxes: "xy"|"xz"|"yz", puzzleCountA, puzzleCountB, puzzleMaterialThicknessMM, puzzleSlotClearanceMM, puzzleSimplifyCutLine, puzzleSimplifyMode: "rdp"|"smooth"|"bridge"|"convex", puzzleSimplifyToleranceMM, filterSmallIslands, fillInternalHoles, nestingEnabled, boardWidthMM, boardHeightMM).',
+    '2) Un enlace directo clicable a https://nmarafo.github.io/layerstudio3D/?... con esos mismos parámetros en la query string para abrirlo configurado automáticamente.'
+  ].join('\n');
+
+  if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(promptText).then(() => {
+      setOkfStatusFeedback('📋 Prompt Maestro OKF copiado al portapapeles. Péguenlo en ChatGPT, Gemini, Claude o NotebookLM.');
+    }).catch(() => {
+      setOkfStatusFeedback('Prompt generado en el cuadro de texto.', false);
+    });
+  } else {
+    const ta = typeof document !== 'undefined' ? document.getElementById('okfRecipeTextarea') : null;
+    if (ta) ta.value = promptText;
+    setOkfStatusFeedback('📋 Prompt Maestro OKF mostrado en el cuadro de texto para copiar.');
+  }
+}
+
+function copyCurrentOkfShareUrl() {
+  const url = buildOkfShareUrl();
+  const urlInput = typeof document !== 'undefined' ? document.getElementById('okfShareUrlInput') : null;
+  if (urlInput) urlInput.value = url;
+  if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url).then(() => {
+      setOkfStatusFeedback('🔗 Enlace mágico de GitHub Pages copiado al portapapeles.');
+    }).catch(() => {
+      setOkfStatusFeedback('Enlace generado en la caja superior.', false);
+    });
+  } else {
+    setOkfStatusFeedback('🔗 Enlace mágico generado en la caja superior.');
+  }
+}
+
 if (typeof window !== 'undefined') {
   window.applyOkfProjectConfig = applyOkfProjectConfig;
+  window.getOkfRecipePayload = getOkfRecipePayload;
+  window.parseOkfUrlQuery = parseOkfUrlQuery;
+  window.parseAndApplyOkfFromUrl = parseAndApplyOkfFromUrl;
+  window.buildOkfShareUrl = buildOkfShareUrl;
+  window.openOkfAgentModal = openOkfAgentModal;
+  window.closeOkfAgentModal = closeOkfAgentModal;
+  window.loadCurrentConfigIntoOkfTextarea = loadCurrentConfigIntoOkfTextarea;
+  window.applyOkfRecipeFromTextarea = applyOkfRecipeFromTextarea;
+  window.applyQuickOkfSampleRecipe = applyQuickOkfSampleRecipe;
+  window.copyOkfMasterPromptToClipboard = copyOkfMasterPromptToClipboard;
+  window.copyCurrentOkfShareUrl = copyCurrentOkfShareUrl;
 }
 
 function importProjectFile(file) {
