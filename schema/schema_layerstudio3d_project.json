@@ -139,7 +139,7 @@
     },
     "puzzleSelfSupporting": {
       "type": "boolean",
-      "default": false,
+      "default": true,
       "description": "Si es true, las costillas seleccionadas en Puzzle 3D no bajan hasta el suelo y se sostienen solas mediante sus ranuras de encaje a media madera."
     },
     "puzzleSelfSupportTarget": {

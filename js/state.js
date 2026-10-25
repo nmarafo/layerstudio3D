@@ -63,7 +63,7 @@ const state = {
   puzzleRawVerticesCount: 0,      // Total de vértices originales en los contornos base del Puzzle 3D
   puzzleSimplifiedVerticesCount: 0, // Total de vértices tras simplificar la línea de corte del Puzzle 3D
   // Modo Autosustentante en Puzzle 3D (la costilla no viene desde el suelo y se sostiene sola con la unión)
-  puzzleSelfSupporting: false,        // true = las costillas indicadas no bajan hasta el suelo y se sostienen con la unión
+  puzzleSelfSupporting: true,         // true = las costillas indicadas no bajan hasta el suelo y se sostienen con la unión (activo por defecto)
   puzzleSelfSupportTarget: 'outer',   // 'outer' (Exteriores y voladizos) | 'series_b' (Serie B) | 'series_a' (Serie A) | 'all' (Todas) | 'custom' (Solo individuales)
   puzzleSelfSupportStyle: 'trim_union', // 'trim_union' (Corte recto bajo unión) | 'arch' (Costilla en arco siguiendo silueta) | 'natural' (Solo perfil 3D flotante)
   puzzleSelfSupportClearanceMM: 22.0, // Altura libre desde el suelo en mm (protegiendo siempre el encaje de unión)

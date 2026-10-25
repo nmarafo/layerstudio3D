@@ -38,17 +38,17 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
 
   <!-- Hoja de estilos principal -->
-  <link rel="stylesheet" href="css/styles.css?v=3.0.13" />
+  <link rel="stylesheet" href="css/styles.css?v=3.0.14" />
 
   <!-- Módulos de la aplicación (cargados en orden de dependencia con defer y cache-busting) -->
-  <script src="js/state.js?v=3.0.13" defer></script>
-  <script src="js/viewer3d.js?v=3.0.13" defer></script>
-  <script src="js/slicer.js?v=3.0.13" defer></script>
-  <script src="js/nesting.js?v=3.0.13" defer></script>
-  <script src="js/modals-guide.js?v=3.0.13" defer></script>
-  <script src="js/viewer2d.js?v=3.0.13" defer></script>
-  <script src="js/exporters.js?v=3.0.13" defer></script>
-  <script src="js/vectorizer2d.js?v=3.0.13" defer></script>
+  <script src="js/state.js?v=3.0.14" defer></script>
+  <script src="js/viewer3d.js?v=3.0.14" defer></script>
+  <script src="js/slicer.js?v=3.0.14" defer></script>
+  <script src="js/nesting.js?v=3.0.14" defer></script>
+  <script src="js/modals-guide.js?v=3.0.14" defer></script>
+  <script src="js/viewer2d.js?v=3.0.14" defer></script>
+  <script src="js/exporters.js?v=3.0.14" defer></script>
+  <script src="js/vectorizer2d.js?v=3.0.14" defer></script>
 </head>
 <body class="h-screen w-screen flex flex-col">
 
@@ -413,17 +413,17 @@
             <div class="mt-2 bg-emerald-950/35 border border-emerald-500/40 rounded-lg p-2 space-y-1.5">
               <label class="flex items-center justify-between text-[11px] font-bold text-emerald-300 cursor-pointer" title="Permite que las costillas seleccionadas no bajen hasta el suelo (sin pedestal inferior) y se sostengan solas en el aire mediante el encaje con las costillas perpendiculares">
                 <span>🧲 Costilla autosustentante (sin bajar al suelo)</span>
-                <input type="checkbox" id="puzzleSelfSupportingCheck" onchange="setPuzzleSelfSupporting(this.checked)" class="accent-emerald-500 w-3.5 h-3.5" />
+                <input type="checkbox" id="puzzleSelfSupportingCheck" checked onchange="setPuzzleSelfSupporting(this.checked)" class="accent-emerald-500 w-3.5 h-3.5" />
               </label>
 
               <div class="grid grid-cols-4 gap-1">
-                <button type="button" id="puzzleSelfSupTargetBtn_outer" onclick="setPuzzleSelfSupportTarget('outer')" class="py-1 px-1.5 rounded border border-slate-700 bg-slate-950 text-[9px] font-semibold text-slate-300 hover:bg-slate-800 transition" title="Las costillas exteriores quedan suspendidas sujetas por la unión mientras el núcleo central apoya en el suelo">Exteriores</button>
+                <button type="button" id="puzzleSelfSupTargetBtn_outer" onclick="setPuzzleSelfSupportTarget('outer')" class="py-1 px-1.5 rounded border border-emerald-500 bg-emerald-500/20 text-[9px] font-bold text-emerald-300 transition" title="Las costillas exteriores quedan suspendidas sujetas por la unión mientras el núcleo central apoya en el suelo">Exteriores</button>
                 <button type="button" id="puzzleSelfSupTargetBtn_series_b" onclick="setPuzzleSelfSupportTarget('series_b')" class="py-1 px-1.5 rounded border border-slate-700 bg-slate-950 text-[9px] font-semibold text-slate-300 hover:bg-slate-800 transition" title="Toda la Serie B se sostiene sola colgada de las uniones con la Serie A (la Serie A apoya en el suelo)">Serie B</button>
                 <button type="button" id="puzzleSelfSupTargetBtn_series_a" onclick="setPuzzleSelfSupportTarget('series_a')" class="py-1 px-1.5 rounded border border-slate-700 bg-slate-950 text-[9px] font-semibold text-slate-300 hover:bg-slate-800 transition" title="Toda la Serie A se sostiene sola encajada sobre la Serie B (la Serie B apoya en el suelo)">Serie A</button>
                 <button type="button" id="puzzleSelfSupTargetBtn_all" onclick="setPuzzleSelfSupportTarget('all')" class="py-1 px-1.5 rounded border border-slate-700 bg-slate-950 text-[9px] font-semibold text-slate-300 hover:bg-slate-800 transition" title="Aplicar recorte autosustentante o silueta sin pedestal a todas las costillas posibles">Todas</button>
               </div>
 
-              <div id="puzzleSelfSupportBox" class="hidden space-y-1.5 pt-1 border-t border-emerald-500/25 transition">
+              <div id="puzzleSelfSupportBox" class="space-y-1.5 pt-1 border-t border-emerald-500/25 transition">
                 <div class="flex items-center justify-between gap-1 text-[10px]">
                   <span class="text-slate-300">Modo de base:</span>
                   <select id="puzzleSelfSupportStyleSelect" onchange="onPuzzleSelfSupportParamsChange()" class="bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] text-emerald-300 outline-none">
