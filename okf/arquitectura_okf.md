@@ -241,10 +241,10 @@ En un **Puzzle 3D (`puzzle3d`)**, lo normal es grabar las **costillas primera y 
 
 > [!IMPORTANT]
 > **REGLA OBLIGATORIA OKF ANTES DE EXPORTAR (`OKF-GATE-LASCA-PREVIEW-BEFORE-EXPORT`)**:  
-> Antes de exportar cualquier paquete de archivos de fabricación (`.ZIP`, `.DXF`, `.SVG`, `.STL` de capas) o de compilar los archivos binarios `.oud` / `.oue` para la cortadora láser **Pérez Camps PC 13/90 II**, cualquier Agente de IA **DEBE**:
+> Antes de exportar cualquier paquete de archivos de fabricación (`.ZIP`, `.DXF`, `.SVG`, `.STL` de capas), cualquier Agente de IA **DEBE**:
 > 1. **Generar primero el archivo de proyecto `.lasca`** (`exportProjectFile()`) con la configuración propuesta.
 > 2. **Preguntar explícitamente a la persona usuaria si desea previsualizar el proyecto (`.lasca`) en LayerStudio 3D (`https://nmarafo.github.io/layerstudio3D/` → botón `📂 Abrir`) antes de exportar los archivos definitivos de corte**:
->    > *«He generado el archivo de proyecto `.lasca` con la configuración propuesta (combinación de ejes, número de costillas, modo autosustentante y distribución en tableros). ¿Desea previsualizar primero el proyecto `.lasca` en LayerStudio 3D antes de que exporte los archivos definitivos de corte (`.ZIP` / `.DXF` / `.SVG` / `.OUD`)?»*
+>    > *«He generado el archivo de proyecto `.lasca` con la configuración propuesta (combinación de ejes, número de costillas, modo autosustentante y distribución en tableros). ¿Desea previsualizar primero el proyecto `.lasca` en LayerStudio 3D antes de que exporte los archivos definitivos de corte (`.ZIP` / `.DXF` / `.SVG` / `.STL`)?»*
 > 3. **Esperar la confirmación de la persona usuaria** (salvo que esta indique expresamente que desea exportar directamente sin previsualizar) antes de ejecutar las funciones de exportación final.
 
 Una vez validado el proyecto `.lasca` por la persona usuaria, ejecutar la exportación solicitada:
@@ -268,8 +268,8 @@ A raíz de casos reales con modelos arquitectónicos y esculturas generadas por 
    - `sliceTrianglesAtPlane()` detecta automáticamente esta condición (`netArea < 0.38 * bboxArea`) y muestrea el perfil superior envolvente $v_{\max}(u)$ de todos los segmentos intersectados para cerrarlo en línea recta contra la cota base del modelo (`baseY = minZ`), generando costillas estructuralmente macizas y estables.
 3. **Limpieza Automática de Esquirlas en Cumbreras Inclinadas (`carveInterlockingPuzzleSlots`)**:
    - Cuando una ranura superior a 90° coincide con un tejado o pendiente pronunciada, la sustracción booleana puede seccionar la punta superior en un pequeño triángulo residual suelto. El motor descarta automáticamente tras el booleano cualquier sub-fragmento secundario cuya área sea inferior a $\max(15\text{ mm}^2, \text{slotW}^2)$.
-4. **Contrato de Interoperabilidad con `laserpc13-90-II` (`PROYECTO_OKF.lasca` dentro del `.ZIP`)**:
-   - Todo archivo `.ZIP` generado por `exportZipBatch()` incluye en su raíz `PROYECTO_OKF.lasca`. Al arrastrar ese `.ZIP` al compilador `.OUD`/`.OUE` de la cortadora láser **Pérez Camps PC 13/90 II**, la aplicación lee `puzzleMaterialThicknessMM` y `boardWidthMM × boardHeightMM` y selecciona automáticamente el perfil de velocidades y potencias calibrado para ese material.
+4. **Metadatos de Proyecto Integrados (`PROYECTO_OKF.lasca` dentro del `.ZIP`)**:
+   - Todo archivo `.ZIP` generado por `exportZipBatch()` incluye en su raíz `PROYECTO_OKF.lasca` con el grosor de material (`puzzleMaterialThicknessMM`) y las dimensiones de tablero (`boardWidthMM × boardHeightMM`) para facilitar el postprocesado CAM automatizado.
 5. **Selección Automática Generalizada de Ejes de Cruce en Puzzle 3D (`autoSelectBestPuzzleAxes`)**:
    - Al activar el modo `puzzle3d` o pulsar **`🪄 Auto-Elegir`**, LayerStudio 3D simula internamente las tres combinaciones ortogonales (`xy`, `xz`, `yz`) y las puntúa de `0` a `100` mediante `computePuzzleAxesCandidateScore()` según 4 métricas universales:
      1. **Estabilidad Rotacional de Encajes (`35 pts`)**: Premia que todas las costillas activas tengan $\ge 2$ ranuras y penaliza las costillas en voladizo con `1` sola ranura o `0` ranuras.
