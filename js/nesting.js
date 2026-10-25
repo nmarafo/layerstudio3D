@@ -35,11 +35,22 @@ function syncBoardInputsUI() {
 function setBoardPresetMM(wMM, hMM) {
   state.boardWidthMM = wMM;
   state.boardHeightMM = hMM;
+  if (state.splitMode === 'max_size') {
+    state.splitMaxPartWidthMM = wMM;
+    state.splitMaxPartHeightMM = hMM;
+  }
   syncBoardInputsUI();
+  if (state.splitModelEnabled && typeof applyModelSplitToExistingSlices === 'function') {
+    applyModelSplitToExistingSlices(false);
+    if (typeof build3DSlicesMesh === 'function') build3DSlicesMesh();
+  } else if (typeof syncSplitModelUI === 'function') {
+    syncSplitModelUI();
+  }
   if (!state.nestingEnabled) {
     setNestingEnabled(true);
   } else {
     recomputeBoardNesting();
+    renderSliceStripUI();
     update2DInspectorHeader();
     render2DSlice();
   }
@@ -98,15 +109,26 @@ function setNestingEnabled(val) {
   reset2DView(false);
 
   if (state.nestingEnabled) {
+    if (state.splitModelEnabled && typeof applyModelSplitToExistingSlices === 'function') {
+      applyModelSplitToExistingSlices(false);
+      if (typeof build3DSlicesMesh === 'function') build3DSlicesMesh();
+    }
     recomputeBoardNesting();
-    state.activeBoardIndex = 0;
+    let initialBoardIdx = 0;
+    if (state.splitModelEnabled && state.nestedBoards && state.nestedBoards.length > 0) {
+      const foundIdx = state.nestedBoards.findIndex((b) =>
+        b.placements && b.placements.some((pl) => pl.island && pl.island.sliceIndex === state.activeSliceIndex)
+      );
+      if (foundIdx !== -1) initialBoardIdx = foundIdx;
+    }
+    state.activeBoardIndex = initialBoardIdx;
     state.activeCarrierIndex = 0;
     const slider = document.getElementById('currentSliceSlider');
     if (slider) {
       slider.max = state.carrierEnabled
         ? Math.max(0, state.nestedCarriers.length - 1)
         : Math.max(0, state.nestedBoards.length - 1);
-      slider.value = 0;
+      slider.value = state.activeBoardIndex;
     }
   } else {
     if (state.carrierEnabled) {
@@ -146,6 +168,16 @@ function onBoardSettingsChange() {
   if (clipChk) state.nestClipOversized = clipChk.checked;
 
   syncBoardInputsUI();
+  if (state.splitMode === 'max_size') {
+    state.splitMaxPartWidthMM = state.boardWidthMM;
+    state.splitMaxPartHeightMM = state.boardHeightMM;
+  }
+  if (state.splitModelEnabled && typeof applyModelSplitToExistingSlices === 'function') {
+    applyModelSplitToExistingSlices(false);
+    if (typeof build3DSlicesMesh === 'function') build3DSlicesMesh();
+  } else if (typeof syncSplitModelUI === 'function') {
+    syncSplitModelUI();
+  }
   if (state.nestingEnabled) {
     recomputeBoardNesting();
     renderSliceStripUI();
@@ -1056,10 +1088,13 @@ function packIslandsIntoBoards(islands, boardW, boardH, margin, spacing, allowRo
     let w0 = island.bounds.width;
     let h0 = island.bounds.height;
 
-    // Comprobar primero si la isla cabe físicamente dentro de un tablero vacío de estas dimensiones
+    // Comprobar primero si la isla cabe dentro del área útil con margen completo, o dentro del tablero físico ajustando el margen
     const fitsNormalInEmpty = (w0 <= usableW + 1e-4 && h0 <= usableH + 1e-4);
     const fitsRotInEmpty = allowRot && (h0 <= usableW + 1e-4 && w0 <= usableH + 1e-4);
-    if (!fitsNormalInEmpty && !fitsRotInEmpty) {
+    const fitsNormalTight = (w0 <= boardW + 1e-3 && h0 <= boardH + 1e-3);
+    const fitsRotTight = allowRot && (h0 <= boardW + 1e-3 && w0 <= boardH + 1e-3);
+
+    if (!fitsNormalInEmpty && !fitsRotInEmpty && !fitsNormalTight && !fitsRotTight) {
       if (state.nestClipOversized) {
         const clipped = clipOversizedIslandToUsableBoard(island, usableW, usableH, allowRot);
         if (!clipped) {
@@ -1137,15 +1172,27 @@ function packIslandsIntoBoards(islands, boardW, boardH, margin, spacing, allowRo
     };
 
     // Intentar colocar en los tableros existentes donde quepa
-    for (let bIdx = 0; bIdx < boards.length; bIdx++) {
-      tryFindOnBoard(boards[bIdx]);
-      if (bestBoard) break;
+    if (fitsNormalInEmpty || fitsRotInEmpty) {
+      for (let bIdx = 0; bIdx < boards.length; bIdx++) {
+        tryFindOnBoard(boards[bIdx]);
+        if (bestBoard) break;
+      }
     }
 
     // Si no cabe en ninguno de los tableros actuales, abrir un nuevo tablero
     if (!bestBoard) {
       const nb = createNewBoard();
-      tryFindOnBoard(nb);
+      if (fitsNormalInEmpty || fitsRotInEmpty) {
+        tryFindOnBoard(nb);
+      } else {
+        // La pieza cabe dentro del tablero físico (boardW × boardH) reduciendo ligeramente el margen perimetral
+        bestBoard = nb;
+        bestRotated = !fitsNormalTight && fitsRotTight;
+        const pW = bestRotated ? h0 : w0;
+        const pH = bestRotated ? w0 : h0;
+        bestX = Math.max(0, Math.min(margin, (boardW - pW) * 0.5));
+        bestY = Math.max(0, Math.min(margin, (boardH - pH) * 0.5));
+      }
     }
 
     if (!bestBoard) {
@@ -1338,8 +1385,26 @@ function update2DInspectorHeader() {
 
     document.getElementById('slice2DTitle').textContent =
       totalB > 0 ? ('Tablero #' + (state.activeBoardIndex + 1) + ' / ' + totalB) : 'Sin piezas que quepan';
-    document.getElementById('slice2DCoord').textContent =
-      b ? (b.placements.length + ' piezas en este tablero') : '0 piezas';
+    let coordTxt = b ? (b.placements.length + ' piezas en este tablero') : '0 piezas';
+    if (b && state.splitModelEnabled && b.placements.length > 0) {
+      const partSummaries = [];
+      b.placements.forEach((pl) => {
+        if (!pl.island) return;
+        const sl = state.slices[pl.island.sliceIndex];
+        const sCode = pl.island.puzzleCode || ('#' + (pl.island.sliceNum || 1));
+        const sec = pl.island.sectorCode || 'A1';
+        const totP = (sl && sl.splitGrid) ? sl.splitGrid.totalParts : 1;
+        if (totP > 1) {
+          partSummaries.push(sCode + '·' + sec + ' (de ' + totP + ' partes)');
+        } else {
+          partSummaries.push(sCode);
+        }
+      });
+      if (partSummaries.length > 0) {
+        coordTxt = '🧩 ' + partSummaries.slice(0, 3).join(', ') + (partSummaries.length > 3 ? (' +' + (partSummaries.length - 3)) : '');
+      }
+    }
+    document.getElementById('slice2DCoord').textContent = coordTxt;
     document.getElementById('slice2DStats').textContent =
       'Tablero: ' + (state.boardWidthMM / f).toFixed(dec) + ' × ' + (state.boardHeightMM / f).toFixed(dec) + ' ' + state.unit +
       ' | Sep: ' + state.nestSpacingMM + ' mm' +
@@ -1397,10 +1462,7 @@ function on2DSliderInput(val) {
     highlightActiveCardInStrip();
     render2DSlice();
   } else if (state.nestingEnabled) {
-    state.activeBoardIndex = Math.max(0, Math.min(state.nestedBoards.length - 1, val));
-    update2DInspectorHeader();
-    highlightActiveCardInStrip();
-    render2DSlice();
+    selectActiveBoard(val);
   } else {
     selectActiveSlice(val);
   }
@@ -1410,9 +1472,19 @@ function on2DSliderInput(val) {
 function selectActiveBoard(bIdx) {
   if (state.nestedBoards.length === 0) return;
   state.activeBoardIndex = Math.max(0, Math.min(state.nestedBoards.length - 1, bIdx));
+  const curBoard = state.nestedBoards[state.activeBoardIndex];
+  if (curBoard && curBoard.placements && curBoard.placements.length > 0 && curBoard.placements[0].island) {
+    state.activeSliceIndex = curBoard.placements[0].island.sliceIndex;
+  }
   const slider = document.getElementById('currentSliceSlider');
   if (slider) slider.value = state.activeBoardIndex;
   update2DInspectorHeader();
+  if (state.splitModelEnabled && typeof syncSplitModelUI === 'function') {
+    syncSplitModelUI();
+  }
+  if (typeof update3DSlicesTransforms === 'function') {
+    update3DSlicesTransforms();
+  }
   highlightActiveCardInStrip();
   render2DSlice();
 }

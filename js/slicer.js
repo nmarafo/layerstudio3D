@@ -2386,8 +2386,49 @@ function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB, slicesC = 
       return;
     }
     let currentLoops = slice.baseLoops.slice();
+    const splitGrid = state.splitModelEnabled
+      ? getSliceSplitGrid(slice.sliceAxis || state.axis, slice.index, slice)
+      : null;
+    const splitSpineMargin = Math.max(
+      12.0,
+      (state.splitJointType !== 'straight' ? (Number(state.splitJointDepthMM) || 6.0) : 0) + halfW + 4.0
+    );
+
     for (let r = 0; r < slice.slotRects.length; r++) {
       const rect = slice.slotRects[r];
+      const sl = slice.slots[r];
+
+      // Si Gran Formato está activo, acotar el fondo de la ranura para no cruzar ninguna línea de unión modular (xCuts / yCuts)
+      if (splitGrid && sl && (splitGrid.cols > 1 || splitGrid.rows > 1)) {
+        if (sl.vAxis === 'y' && splitGrid.yCuts && splitGrid.yCuts.length > 0) {
+          for (let cyIdx = 0; cyIdx < splitGrid.yCuts.length; cyIdx++) {
+            const cutY = splitGrid.yCuts[cyIdx];
+            if (sl.openPositive && rect.minY < cutY + splitSpineMargin && rect.maxY > cutY + splitSpineMargin + slotW) {
+              rect.minY = cutY + splitSpineMargin;
+              sl.vMid = rect.minY;
+              sl.by = rect.minY;
+            } else if (!sl.openPositive && rect.maxY > cutY - splitSpineMargin && rect.minY < cutY - splitSpineMargin - slotW) {
+              rect.maxY = cutY - splitSpineMargin;
+              sl.vMid = rect.maxY;
+              sl.by = rect.maxY;
+            }
+          }
+        } else if (sl.vAxis === 'x' && splitGrid.xCuts && splitGrid.xCuts.length > 0) {
+          for (let cxIdx = 0; cxIdx < splitGrid.xCuts.length; cxIdx++) {
+            const cutX = splitGrid.xCuts[cxIdx];
+            if (sl.openPositive && rect.minX < cutX + splitSpineMargin && rect.maxX > cutX + splitSpineMargin + slotW) {
+              rect.minX = cutX + splitSpineMargin;
+              sl.vMid = rect.minX;
+              sl.bx = rect.minX;
+            } else if (!sl.openPositive && rect.maxX > cutX - splitSpineMargin && rect.minX < cutX - splitSpineMargin - slotW) {
+              rect.maxX = cutX - splitSpineMargin;
+              sl.vMid = rect.maxX;
+              sl.bx = rect.maxX;
+            }
+          }
+        }
+      }
+
       if (!hasC) {
         currentLoops = subtractSingleRectFromLoops(currentLoops, rect);
       } else {
@@ -2522,9 +2563,148 @@ function getSlicePlaneSpan2D(sliceAxis) {
   return { spanX: state.dimsMM.x || 100, spanY: state.dimsMM.y || 100, labelX: 'X', labelY: 'Y' };
 }
 
+// Desplaza ligeramente una línea de corte modular si coincide con una ranura paralela de Puzzle 3D
+// o si cortaría a través de la zona abierta de las ranuras perpendiculares desmembrando los dientes del peine
+function nudgeCutAwayFromPuzzleSlots(cutVal, cutAxis2D, minBound, maxBound, sliceAxis, sliceRef) {
+  if (state.constructionMode !== 'puzzle3d') return cutVal;
+  const ax = sliceAxis || (sliceRef && sliceRef.sliceAxis) || state.axis;
+  const refSlice = (sliceRef && sliceRef.slots && sliceRef.slots.length > 0)
+    ? sliceRef
+    : (state.slices || []).find((s) => s && s.sliceAxis === ax && s.slots && s.slots.length > 0);
+
+  const slotW = Math.max(0.4, (Number(state.puzzleMaterialThicknessMM) || 5.0) + (Number(state.puzzleSlotClearanceMM) || 0.0));
+  const halfW = slotW * 0.5;
+  const jointPad = state.splitJointType !== 'straight' ? Math.max(2.0, Number(state.splitJointDepthMM) || 6.0) : 0;
+  const spineMargin = Math.max(14.0, jointPad + halfW + 4.0);
+  const spanTotal = maxBound - minBound;
+  // Límite máximo de desplazamiento para no agrandar la pieza vecina más allá del área del tablero
+  const maxNudge = 3.5;
+
+  // 1. Si existen ranuras perpendiculares a este corte (vAxis === cutAxis2D) cuyo fondo vMid cae muy cerca de la línea de corte,
+  // desplazar ligeramente la línea de corte hacia el alma sólida (antes de vMid) para no seccionar los dientes del peine
+  let adjustedVal = cutVal;
+  if (refSlice && refSlice.slots && refSlice.slots.length >= 2) {
+    const perpSlots = refSlice.slots.filter((sl) => sl && !sl.skippedForAntiShear && sl.vAxis === cutAxis2D && Number.isFinite(sl.vMid));
+    if (perpSlots.length >= 2) {
+      const posOpenSlots = perpSlots.filter((sl) => sl.openPositive && Math.abs(adjustedVal - sl.vMid) <= spineMargin * 1.5);
+      const negOpenSlots = perpSlots.filter((sl) => !sl.openPositive && Math.abs(adjustedVal - sl.vMid) <= spineMargin * 1.5);
+
+      if (posOpenSlots.length >= 2 && posOpenSlots.length >= negOpenSlots.length) {
+        const minVMid = Math.min(...posOpenSlots.map((sl) => sl.vMid));
+        const targetSpineCut = minVMid - spineMargin;
+        if (Math.abs(targetSpineCut - cutVal) <= maxNudge && targetSpineCut > minBound + spanTotal * 0.14 && targetSpineCut < maxBound - spanTotal * 0.14) {
+          adjustedVal = targetSpineCut;
+        }
+      } else if (negOpenSlots.length >= 2) {
+        const maxVMid = Math.max(...negOpenSlots.map((sl) => sl.vMid));
+        const targetSpineCut = maxVMid + spineMargin;
+        if (Math.abs(targetSpineCut - cutVal) <= maxNudge && targetSpineCut > minBound + spanTotal * 0.14 && targetSpineCut < maxBound - spanTotal * 0.14) {
+          adjustedVal = targetSpineCut;
+        }
+      }
+    }
+  }
+
+  // 2. Recolectar coordenadas uCenter de todas las ranuras paralelas al corte (uAxis === cutAxis2D)
+  const slotCenters = [];
+  if (refSlice && refSlice.slots && refSlice.slots.length > 0) {
+    refSlice.slots.forEach((sl) => {
+      if (sl && sl.uAxis === cutAxis2D && Number.isFinite(sl.uCenter)) {
+        if (!slotCenters.some((v) => Math.abs(v - sl.uCenter) < 0.05)) {
+          slotCenters.push(sl.uCenter);
+        }
+      }
+    });
+  } else {
+    const cfg = getPuzzleAxesConfig();
+    const perpAxes = [];
+    if (cfg.axisA !== ax) perpAxes.push({ axis: cfg.axisA, count: state.puzzleCountA, off: state.puzzleStartOffsetAMM, map: state.puzzleRibOffsetsAMM });
+    if (cfg.axisB !== ax) perpAxes.push({ axis: cfg.axisB, count: state.puzzleCountB, off: state.puzzleStartOffsetBMM, map: state.puzzleRibOffsetsBMM });
+    if (cfg.is3Axes && cfg.axisC && cfg.axisC !== ax) {
+      perpAxes.push({ axis: cfg.axisC, count: state.puzzleCountC || 4, off: state.puzzleStartOffsetCMM || 0, map: state.puzzleRibOffsetsCMM });
+    }
+    perpAxes.forEach((p) => {
+      const info2D = getPuzzleSlice2DAxes(ax, p.axis);
+      if (info2D.uAxis === cutAxis2D) {
+        const spanP = (state.dimsMM && state.dimsMM[p.axis]) || 100;
+        const cInfo = computePuzzleAxisSliceCoords(spanP, p.count, p.off, state.puzzleStartMode, p.map);
+        (cInfo.coords || []).forEach((cVal) => slotCenters.push(cVal));
+      }
+    });
+  }
+
+  if (slotCenters.length === 0) return adjustedVal;
+
+  const isCutSafe = (val) => {
+    if (val <= minBound + 8 || val >= maxBound - 8) return false;
+    if (Math.abs(val - cutVal) > maxNudge) return false;
+    for (let i = 0; i < slotCenters.length; i++) {
+      const u = slotCenters[i];
+      const forbidMin = u - halfW - jointPad - 1.5;
+      const forbidMax = u + halfW + 1.5;
+      if (val > forbidMin && val < forbidMax) return false;
+    }
+    return true;
+  };
+
+  if (isCutSafe(adjustedVal)) return adjustedVal;
+
+  for (let i = 0; i < slotCenters.length; i++) {
+    const u = slotCenters[i];
+    const forbidMin = u - halfW - jointPad - 1.5;
+    const forbidMax = u + halfW + 1.5;
+    if (adjustedVal > forbidMin && adjustedVal < forbidMax) {
+      const candPos = u + halfW + 1.8;
+      const candNeg = u - halfW - jointPad - 1.8;
+      if (isCutSafe(candPos)) return candPos;
+      if (isCutSafe(candNeg)) return candNeg;
+      // Si el desplazamiento completo con jointPad supera maxNudge, al menos salir del hueco físico de la ranura
+      const minClearPos = u + halfW + 1.2;
+      const minClearNeg = u - halfW - 1.2;
+      if (Math.abs(minClearPos - cutVal) <= maxNudge && minClearPos < maxBound - 8) return minClearPos;
+      if (Math.abs(minClearNeg - cutVal) <= maxNudge && minClearNeg > minBound + 8) return minClearNeg;
+    }
+  }
+  return adjustedVal;
+}
+
 // Calcula la cuadrícula de subdivisión 2D (columnas, filas y coordenadas de líneas de corte)
-function getSliceSplitGrid(sliceAxis, sliceIndex = 0) {
-  const { spanX, spanY, labelX, labelY } = getSlicePlaneSpan2D(sliceAxis);
+function getSliceSplitGrid(sliceAxis, sliceIndex = 0, sliceRef = null) {
+  const ax = sliceAxis || (sliceRef && sliceRef.sliceAxis) || state.axis;
+  const planeSpan = getSlicePlaneSpan2D(ax);
+  let spanX = planeSpan.spanX;
+  let spanY = planeSpan.spanY;
+  const labelX = planeSpan.labelX;
+  const labelY = planeSpan.labelY;
+
+  // Si tenemos referencia a la lasca real, verificar su extensión geométrica real 2D
+  if (sliceRef) {
+    const srcLoops = (sliceRef.baseLoops && sliceRef.baseLoops.length > 0)
+      ? sliceRef.baseLoops
+      : ((sliceRef.unsplitLoops && sliceRef.unsplitLoops.length > 0)
+        ? sliceRef.unsplitLoops
+        : ((sliceRef.rawLoops && sliceRef.rawLoops.length > 0) ? sliceRef.rawLoops : sliceRef.loops));
+    if (srcLoops && srcLoops.length > 0) {
+      let bMinX = Infinity, bMaxX = -Infinity, bMinY = Infinity, bMaxY = -Infinity;
+      srcLoops.forEach((l) => {
+        if (l.isHole || !l.points) return;
+        for (let i = 0; i < l.points.length; i++) {
+          const p = l.points[i];
+          if (p.x < bMinX) bMinX = p.x;
+          if (p.x > bMaxX) bMaxX = p.x;
+          if (p.y < bMinY) bMinY = p.y;
+          if (p.y > bMaxY) bMaxY = p.y;
+        }
+      });
+      if (Number.isFinite(bMinX) && Number.isFinite(bMaxX)) {
+        const actualSpanX = bMaxX - bMinX;
+        const actualSpanY = bMaxY - bMinY;
+        if (actualSpanX > spanX + 0.05) spanX = actualSpanX;
+        if (actualSpanY > spanY + 0.05) spanY = actualSpanY;
+      }
+    }
+  }
+
   let cols = 1;
   let rows = 1;
 
@@ -2533,10 +2713,56 @@ function getSliceSplitGrid(sliceAxis, sliceIndex = 0) {
       cols = Math.max(1, Math.min(12, parseInt(state.splitCols, 10) || 2));
       rows = Math.max(1, Math.min(12, parseInt(state.splitRows, 10) || 2));
     } else {
-      const maxW = Math.max(20, Number(state.splitMaxPartWidthMM) || 300);
-      const maxH = Math.max(20, Number(state.splitMaxPartHeightMM) || 300);
-      cols = Math.max(1, Math.min(12, Math.ceil((spanX - 0.05) / maxW)));
-      rows = Math.max(1, Math.min(12, Math.ceil((spanY - 0.05) / maxH)));
+      const rawW = Math.max(20, Number(state.splitMaxPartWidthMM) || 300);
+      const rawH = Math.max(20, Number(state.splitMaxPartHeightMM) || 250);
+      const boardW = Math.max(20, Number(state.boardWidthMM) || 300);
+      const boardH = Math.max(20, Number(state.boardHeightMM) || 250);
+
+      let limitW = rawW;
+      let limitH = rawH;
+      if (state.nestingEnabled) {
+        limitW = Math.min(rawW, boardW);
+        limitH = Math.min(rawH, boardH);
+      }
+
+      // Al dividir una dimensión (> 1 parte), la pestaña macho (cola de milano / espiga) y el posible
+      // desplazamiento anti-ranura en Puzzle 3D añaden saliente exterior a la caja delimitadora de la pieza
+      const jointAllowance = state.splitJointType !== 'straight'
+        ? Math.max(2.0, Number(state.splitJointDepthMM) || 6.0)
+        : 0;
+      const nudgeAllowance = state.constructionMode === 'puzzle3d' ? 3.5 : 1.0;
+      const splitExtra = jointAllowance + nudgeAllowance;
+
+      const calcSubdivsForLimit = (span, lim) => {
+        if (span <= lim + 0.05) return 1;
+        const effLim = Math.max(20, lim - splitExtra);
+        return Math.max(2, Math.min(12, Math.ceil((span - 0.05) / effLim)));
+      };
+
+      const cols0 = calcSubdivsForLimit(spanX, limitW);
+      const rows0 = calcSubdivsForLimit(spanY, limitH);
+      cols = cols0;
+      rows = rows0;
+
+      // Si se permite rotación en el tablero (por defecto sí), evaluar orientación rotada 90° (limitH × limitW)
+      // para minimizar el número de cortes asegurando que cada parte encaje en el tablero
+      if (state.nestAllowRotate !== false) {
+        const cols90 = calcSubdivsForLimit(spanX, limitH);
+        const rows90 = calcSubdivsForLimit(spanY, limitW);
+        const parts0 = cols0 * rows0;
+        const parts90 = cols90 * rows90;
+        if (parts90 < parts0) {
+          cols = cols90;
+          rows = rows90;
+        } else if (parts90 === parts0 && parts0 > 1) {
+          const slack0 = Math.min(limitW - (spanX / cols0), limitH - (spanY / rows0));
+          const slack90 = Math.min(limitH - (spanX / cols90), limitW - (spanY / rows90));
+          if (slack90 > slack0) {
+            cols = cols90;
+            rows = rows90;
+          }
+        }
+      }
     }
   }
 
@@ -2558,11 +2784,13 @@ function getSliceSplitGrid(sliceAxis, sliceIndex = 0) {
 
   const xCuts = [];
   for (let c = 1; c < cols; c++) {
-    xCuts.push(minX + c * partW + staggerX);
+    const rawCutX = minX + c * partW + staggerX;
+    xCuts.push(nudgeCutAwayFromPuzzleSlots(rawCutX, 'x', minX, maxX, ax, sliceRef));
   }
   const yCuts = [];
   for (let r = 1; r < rows; r++) {
-    yCuts.push(minY + r * partH + staggerY);
+    const rawCutY = minY + r * partH + staggerY;
+    yCuts.push(nudgeCutAwayFromPuzzleSlots(rawCutY, 'y', minY, maxY, ax, sliceRef));
   }
 
   return {
@@ -2580,11 +2808,163 @@ function getSliceSplitGrid(sliceAxis, sliceIndex = 0) {
     xCuts,
     yCuts,
     labelX,
-    labelY
+    labelY,
+    sliceAxis: ax
   };
 }
 
-// Verifica si una caja delimitadora 2D está íntegramente contenida dentro del material sólido de la lasca
+// Devuelve la cuadrícula de subdivisión de referencia (en modo Puzzle 3D prioriza la costilla activa o el eje con más bloques)
+function getPrimarySplitGrid() {
+  if (state.constructionMode === 'puzzle3d') {
+    const activeSlice = state.slices && state.slices[state.activeSliceIndex];
+    const cfg = getPuzzleAxesConfig();
+    const axesToCheck = [cfg.axisA, cfg.axisB];
+    if (cfg.is3Axes && cfg.axisC) axesToCheck.push(cfg.axisC);
+
+    let bestGrid = activeSlice
+      ? getSliceSplitGrid(activeSlice.sliceAxis, activeSlice.index, activeSlice)
+      : getSliceSplitGrid(cfg.axisA, 0);
+
+    for (let i = 0; i < axesToCheck.length; i++) {
+      const sampleSlice = (state.slices || []).find((s) => s && s.sliceAxis === axesToCheck[i]);
+      const g = getSliceSplitGrid(axesToCheck[i], sampleSlice ? sampleSlice.index : 0, sampleSlice || null);
+      if (g.totalParts > bestGrid.totalParts) {
+        bestGrid = g;
+      }
+    }
+    if (state.slices && state.slices.length > 0) {
+      for (let i = 0; i < state.slices.length; i++) {
+        const s = state.slices[i];
+        if (!s) continue;
+        const g = getSliceSplitGrid(s.sliceAxis, s.index, s);
+        if (g.totalParts > bestGrid.totalParts) {
+          bestGrid = g;
+        }
+      }
+    }
+    return bestGrid;
+  }
+  const activeSlice = state.slices && state.slices[state.activeSliceIndex];
+  return getSliceSplitGrid(state.axis, activeSlice ? activeSlice.index : 0, activeSlice || null);
+}
+
+// Encadena segmentos [p0, p1] con coincidencia exacta en los vértices de corte booleano (extensión bidireccional)
+function chainExactBooleanSegments(segments) {
+  const used = new Uint8Array(segments.length);
+  const tolSq = 1e-6; // 0.001 mm
+  const looseTolSq = 0.04; // 0.2 mm respaldo para micro-desviaciones de coma flotante
+  const loops = [];
+
+  const distSq = (a, b) => {
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    return dx * dx + dy * dy;
+  };
+
+  for (let i = 0; i < segments.length; i++) {
+    if (used[i]) continue;
+    used[i] = 1;
+    const poly = [segments[i][0], segments[i][1]];
+
+    let extended = true;
+    while (extended) {
+      extended = false;
+      const tail = poly[poly.length - 1];
+      if (poly.length >= 4 && distSq(poly[0], tail) <= tolSq) {
+        break;
+      }
+
+      let bestIdx = -1;
+      let bestEnd = 0;
+      let bestD = tolSq * 4;
+
+      for (let j = 0; j < segments.length; j++) {
+        if (used[j]) continue;
+        const d0 = distSq(tail, segments[j][0]);
+        if (d0 < bestD) {
+          bestD = d0;
+          bestIdx = j;
+          bestEnd = 0;
+          if (d0 === 0) break;
+        }
+        const d1 = distSq(tail, segments[j][1]);
+        if (d1 < bestD) {
+          bestD = d1;
+          bestIdx = j;
+          bestEnd = 1;
+          if (d1 === 0) break;
+        }
+      }
+
+      // Si no hubo coincidencia estricta, permitir respaldo con tolerancia de 0.2 mm
+      if (bestIdx === -1) {
+        let fallbackD = looseTolSq;
+        for (let j = 0; j < segments.length; j++) {
+          if (used[j]) continue;
+          const d0 = distSq(tail, segments[j][0]);
+          if (d0 < fallbackD) {
+            fallbackD = d0;
+            bestIdx = j;
+            bestEnd = 0;
+          }
+          const d1 = distSq(tail, segments[j][1]);
+          if (d1 < fallbackD) {
+            fallbackD = d1;
+            bestIdx = j;
+            bestEnd = 1;
+          }
+        }
+      }
+
+      if (bestIdx !== -1) {
+        used[bestIdx] = 1;
+        poly.push(bestEnd === 0 ? segments[bestIdx][1] : segments[bestIdx][0]);
+        extended = true;
+      }
+    }
+
+    // Extender también desde el inicio si el lazo comenzó a mitad de cadena
+    while (distSq(poly[0], poly[poly.length - 1]) > tolSq) {
+      const head = poly[0];
+      let bestIdx = -1;
+      let bestEnd = 0;
+      let bestD = looseTolSq;
+      for (let j = 0; j < segments.length; j++) {
+        if (used[j]) continue;
+        const d0 = distSq(head, segments[j][0]);
+        if (d0 < bestD) {
+          bestD = d0;
+          bestIdx = j;
+          bestEnd = 0;
+          if (d0 === 0) break;
+        }
+        const d1 = distSq(head, segments[j][1]);
+        if (d1 < bestD) {
+          bestD = d1;
+          bestIdx = j;
+          bestEnd = 1;
+          if (d1 === 0) break;
+        }
+      }
+      if (bestIdx !== -1) {
+        used[bestIdx] = 1;
+        poly.unshift(bestEnd === 0 ? segments[bestIdx][1] : segments[bestIdx][0]);
+      } else {
+        break;
+      }
+    }
+
+    if (poly.length >= 4 && distSq(poly[0], poly[poly.length - 1]) <= looseTolSq) {
+      poly.pop();
+      if (poly.length >= 3) {
+        loops.push(poly);
+      }
+    }
+  }
+  return loops;
+}
+
+// Verifica si una caja delimitadora 2D está íntegramente contenida dentro del material sólido de la lasca (sin invadir ranuras ni huecos)
 function isBoxInsideLoopsSolid(minX, maxX, minY, maxY, loops) {
   const samplePts = [
     { x: minX, y: minY },
@@ -2600,11 +2980,43 @@ function isBoxInsideLoopsSolid(minX, maxX, minY, maxY, loops) {
   for (let i = 0; i < samplePts.length; i++) {
     if (!isPointInLoopsSolid(samplePts[i], loops)) return false;
   }
+
+  // Comprobar que ningún vértice ni arista del polígono (p. ej. ranuras estrechas de Puzzle 3D) atraviese la caja del conector
+  const rectCorners = [
+    { x: minX, y: minY },
+    { x: maxX, y: minY },
+    { x: maxX, y: maxY },
+    { x: minX, y: maxY }
+  ];
+  for (let lIdx = 0; lIdx < loops.length; lIdx++) {
+    const pts = loops[lIdx].points;
+    if (!pts || pts.length < 3) continue;
+    for (let i = 0, n = pts.length; i < n; i++) {
+      const p1 = pts[i];
+      const p2 = pts[(i + 1) % n];
+      if (p1.x < minX && p2.x < minX) continue;
+      if (p1.x > maxX && p2.x > maxX) continue;
+      if (p1.y < minY && p2.y < minY) continue;
+      if (p1.y > maxY && p2.y > maxY) continue;
+
+      if (p1.x > minX + 1e-5 && p1.x < maxX - 1e-5 && p1.y > minY + 1e-5 && p1.y < maxY - 1e-5) {
+        return false;
+      }
+      for (let e = 0; e < 4; e++) {
+        const cA = rectCorners[e];
+        const cB = rectCorners[(e + 1) % 4];
+        const t = intersectSegmentParam(p1, p2, cA, cB);
+        if (t !== null && t > 1e-5 && t < 1 - 1e-5) {
+          return false;
+        }
+      }
+    }
+  }
   return true;
 }
 
 // Divide un conjunto de contornos 2D a lo largo de la recta x = cutVal o y = cutVal, insertando conectores cola de milano / espiga
-function splitLoopsAlongLine(loops, axis, cutVal, jointType, jointDepthMM) {
+function splitLoopsAlongLine(loops, axis, cutVal, jointType, jointDepthMM, avoidCrossCoords = null) {
   if (!loops || loops.length === 0) {
     return { negLoops: [], posLoops: [], jointsCount: 0, seamPolylines: [] };
   }
@@ -2664,65 +3076,75 @@ function splitLoopsAlongLine(loops, axis, cutVal, jointType, jointDepthMM) {
     const c0 = crossCoords[k];
     const c1 = crossCoords[k + 1];
     const span = c1 - c0;
-    if (span < 1e-5) continue;
-
-    const midC = (c0 + c1) * 0.5;
-    const testPt = axis === 'x' ? { x: cutVal, y: midC } : { x: midC, y: cutVal };
-    if (!isPointInLoopsSolid(testPt, nudgedLoops)) continue;
+    if (span < 1e-6) continue;
 
     const pStartNeg = axis === 'x' ? { x: cutVal, y: c0 } : { x: c0, y: cutVal };
     const pEndNeg = axis === 'x' ? { x: cutVal, y: c1 } : { x: c1, y: cutVal };
     const pStartPos = axis === 'x' ? { x: cutVal, y: c0 } : { x: c0, y: cutVal };
     const pEndPos = axis === 'x' ? { x: cutVal, y: c1 } : { x: c1, y: cutVal };
 
+    const midC = (c0 + c1) * 0.5;
+    const testPt = axis === 'x' ? { x: cutVal, y: midC } : { x: midC, y: cutVal };
+    const isSolidMid = isPointInLoopsSolid(testPt, nudgedLoops);
+
     const d = Math.min(Math.max(2.0, Number(jointDepthMM) || 6.0), span * 0.22);
     const neckHalf = d * 0.65;
     const headHalf = jointType === 'dovetail' ? d * 1.05 : neckHalf;
 
-    let canPlaceJoint = (jointType === 'dovetail' || jointType === 'tenon') && span >= Math.max(14, d * 3.6);
-    if (canPlaceJoint) {
+    const isCenterValidForJoint = (mc) => {
+      if (mc - headHalf <= c0 + 1.2 || mc + headHalf >= c1 - 1.2) return false;
+      if (Array.isArray(avoidCrossCoords) && avoidCrossCoords.length > 0) {
+        for (let aIdx = 0; aIdx < avoidCrossCoords.length; aIdx++) {
+          if (Math.abs(mc - avoidCrossCoords[aIdx]) < headHalf + 2.5) return false;
+        }
+      }
       const margin = 0.8;
-      const boxMinX = axis === 'x' ? cutVal - margin : midC - headHalf - margin;
-      const boxMaxX = axis === 'x' ? cutVal + d + margin : midC + headHalf + margin;
-      const boxMinY = axis === 'y' ? cutVal - margin : midC - headHalf - margin;
-      const boxMaxY = axis === 'y' ? cutVal + d + margin : midC + headHalf + margin;
-      if (!isBoxInsideLoopsSolid(boxMinX, boxMaxX, boxMinY, boxMaxY, nudgedLoops)) {
-        canPlaceJoint = false;
+      const boxMinX = axis === 'x' ? cutVal + 0.15 : mc - headHalf - margin;
+      const boxMaxX = axis === 'x' ? cutVal + d + margin : mc + headHalf + margin;
+      const boxMinY = axis === 'y' ? cutVal + 0.15 : mc - headHalf - margin;
+      const boxMaxY = axis === 'y' ? cutVal + d + margin : mc + headHalf + margin;
+      const negMinX = axis === 'x' ? cutVal - margin : mc - headHalf - margin;
+      const negMaxX = axis === 'x' ? cutVal - 0.15 : mc + headHalf + margin;
+      const negMinY = axis === 'y' ? cutVal - margin : mc - headHalf - margin;
+      const negMaxY = axis === 'y' ? cutVal - 0.15 : mc + headHalf + margin;
+      return (
+        isBoxInsideLoopsSolid(boxMinX, boxMaxX, boxMinY, boxMaxY, nudgedLoops) &&
+        isBoxInsideLoopsSolid(negMinX, negMaxX, negMinY, negMaxY, nudgedLoops)
+      );
+    };
+
+    const wantsJoint = isSolidMid && (jointType === 'dovetail' || jointType === 'tenon') && span >= Math.max(14, d * 3.6);
+    const activeCenters = [];
+
+    if (wantsJoint) {
+      const wantTwo = span >= Math.max(95, d * 8.5);
+      if (wantTwo) {
+        const pairC1 = c0 + span * 0.3;
+        const pairC2 = c0 + span * 0.7;
+        if (isCenterValidForJoint(pairC1) && isCenterValidForJoint(pairC2)) {
+          activeCenters.push(pairC1, pairC2);
+        }
+      }
+      if (activeCenters.length === 0) {
+        // Probar el punto medio y posiciones cercanas por si una ranura de Puzzle 3D pasa cerca del centro
+        const candidateRatios = [0.5, 0.38, 0.62, 0.28, 0.72, 0.2, 0.8];
+        for (let rIdx = 0; rIdx < candidateRatios.length; rIdx++) {
+          const candMc = c0 + span * candidateRatios[rIdx];
+          if (isCenterValidForJoint(candMc)) {
+            activeCenters.push(candMc);
+            break;
+          }
+        }
       }
     }
 
-    if (canPlaceJoint) {
-      jointsCount++;
+    if (activeCenters.length > 0) {
+      jointsCount += activeCenters.length;
       const makePt = (uAlong, vPerp) => (
         axis === 'x'
           ? { x: cutVal + vPerp, y: uAlong }
           : { x: uAlong, y: cutVal + vPerp }
       );
-
-      // Si el tramo es largo (> 95 mm), colocamos 2 conectores simétricos para evitar giro en el plano
-      const numJointsInSpan = (span >= Math.max(95, d * 8.5)) ? 2 : 1;
-      const centers = numJointsInSpan === 2
-        ? [c0 + span * 0.3, c0 + span * 0.7]
-        : [midC];
-
-      // Verificar que todos los centros candidatos estén dentro del sólido
-      let allCentersValid = true;
-      if (numJointsInSpan === 2) {
-        for (let m = 0; m < centers.length; m++) {
-          const mc = centers[m];
-          const margin = 0.8;
-          const bMinX = axis === 'x' ? cutVal - margin : mc - headHalf - margin;
-          const bMaxX = axis === 'x' ? cutVal + d + margin : mc + headHalf + margin;
-          const bMinY = axis === 'y' ? cutVal - margin : mc - headHalf - margin;
-          const bMaxY = axis === 'y' ? cutVal + d + margin : mc + headHalf + margin;
-          if (!isBoxInsideLoopsSolid(bMinX, bMaxX, bMinY, bMaxY, nudgedLoops)) {
-            allCentersValid = false;
-            break;
-          }
-        }
-      }
-      const activeCenters = allCentersValid ? centers : [midC];
-      if (activeCenters.length === 2) jointsCount++; // segundo conector en el tramo
 
       const chainNeg = [pStartNeg];
       const chainPos = [pStartPos];
@@ -2779,6 +3201,21 @@ function splitLoopsAlongLine(loops, axis, cutVal, jointType, jointDepthMM) {
 
 // Aplica la subdivisión modular en bloques sobre todas las lascas actuales
 function applyModelSplitToExistingSlices(triggerRender = true) {
+  if (triggerRender && state.constructionMode === 'puzzle3d' && state.slices && state.slices.length > 0) {
+    const cfg = getPuzzleAxesConfig();
+    const slicesA = state.slices.filter((s) => s.puzzleSeries === 'A');
+    const slicesB = state.slices.filter((s) => s.puzzleSeries === 'B');
+    const slicesC = cfg.is3Axes ? state.slices.filter((s) => s.puzzleSeries === 'C') : null;
+    if (slicesA.length > 0 && slicesB.length > 0) {
+      carveInterlockingPuzzleSlots(slicesA, slicesB, cfg.axisA, cfg.axisB, slicesC, cfg.axisC);
+      state.slices.forEach((s) => {
+        s.modelLoops = (s.loops || []).slice();
+        s.unsplitLoops = (s.loops || []).slice();
+      });
+      syncConstructionModeUI();
+    }
+  }
+
   let totalJoints = 0;
   const activeSectorsSet = new Set();
 
@@ -2800,7 +3237,7 @@ function applyModelSplitToExistingSlices(triggerRender = true) {
       return;
     }
 
-    const grid = getSliceSplitGrid(slice.sliceAxis || state.axis, slice.index);
+    const grid = getSliceSplitGrid(slice.sliceAxis || state.axis, slice.index, slice);
     slice.splitGrid = grid;
     slice.splitCutSeams = [];
 
@@ -2819,12 +3256,12 @@ function applyModelSplitToExistingSlices(triggerRender = true) {
       return;
     }
 
-    // 1. Subdividir a lo largo de las líneas verticales X
+    // 1. Subdividir a lo largo de las líneas verticales X (evitando colocar espigas sobre cortes horizontales Y)
     const xStrips = [{ col: 0, loops: slice.unsplitLoops.slice() }];
     for (let c = 1; c < grid.cols; c++) {
       const cutX = grid.xCuts[c - 1];
       const currentStrip = xStrips[xStrips.length - 1];
-      const res = splitLoopsAlongLine(currentStrip.loops, 'x', cutX, state.splitJointType, state.splitJointDepthMM);
+      const res = splitLoopsAlongLine(currentStrip.loops, 'x', cutX, state.splitJointType, state.splitJointDepthMM, grid.yCuts);
       currentStrip.loops = res.negLoops;
       xStrips.push({ col: c, loops: res.posLoops });
       totalJoints += res.jointsCount;
@@ -2877,7 +3314,22 @@ function applyModelSplitToExistingSlices(triggerRender = true) {
     slice.loops = finalLoops;
   });
 
-  const mainGrid = getSliceSplitGrid(state.axis, 0);
+  // Si la lámina activa actual no requiere división (1×1) pero existen láminas divididas (> 1 parte, ej. las de 72 cm en otros ejes),
+  // enfocar automáticamente la primera lámina dividida con geometría válida para que la división sea visible de inmediato
+  if (state.splitModelEnabled && state.slices && state.slices.length > 0) {
+    const curSlice = state.slices[state.activeSliceIndex];
+    const curParts = curSlice && curSlice.splitGrid ? curSlice.splitGrid.totalParts : 1;
+    if (curParts <= 1) {
+      const firstDividedIdx = state.slices.findIndex((s) =>
+        s && s.splitGrid && s.splitGrid.totalParts > 1 && s.loops && s.loops.filter((l) => !l.isHole).length > 1
+      );
+      if (firstDividedIdx !== -1) {
+        state.activeSliceIndex = firstDividedIdx;
+      }
+    }
+  }
+
+  const mainGrid = getPrimarySplitGrid();
   state.splitTotalPartsCount = state.splitModelEnabled ? mainGrid.totalParts : 1;
   state.splitTotalJointsCount = state.splitModelEnabled ? totalJoints : 0;
   state.splitActiveSectorsCount = state.splitModelEnabled ? activeSectorsSet.size : 1;
@@ -2892,6 +3344,19 @@ function applyModelSplitToExistingSlices(triggerRender = true) {
     build3DSlicesMesh();
     if (state.nestingEnabled) {
       recomputeBoardNesting();
+      // Si el tablero activo no contiene la lámina activa dividida, saltar al tablero donde está su primera parte (A1)
+      if (state.splitModelEnabled && state.nestedBoards && state.nestedBoards.length > 0) {
+        const curBoard = state.nestedBoards[state.activeBoardIndex];
+        const hasActiveSliceOnBoard = curBoard && curBoard.placements.some((pl) => pl.island && pl.island.sliceIndex === state.activeSliceIndex);
+        if (!hasActiveSliceOnBoard) {
+          const targetBoardIdx = state.nestedBoards.findIndex((b) =>
+            b.placements.some((pl) => pl.island && pl.island.sliceIndex === state.activeSliceIndex)
+          );
+          if (targetBoardIdx !== -1) {
+            state.activeBoardIndex = targetBoardIdx;
+          }
+        }
+      }
     }
     renderSliceStripUI();
     update2DInspectorHeader();
@@ -4025,8 +4490,15 @@ function update3DSlicesTransforms() {
     }
 
     if (isActive) {
-      mesh.material.color.setHex(0xf43f5e);
-      mesh.material.emissive.setHex(0x4c0519);
+      const isMultiPart = state.splitModelEnabled && ((mesh.userData.gridCols || 1) > 1 || (mesh.userData.gridRows || 1) > 1);
+      if (isMultiPart) {
+        const parity = ((mesh.userData.sectorCol || 0) + (mesh.userData.sectorRow || 0)) % 2;
+        mesh.material.color.setHex(parity === 0 ? 0xf43f5e : 0xe879f9);
+        mesh.material.emissive.setHex(parity === 0 ? 0x4c0519 : 0x4a044e);
+      } else {
+        mesh.material.color.setHex(0xf43f5e);
+        mesh.material.emissive.setHex(0x4c0519);
+      }
       mesh.material.opacity = 1.0;
     } else {
       mesh.material.color.setHex(mesh.userData.baseColor);
@@ -4599,7 +5071,7 @@ function syncSplitModelUI() {
     if (!state.splitModelEnabled) {
       badge.textContent = 'Subdivisión desactivada (1 pieza entera por capa)';
     } else {
-      const grid = getSliceSplitGrid(state.axis, 0);
+      const grid = getPrimarySplitGrid();
       const figWCm = (grid.spanX / 10).toFixed(1);
       const figHCm = (grid.spanY / 10).toFixed(1);
       const partWCm = (grid.partW / 10).toFixed(1);
@@ -4611,7 +5083,10 @@ function syncSplitModelUI() {
         badge.textContent = 'La figura (' + figWCm + '×' + figHCm + ' cm) cabe en 1 bloque de ' + wCm.toFixed(0) + '×' + hCm.toFixed(0) + ' cm. Pulsa 2×2 o 4×4 arriba para Gran Formato.';
       } else {
         const lastSector = String.fromCharCode(65 + grid.rows - 1) + grid.cols;
-        badge.textContent = '🧩 Figura ' + figWCm + '×' + figHCm + ' cm → ' + grid.cols + '×' + grid.rows + ' (' + grid.totalParts + ' conjuntos A1..' + lastSector + ' de ' + partWCm + '×' + partHCm + ' cm · ' + jointLabel + ')';
+        const axisHint = state.constructionMode === 'puzzle3d' && grid.labelX && grid.labelY
+          ? (' [' + grid.labelX + '×' + grid.labelY + ']')
+          : '';
+        badge.textContent = '🧩 Figura ' + figWCm + '×' + figHCm + ' cm' + axisHint + ' → ' + grid.cols + '×' + grid.rows + ' (' + grid.totalParts + ' conjuntos A1..' + lastSector + ' de ' + partWCm + '×' + partHCm + ' cm · ' + jointLabel + ')';
       }
     }
   }
@@ -4619,10 +5094,14 @@ function syncSplitModelUI() {
 
 function setSplitModelEnabled(val) {
   state.splitModelEnabled = Boolean(val);
+  if (state.splitModelEnabled && (!state.splitExplodeFactor || state.splitExplodeFactor === 0)) {
+    state.splitExplodeFactor = 12;
+  }
+  syncSplitModelUI();
   if (state.splitModelEnabled && state.splitMode === 'max_size') {
-    const { spanX, spanY } = getSlicePlaneSpan2D(state.axis);
-    if (spanX <= state.splitMaxPartWidthMM + 0.1 && spanY <= state.splitMaxPartHeightMM + 0.1) {
-      // Si el modelo actual es menor que el bloque máximo (ej. 12 cm vs 30 cm), escalamos automáticamente a 2×2 conjuntos (ej. 60×60 cm)
+    const primaryGrid = getPrimarySplitGrid();
+    if (primaryGrid.totalParts <= 1) {
+      // Si el modelo actual cabe en un único bloque (ej. <= 30×25 cm), escalamos automáticamente a 2×2 conjuntos de Gran Formato
       scaleModelToSplitMultiple(2, 2);
       return;
     }
@@ -4666,8 +5145,12 @@ function setSplitPartPresetMM(wMM, hMM) {
 function syncSplitWithBoardSize() {
   state.splitModelEnabled = true;
   state.splitMode = 'max_size';
-  const usableW = Math.max(40, Math.round(state.boardWidthMM - state.boardMarginMM * 2));
-  const usableH = Math.max(40, Math.round(state.boardHeightMM - state.boardMarginMM * 2));
+  const margin = Math.max(0, Number(state.nestMarginMM) || 4);
+  const jointAllowance = state.splitJointType !== 'straight'
+    ? Math.max(2, Number(state.splitJointDepthMM) || 6) + 2
+    : 0;
+  const usableW = Math.max(40, Math.round(state.boardWidthMM - margin * 2 - jointAllowance));
+  const usableH = Math.max(40, Math.round(state.boardHeightMM - margin * 2 - jointAllowance));
   state.splitMaxPartWidthMM = usableW;
   state.splitMaxPartHeightMM = usableH;
   applyModelSplitToExistingSlices(true);
@@ -4679,23 +5162,49 @@ function scaleModelToSplitMultiple(multCols, multRows) {
   state.splitModelEnabled = true;
   state.splitMode = 'max_size';
 
-  const targetW = c * state.splitMaxPartWidthMM;
-  const targetH = r * state.splitMaxPartHeightMM;
-  const ax = state.axis;
+  const maxW = Math.max(20, Number(state.splitMaxPartWidthMM) || 300);
+  const maxH = Math.max(20, Number(state.splitMaxPartHeightMM) || 250);
+  const targetW = c * maxW;
+  const targetH = r * maxH;
+
+  const activeSlice = state.slices && state.slices[state.activeSliceIndex];
+  const ax = state.constructionMode === 'puzzle3d'
+    ? ((activeSlice && activeSlice.sliceAxis) || getPuzzleAxesConfig().axisA)
+    : state.axis;
   const { spanX, spanY } = getSlicePlaneSpan2D(ax);
 
   const lockEl = document.getElementById('lockAspectCheckbox');
   const locked = lockEl ? lockEl.checked : true;
 
   if (locked) {
-    const curPlanarMax = Math.max(spanX, spanY, 0.001);
-    const desiredPlanarMax = Math.max(targetW, targetH);
-    const ratio = desiredPlanarMax / curPlanarMax;
+    let ratio;
+    if (state.constructionMode === 'puzzle3d') {
+      const horizMax = Math.max(state.dimsMM.x || 1, state.dimsMM.y || 1, 0.001);
+      const vertSpan = Math.max(state.dimsMM.z || 1, 0.001);
+      const ratioFit = Math.min(targetW / horizMax, targetH / vertSpan);
+      // Si el modelo tiene una relación de aspecto muy extrema y ratioFit no alcanza a dividir ningún eje, usar el eje dominante
+      if (horizMax * ratioFit <= maxW + 0.5 && vertSpan * ratioFit <= maxH + 0.5) {
+        ratio = Math.max(targetW / horizMax, targetH / vertSpan);
+      } else {
+        ratio = ratioFit;
+      }
+    } else {
+      const ratioFit = Math.min(targetW / Math.max(spanX, 0.001), targetH / Math.max(spanY, 0.001));
+      if (spanX * ratioFit <= maxW + 0.5 && spanY * ratioFit <= maxH + 0.5) {
+        ratio = Math.max(targetW / Math.max(spanX, 0.001), targetH / Math.max(spanY, 0.001));
+      } else {
+        ratio = ratioFit;
+      }
+    }
     state.dimsMM.x = Number(Math.max(1, state.dimsMM.x * ratio).toFixed(2));
     state.dimsMM.y = Number(Math.max(1, state.dimsMM.y * ratio).toFixed(2));
     state.dimsMM.z = Number(Math.max(1, state.dimsMM.z * ratio).toFixed(2));
   } else {
-    if (ax === 'z') {
+    if (state.constructionMode === 'puzzle3d') {
+      state.dimsMM.x = targetW;
+      state.dimsMM.y = targetW;
+      state.dimsMM.z = targetH;
+    } else if (ax === 'z') {
       state.dimsMM.x = targetW;
       state.dimsMM.y = targetH;
     } else if (ax === 'y') {
@@ -4720,6 +5229,7 @@ function onSplitExplodeInput(val) {
 }
 
 if (typeof window !== 'undefined') {
+  window.getPrimarySplitGrid = getPrimarySplitGrid;
   window.setSplitModelEnabled = setSplitModelEnabled;
   window.setSplitMode = setSplitMode;
   window.onSplitSettingsChange = onSplitSettingsChange;

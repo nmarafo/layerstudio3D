@@ -310,6 +310,9 @@ function selectActiveSlice(idx) {
   }
 
   update2DInspectorHeader();
+  if (state.splitModelEnabled && typeof syncSplitModelUI === 'function') {
+    syncSplitModelUI();
+  }
   update3DSlicesTransforms();
   render2DSlice();
   highlightActiveCardInStrip();
@@ -603,6 +606,144 @@ function render2DBoard(ctx, canvas) {
     // Grabado en cada isla autoajustado en tamaño y líneas para caber 100% en su interior
     drawAdaptiveIslandTextOnCanvas(ctx, pl.textLayout, toScreenX, toScreenY, scale);
   });
+
+  // Si el modo Gran Formato está activo y este tablero aloja una parte de una lámina dividida (ej. 72 cm en 3 partes A1..A3),
+  // dibujar un mini-mapa de ensamblaje de la lámina completa en la esquina superior derecha para visualizar todas sus partes
+  if (state.splitModelEnabled) {
+    drawSplitSliceOverviewInsetOnBoard(ctx, canvas, board);
+  }
+}
+
+// Dibuja un recuadro flotante en la vista de Tablero mostrando la lámina completa dividida en sus partes (A1, A2, A3...)
+// y resaltando qué parte se encuentra en el tablero actual
+function drawSplitSliceOverviewInsetOnBoard(ctx, canvas, board) {
+  if (!state.splitModelEnabled || !state.slices || state.slices.length === 0) return;
+
+  // Buscar una lámina dividida presente en este tablero (priorizando la lámina activa)
+  let targetSlice = null;
+  const activeSl = state.slices[state.activeSliceIndex];
+  if (activeSl && activeSl.splitGrid && activeSl.splitGrid.totalParts > 1 &&
+      board.placements.some((pl) => pl.island && pl.island.sliceIndex === state.activeSliceIndex)) {
+    targetSlice = activeSl;
+  }
+  if (!targetSlice) {
+    for (let i = 0; i < board.placements.length; i++) {
+      const pl = board.placements[i];
+      const sl = pl.island ? state.slices[pl.island.sliceIndex] : null;
+      if (sl && sl.splitGrid && sl.splitGrid.totalParts > 1) {
+        targetSlice = sl;
+        break;
+      }
+    }
+  }
+  if (!targetSlice && activeSl && activeSl.splitGrid && activeSl.splitGrid.totalParts > 1) {
+    targetSlice = activeSl;
+  }
+  if (!targetSlice || !targetSlice.loops || targetSlice.loops.length === 0) return;
+
+  const g = targetSlice.splitGrid;
+  const sectorsOnThisBoard = new Set();
+  board.placements.forEach((pl) => {
+    if (pl.island && pl.island.sliceIndex === targetSlice.index && pl.island.sectorCode) {
+      sectorsOnThisBoard.add(pl.island.sectorCode);
+    }
+  });
+
+  const boxW = Math.min(210, Math.max(150, Math.round(canvas.width * 0.28)));
+  const boxH = Math.min(130, Math.max(92, Math.round(canvas.height * 0.26)));
+  const boxX = canvas.width - boxW - 10;
+  const boxY = 10;
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+  ctx.strokeStyle = 'rgba(217, 70, 239, 0.65)';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(boxX, boxY, boxW, boxH, 8);
+  } else {
+    ctx.rect(boxX, boxY, boxW, boxH);
+  }
+  ctx.fill();
+  ctx.stroke();
+
+  const sliceName = targetSlice.puzzleCode ? ('Costilla ' + targetSlice.puzzleCode) : ('Lasca #' + (targetSlice.index + 1));
+  const spanWCm = (g.spanX / 10).toFixed(0);
+  const spanHCm = (g.spanY / 10).toFixed(0);
+  ctx.fillStyle = '#f0abfc';
+  ctx.font = 'bold 10px Inter, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText('🧩 ' + sliceName + ' (' + spanWCm + '×' + spanHCm + 'cm) → ' + g.cols + '×' + g.rows + ' partes', boxX + 8, boxY + 6);
+
+  const padIn = 10;
+  const drawAreaX = boxX + padIn;
+  const drawAreaY = boxY + 22;
+  const drawAreaW = boxW - padIn * 2;
+  const drawAreaH = boxH - 30;
+
+  const sScale = Math.min(drawAreaW / Math.max(1, g.spanX), drawAreaH / Math.max(1, g.spanY));
+  const sCx = drawAreaX + drawAreaW * 0.5;
+  const sCy = drawAreaY + drawAreaH * 0.5;
+  const toMiniX = (x) => sCx + x * sScale;
+  const toMiniY = (y) => sCy - y * sScale;
+
+  // Dibujar cada parte dividida de la lámina
+  targetSlice.loops.forEach((loop) => {
+    if (loop.isHole || !loop.points || loop.points.length < 3) return;
+    const isHere = sectorsOnThisBoard.has(loop.sectorCode || 'A1');
+    const parity = ((loop.sectorCol || 0) + (loop.sectorRow || 0)) % 2;
+
+    ctx.beginPath();
+    loop.points.forEach((pt, idx) => {
+      if (idx === 0) ctx.moveTo(toMiniX(pt.x), toMiniY(pt.y));
+      else ctx.lineTo(toMiniX(pt.x), toMiniY(pt.y));
+    });
+    ctx.closePath();
+    ctx.fillStyle = isHere
+      ? 'rgba(244, 63, 94, 0.52)'
+      : (parity === 0 ? 'rgba(14, 165, 233, 0.25)' : 'rgba(168, 85, 247, 0.25)');
+    ctx.fill();
+    ctx.strokeStyle = isHere ? '#fb7185' : 'rgba(148, 163, 184, 0.7)';
+    ctx.lineWidth = isHere ? 1.6 : 1.0;
+    ctx.stroke();
+  });
+
+  // Costuras de unión (colas de milano / espigas)
+  if (targetSlice.splitCutSeams && targetSlice.splitCutSeams.length > 0) {
+    ctx.strokeStyle = '#e879f9';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    targetSlice.splitCutSeams.forEach((seam) => {
+      seam.forEach((pt, idx) => {
+        if (idx === 0) ctx.moveTo(toMiniX(pt.x), toMiniY(pt.y));
+        else ctx.lineTo(toMiniX(pt.x), toMiniY(pt.y));
+      });
+    });
+    ctx.stroke();
+  }
+
+  // Etiquetas de cada parte (A1, A2, A3...)
+  ctx.font = 'bold 9px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (let r = 0; r < g.rows; r++) {
+    const displayRow = (g.rows - 1) - r;
+    const rowLetter = String.fromCharCode(65 + Math.max(0, Math.min(25, displayRow)));
+    const cellMinY = r === 0 ? g.minY : g.yCuts[r - 1];
+    const cellMaxY = r === g.rows - 1 ? g.maxY : g.yCuts[r];
+    for (let c = 0; c < g.cols; c++) {
+      const cellMinX = c === 0 ? g.minX : g.xCuts[c - 1];
+      const cellMaxX = c === g.cols - 1 ? g.maxX : g.xCuts[c];
+      const secCode = rowLetter + (c + 1);
+      const isHere = sectorsOnThisBoard.has(secCode);
+      const mx = toMiniX((cellMinX + cellMaxX) * 0.5);
+      const my = toMiniY((cellMinY + cellMaxY) * 0.5);
+      ctx.fillStyle = isHere ? '#ffffff' : 'rgba(240, 171, 252, 0.9)';
+      ctx.fillText(secCode, mx, my);
+    }
+  }
+  ctx.restore();
 }
 
 // Renderiza un Soporte Mayor (Apartado 6) conteniendo múltiples tableros completos en el Inspector 2D
@@ -924,19 +1065,46 @@ function render2DSlice() {
     ctx.restore();
   }
 
-  // Relleno sombreado con regla evenodd
-  ctx.save();
-  ctx.beginPath();
-  slice.loops.forEach((loop) => {
-    loop.points.forEach((pt, i) => {
-      if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
-      else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+  // Relleno sombreado con regla evenodd (con color alterno por sector si está dividida en múltiples partes)
+  if (isSplitMulti) {
+    const holes = slice.loops.filter((l) => l.isHole);
+    slice.loops.forEach((loop) => {
+      if (loop.isHole) return;
+      const parity = ((loop.sectorCol || 0) + (loop.sectorRow || 0)) % 2;
+      ctx.save();
+      ctx.beginPath();
+      loop.points.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+        else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+      });
+      ctx.closePath();
+      holes.forEach((h) => {
+        if (h.sectorCode === loop.sectorCode) {
+          h.points.forEach((pt, i) => {
+            if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+            else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+          });
+          ctx.closePath();
+        }
+      });
+      ctx.fillStyle = parity === 0 ? 'rgba(14, 165, 233, 0.20)' : 'rgba(217, 70, 239, 0.22)';
+      ctx.fill('evenodd');
+      ctx.restore();
     });
-    ctx.closePath();
-  });
-  ctx.fillStyle = 'rgba(14, 165, 233, 0.16)';
-  ctx.fill('evenodd');
-  ctx.restore();
+  } else {
+    ctx.save();
+    ctx.beginPath();
+    slice.loops.forEach((loop) => {
+      loop.points.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+        else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+      });
+      ctx.closePath();
+    });
+    ctx.fillStyle = 'rgba(14, 165, 233, 0.16)';
+    ctx.fill('evenodd');
+    ctx.restore();
+  }
 
   // Grabado vectorial procedente de imagen PNG/BMP si la lasca lo incluye
   if (slice.hatchPolylines && slice.hatchPolylines.length > 0 && slice.engraveStyle === 'vector_hatch') {
@@ -1196,6 +1364,16 @@ function renderSliceStripUI() {
       card.onclick = () => selectActiveBoard(bIdx);
 
       const uniqueSlicesCount = new Set(board.placements.map((p) => p.island.sliceIndex)).size;
+      let boardSplitTag = '';
+      if (state.splitModelEnabled && board.placements.length > 0) {
+        const firstPl = board.placements[0];
+        const sl = firstPl.island ? state.slices[firstPl.island.sliceIndex] : null;
+        if (sl && sl.splitGrid && sl.splitGrid.totalParts > 1) {
+          const sCode = firstPl.island.puzzleCode || ('#' + (firstPl.island.sliceNum || 1));
+          const sec = firstPl.island.sectorCode || 'A1';
+          boardSplitTag = '<span class="text-fuchsia-300 font-bold">' + sCode + '·' + sec + '</span>';
+        }
+      }
 
       const topRow = document.createElement('div');
       topRow.className = 'flex items-center justify-between text-[10px]';
@@ -1206,7 +1384,7 @@ function renderSliceStripUI() {
       const bottomRow = document.createElement('div');
       bottomRow.className = 'flex items-center justify-between text-[9px] text-slate-400 font-mono';
       bottomRow.innerHTML =
-        '<span>' + uniqueSlicesCount + ' lám / ' + board.placements.length + ' isl</span>' +
+        (boardSplitTag ? boardSplitTag : ('<span>' + uniqueSlicesCount + ' lám / ' + board.placements.length + ' isl</span>')) +
         '<span class="text-sky-300">' + board.efficiency.toFixed(0) + '%</span>';
 
       card.appendChild(topRow);
@@ -1252,7 +1430,10 @@ function renderSliceStripUI() {
     const engraveTag = (slice.hasCustomImageEngraving || (slice.engraveLoops && slice.engraveLoops.length > 0))
       ? '<span class="ml-0.5 text-[9px]" title="Contiene imagen grabada">🖼️</span>'
       : '';
-    topRow.innerHTML = '<span class="font-bold ' + codeColor + ' flex items-center">' + codeLabel + capTag + hiddenTag + selfSupTag + engraveTag + '</span>';
+    const splitPartsTag = (state.splitModelEnabled && slice.splitGrid && slice.splitGrid.totalParts > 1)
+      ? '<span class="ml-0.5 px-1 py-0 rounded bg-fuchsia-500/25 text-fuchsia-300 border border-fuchsia-500/40 text-[8px] font-bold" title="Lámina dividida en ' + slice.splitGrid.totalParts + ' partes (' + slice.splitGrid.cols + '×' + slice.splitGrid.rows + ')">' + slice.splitGrid.totalParts + 'p</span>'
+      : '';
+    topRow.innerHTML = '<span class="font-bold ' + codeColor + ' flex items-center">' + codeLabel + capTag + splitPartsTag + hiddenTag + selfSupTag + engraveTag + '</span>';
 
     const chk = document.createElement('input');
     chk.type = 'checkbox';

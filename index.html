@@ -38,17 +38,17 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
 
   <!-- Hoja de estilos principal -->
-  <link rel="stylesheet" href="css/styles.css?v=3.0.15" />
+  <link rel="stylesheet" href="css/styles.css?v=3.0.17" />
 
   <!-- Módulos de la aplicación (cargados en orden de dependencia con defer y cache-busting) -->
-  <script src="js/state.js?v=3.0.15" defer></script>
-  <script src="js/viewer3d.js?v=3.0.15" defer></script>
-  <script src="js/slicer.js?v=3.0.15" defer></script>
-  <script src="js/nesting.js?v=3.0.15" defer></script>
-  <script src="js/modals-guide.js?v=3.0.15" defer></script>
-  <script src="js/viewer2d.js?v=3.0.15" defer></script>
-  <script src="js/exporters.js?v=3.0.15" defer></script>
-  <script src="js/vectorizer2d.js?v=3.0.15" defer></script>
+  <script src="js/state.js?v=3.0.17" defer></script>
+  <script src="js/viewer3d.js?v=3.0.17" defer></script>
+  <script src="js/slicer.js?v=3.0.17" defer></script>
+  <script src="js/nesting.js?v=3.0.17" defer></script>
+  <script src="js/modals-guide.js?v=3.0.17" defer></script>
+  <script src="js/viewer2d.js?v=3.0.17" defer></script>
+  <script src="js/exporters.js?v=3.0.17" defer></script>
+  <script src="js/vectorizer2d.js?v=3.0.17" defer></script>
 </head>
 <body class="h-screen w-screen flex flex-col">
 
@@ -182,7 +182,7 @@
         <div class="pt-2 border-t border-slate-700/60 space-y-1.5">
           <div class="flex items-center gap-1.5">
             <span class="text-[11px] text-slate-400 shrink-0">Lado máx.:</span>
-            <input type="text" id="quickSizeInput" value="120mm" onkeydown="if(event.key==='Enter') applyQuickSizeInput()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white focus:border-sky-500 outline-none" title="Ej: 150mm, 45cm, 1.5m" />
+            <input type="text" id="quickSizeInput" value="120mm" onkeydown="if(event.key==='Enter') applyQuickSizeInput()" onchange="applyQuickSizeInput()" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white focus:border-sky-500 outline-none" title="Ej: 150mm, 45cm, 1.5m" />
             <button onclick="applyQuickSizeInput()" class="px-2.5 py-1 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-xs font-semibold shrink-0">Escalar</button>
           </div>
           <div class="flex gap-1">

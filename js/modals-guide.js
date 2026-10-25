@@ -1728,8 +1728,8 @@ function generateIllustratedAssemblyGuideHTML() {
         : ('1 micro-unión de ' + state.tabWidthMM.toFixed(1) + ' mm cada ' + state.tabSpacingMM.toFixed(0) + ' mm'))
     : 'Corte continuo';
 
-  const splitGridMeta = (state.splitModelEnabled && typeof getSliceSplitGrid === 'function')
-    ? getSliceSplitGrid(state.axis, 0)
+  const splitGridMeta = state.splitModelEnabled
+    ? (typeof getPrimarySplitGrid === 'function' ? getPrimarySplitGrid() : (typeof getSliceSplitGrid === 'function' ? getSliceSplitGrid(state.axis, 0) : null))
     : null;
   const splitSummaryHtml = (splitGridMeta && splitGridMeta.totalParts > 1)
     ? (' · Gran Formato: ' + splitGridMeta.cols + '×' + splitGridMeta.rows + ' (' + splitGridMeta.totalParts + ' bloques)')
@@ -2012,8 +2012,8 @@ function generateFullAssemblyGuideText() {
   const isPuzzle = state.constructionMode === 'puzzle3d';
   const plan = buildAssemblyAndCuttingPlan();
   const axisName = state.axis.toUpperCase();
-  const splitGridTxt = (state.splitModelEnabled && typeof getSliceSplitGrid === 'function')
-    ? getSliceSplitGrid(state.axis, 0)
+  const splitGridTxt = state.splitModelEnabled
+    ? (typeof getPrimarySplitGrid === 'function' ? getPrimarySplitGrid() : (typeof getSliceSplitGrid === 'function' ? getSliceSplitGrid(state.axis, 0) : null))
     : null;
   const splitTxtLine = (splitGridTxt && splitGridTxt.totalParts > 1)
     ? ('Subdivisión Modular Gran Formato: ACTIVA (' + splitGridTxt.cols + 'x' + splitGridTxt.rows + ' = ' + splitGridTxt.totalParts + ' conjuntos modulares de ' + splitGridTxt.partW.toFixed(1) + 'x' + splitGridTxt.partH.toFixed(1) + ' mm | Unión: ' + state.splitJointType + ')')
