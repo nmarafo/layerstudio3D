@@ -1789,6 +1789,35 @@ function compactBaseVerticesForLasca(baseVertices, maxTriangles = 36000) {
   return out;
 }
 
+function serializeSliceImageEngravingsForLasca(engravingsMap) {
+  if (!engravingsMap || typeof engravingsMap !== 'object') return {};
+  const out = {};
+  Object.keys(engravingsMap).forEach((k) => {
+    const entry = engravingsMap[k];
+    if (!entry || typeof entry !== 'object' || !entry.enabled) return;
+    out[k] = {
+      enabled: Boolean(entry.enabled),
+      imageName: entry.imageName || 'Ilustracion_Lasca',
+      presetName: entry.presetName || null,
+      aspectRatio: Number(entry.aspectRatio) || 1.0,
+      scalePct: Number(entry.scalePct) || 75,
+      offsetXMM: Number(entry.offsetXMM) || 0,
+      offsetYMM: Number(entry.offsetYMM) || 0,
+      rotationDeg: Number(entry.rotationDeg) || 0,
+      flipX: Boolean(entry.flipX),
+      flipY: Boolean(entry.flipY),
+      detectMode: entry.detectMode || 'smart_drawing',
+      engraveStyle: entry.engraveStyle || 'vector_fill',
+      threshold: Number(entry.threshold) || 145,
+      invert: Boolean(entry.invert),
+      clipToSlice: entry.clipToSlice !== false,
+      marginMM: Number(entry.marginMM) ?? 0.5,
+      customNormalizedLoops: Array.isArray(entry.customNormalizedLoops) ? entry.customNormalizedLoops : null
+    };
+  });
+  return out;
+}
+
 function exportProjectFile() {
   const payload = {
     okfVersion: '1.3.0',
@@ -1824,6 +1853,7 @@ function exportProjectFile() {
     puzzleHideSeriesB: state.puzzleHideSeriesB,
     puzzleHideSeriesC: Boolean(state.puzzleHideSeriesC),
     puzzleHiddenRibs: state.puzzleHiddenRibs,
+    sliceImageEngravings: serializeSliceImageEngravingsForLasca(state.sliceImageEngravings),
     splitModelEnabled: state.splitModelEnabled,
     splitMode: state.splitMode,
     splitMaxPartWidthMM: state.splitMaxPartWidthMM,
@@ -2181,6 +2211,12 @@ function applyOkfProjectConfig(data) {
     });
   } else if (data.sliceImageEngravings && typeof reapplyAllSliceImageEngravings === 'function') {
     reapplyAllSliceImageEngravings();
+    if (typeof build3DSlicesMesh === 'function' && state.baseVertices) build3DSlicesMesh();
+    if (state.nestingEnabled && typeof recomputeBoardNesting === 'function') recomputeBoardNesting();
+    if (typeof renderSliceStripUI === 'function') renderSliceStripUI();
+    if (typeof update2DInspectorHeader === 'function') update2DInspectorHeader();
+    if (typeof render2DSlice === 'function') render2DSlice();
+    if (typeof syncSliceImageEngraveUI === 'function') syncSliceImageEngraveUI();
   }
 
   if (Array.isArray(data.selectedIndices)) {

@@ -31,11 +31,11 @@
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
 
   <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
 
   <!-- Hoja de estilos principal -->
   <style>
@@ -106,6 +106,8 @@ input[type="range"] {
 }
 
 </style>
+
+  <!-- Módulos de la aplicación (cargados en orden de dependencia con defer y cache-busting) -->
 </head>
 <body class="h-screen w-screen flex flex-col">
 
@@ -2380,7 +2382,6 @@ input[type="range"] {
   </div>
 
 <script>
-/* === state.js === */
 /**
  * LayerStudio 3D - Global State & 3D Scene References
  * Estado reactivo centralizado de la aplicación y referencias de escena Three.js.
@@ -2561,8 +2562,6 @@ let scene, camera, renderer, controls, raycaster, mouse;
 let sliceGroup3D, ghostMesh3D, gridHelper3D;
 
 
-
-/* === viewer3d.js === */
 /**
  * LayerStudio 3D - 3D Viewport, Loaders & Dynamic Sizing
  * Motor 3D Three.js, importación STL/GLB/GLTF, modelos paramétricos y dimensionamiento mm/cm/m.
@@ -2971,8 +2970,6 @@ if (typeof window !== 'undefined') {
   window.rotateBaseModel90 = rotateBaseModel90;
 }
 
-
-/* === slicer.js === */
 /**
  * LayerStudio 3D - Geometric Slicing Engine & Layer Guides
  * Intersección plano-malla X/Y/Z, filtro de islas pequeñas, extrusión 3D y guías de pegado (#N+1 / #N-1).
@@ -8265,8 +8262,6 @@ if (typeof window !== 'undefined') {
 
 
 
-
-/* === nesting.js === */
 /**
  * LayerStudio 3D - 2D Board Nesting Engine (MaxRects)
  * Empaquetado automático multi-tablero, aprovechamiento de huecos y encaje geométrico de texto por isla.
@@ -10199,8 +10194,6 @@ if (typeof window !== 'undefined') {
   window.selectActiveCarrier = selectActiveCarrier;
 }
 
-
-/* === modals-guide.js === */
 /**
  * LayerStudio 3D - Board Inspector & Vector-Illustrated Step-by-Step Assembly Guide
  * Modales de detalle de láminas por tablero y guía interactiva ilustrada algorítmicamente
@@ -12375,8 +12368,6 @@ if (typeof window !== 'undefined') {
 }
 
 
-
-/* === viewer2d.js === */
 /**
  * LayerStudio 3D - 2D Interactive Canvas Inspector & Slice Strip
  * Visor 2D con zoom/pan, selección interactiva de islas, reproductor de capas y galería inferior.
@@ -13724,8 +13715,6 @@ function updateSelectedCountBadge() {
   document.getElementById('selectedCountBadge').textContent = sel + ' / ' + state.slices.length;
 }
 
-
-/* === exporters.js === */
 /**
  * LayerStudio 3D - CAD/CAM Exporters (SVG, DXF, STL, ZIP, LASCA)
  * Generadores vectoriales 1:1 en mm (SVG/DXF), mallas 3D por capa (STL), paquete ZIP y proyectos .lasca.
@@ -15517,6 +15506,35 @@ function compactBaseVerticesForLasca(baseVertices, maxTriangles = 36000) {
   return out;
 }
 
+function serializeSliceImageEngravingsForLasca(engravingsMap) {
+  if (!engravingsMap || typeof engravingsMap !== 'object') return {};
+  const out = {};
+  Object.keys(engravingsMap).forEach((k) => {
+    const entry = engravingsMap[k];
+    if (!entry || typeof entry !== 'object' || !entry.enabled) return;
+    out[k] = {
+      enabled: Boolean(entry.enabled),
+      imageName: entry.imageName || 'Ilustracion_Lasca',
+      presetName: entry.presetName || null,
+      aspectRatio: Number(entry.aspectRatio) || 1.0,
+      scalePct: Number(entry.scalePct) || 75,
+      offsetXMM: Number(entry.offsetXMM) || 0,
+      offsetYMM: Number(entry.offsetYMM) || 0,
+      rotationDeg: Number(entry.rotationDeg) || 0,
+      flipX: Boolean(entry.flipX),
+      flipY: Boolean(entry.flipY),
+      detectMode: entry.detectMode || 'smart_drawing',
+      engraveStyle: entry.engraveStyle || 'vector_fill',
+      threshold: Number(entry.threshold) || 145,
+      invert: Boolean(entry.invert),
+      clipToSlice: entry.clipToSlice !== false,
+      marginMM: Number(entry.marginMM) ?? 0.5,
+      customNormalizedLoops: Array.isArray(entry.customNormalizedLoops) ? entry.customNormalizedLoops : null
+    };
+  });
+  return out;
+}
+
 function exportProjectFile() {
   const payload = {
     okfVersion: '1.3.0',
@@ -15552,6 +15570,7 @@ function exportProjectFile() {
     puzzleHideSeriesB: state.puzzleHideSeriesB,
     puzzleHideSeriesC: Boolean(state.puzzleHideSeriesC),
     puzzleHiddenRibs: state.puzzleHiddenRibs,
+    sliceImageEngravings: serializeSliceImageEngravingsForLasca(state.sliceImageEngravings),
     splitModelEnabled: state.splitModelEnabled,
     splitMode: state.splitMode,
     splitMaxPartWidthMM: state.splitMaxPartWidthMM,
@@ -15909,6 +15928,12 @@ function applyOkfProjectConfig(data) {
     });
   } else if (data.sliceImageEngravings && typeof reapplyAllSliceImageEngravings === 'function') {
     reapplyAllSliceImageEngravings();
+    if (typeof build3DSlicesMesh === 'function' && state.baseVertices) build3DSlicesMesh();
+    if (state.nestingEnabled && typeof recomputeBoardNesting === 'function') recomputeBoardNesting();
+    if (typeof renderSliceStripUI === 'function') renderSliceStripUI();
+    if (typeof update2DInspectorHeader === 'function') update2DInspectorHeader();
+    if (typeof render2DSlice === 'function') render2DSlice();
+    if (typeof syncSliceImageEngraveUI === 'function') syncSliceImageEngraveUI();
   }
 
   if (Array.isArray(data.selectedIndices)) {
@@ -16349,8 +16374,6 @@ function importProjectFile(file) {
   reader.readAsText(file);
 }
 
-
-/* === vectorizer2d.js === */
 /**
  * LayerStudio 3D — Vectorizador Automático 2D (PNG / BMP / JPG / WEBP -> SVG / DXF de Corte y Grabado Láser + Relieve 3D)
  * Copyright (C) 2026 Norberto Martín Afonso <normaafo@gmail.com>
@@ -20763,7 +20786,7 @@ function applyDemoImageEngravingToSelectedSlice(presetName = 'drawing') {
   cfg.imageName = namesMap[presetName] || 'Ilustracion_Demo';
   cfg.sourceCanvas = demoCanvas;
   cfg.aspectRatio = (demoCanvas.width || 480) / Math.max(1, demoCanvas.height || 480);
-  cfg.customNormalizedLoops = null;
+  if (cfg.sourceCanvas) cfg.customNormalizedLoops = null;
   state.sliceEngravePanelOpen = true;
 
   refreshActiveSliceEngravingAndRender();
@@ -20802,7 +20825,7 @@ function handleSliceImageEngraveFile(file) {
       cfg.sourceCanvas = c;
       cfg.aspectRatio = w / Math.max(1, h);
       cfg.threshold = computeOtsuThresholdFromCanvas(c);
-      cfg.customNormalizedLoops = null;
+      if (cfg.sourceCanvas) cfg.customNormalizedLoops = null;
       state.sliceEngravePanelOpen = true;
 
       refreshActiveSliceEngravingAndRender();
@@ -20837,18 +20860,18 @@ function onSelectedSliceEngraveParamsChange() {
 
   if (modeEl && modeEl.value !== cfg.detectMode) {
     cfg.detectMode = modeEl.value;
-    cfg.customNormalizedLoops = null;
+    if (cfg.sourceCanvas) cfg.customNormalizedLoops = null;
   }
   if (thrEl) {
     const newThr = Math.max(15, Math.min(245, parseInt(thrEl.value, 10) || 145));
     if (newThr !== cfg.threshold) {
       cfg.threshold = newThr;
-      cfg.customNormalizedLoops = null;
+      if (cfg.sourceCanvas) cfg.customNormalizedLoops = null;
     }
   }
   if (invEl && Boolean(invEl.checked) !== cfg.invert) {
     cfg.invert = Boolean(invEl.checked);
-    cfg.customNormalizedLoops = null;
+    if (cfg.sourceCanvas) cfg.customNormalizedLoops = null;
   }
   if (clipEl) cfg.clipToSlice = Boolean(clipEl.checked);
 
@@ -20979,7 +21002,7 @@ function applyVectorizedImageToSelectedSlice() {
       isHole: Boolean(l.isHole)
     }));
   } else {
-    cfg.customNormalizedLoops = null;
+    if (cfg.sourceCanvas) cfg.customNormalizedLoops = null;
   }
 
   state.sliceEngravePanelOpen = true;
@@ -21168,10 +21191,10 @@ function setSliceImageEngravingParams(key, val) {
   else if (key === 'offsetXMM') cfg.offsetXMM = Number(val) || 0;
   else if (key === 'offsetYMM') cfg.offsetYMM = Number(val) || 0;
   else if (key === 'rotationDeg') cfg.rotationDeg = Number(val) || 0;
-  else if (key === 'threshold') { cfg.threshold = Math.max(15, Math.min(245, Number(val) || 145)); cfg.customNormalizedLoops = null; }
-  else if (key === 'detectMode' || key === 'mode') { cfg.detectMode = String(val || 'smart_drawing'); cfg.customNormalizedLoops = null; }
+  else if (key === 'threshold') { cfg.threshold = Math.max(15, Math.min(245, Number(val) || 145)); if (cfg.sourceCanvas) cfg.customNormalizedLoops = null; }
+  else if (key === 'detectMode' || key === 'mode') { cfg.detectMode = String(val || 'smart_drawing'); if (cfg.sourceCanvas) cfg.customNormalizedLoops = null; }
   else if (key === 'engraveStyle') cfg.engraveStyle = String(val || 'vector_fill');
-  else if (key === 'invert') { cfg.invert = Boolean(val); cfg.customNormalizedLoops = null; }
+  else if (key === 'invert') { cfg.invert = Boolean(val); if (cfg.sourceCanvas) cfg.customNormalizedLoops = null; }
   else if (key === 'flipX') cfg.flipX = Boolean(val);
   else if (key === 'clipToSlice') cfg.clipToSlice = Boolean(val);
   refreshActiveSliceEngravingAndRender();

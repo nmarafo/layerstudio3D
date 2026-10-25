@@ -4410,7 +4410,7 @@ function applyDemoImageEngravingToSelectedSlice(presetName = 'drawing') {
   cfg.imageName = namesMap[presetName] || 'Ilustracion_Demo';
   cfg.sourceCanvas = demoCanvas;
   cfg.aspectRatio = (demoCanvas.width || 480) / Math.max(1, demoCanvas.height || 480);
-  cfg.customNormalizedLoops = null;
+  if (cfg.sourceCanvas) cfg.customNormalizedLoops = null;
   state.sliceEngravePanelOpen = true;
 
   refreshActiveSliceEngravingAndRender();
@@ -4449,7 +4449,7 @@ function handleSliceImageEngraveFile(file) {
       cfg.sourceCanvas = c;
       cfg.aspectRatio = w / Math.max(1, h);
       cfg.threshold = computeOtsuThresholdFromCanvas(c);
-      cfg.customNormalizedLoops = null;
+      if (cfg.sourceCanvas) cfg.customNormalizedLoops = null;
       state.sliceEngravePanelOpen = true;
 
       refreshActiveSliceEngravingAndRender();
@@ -4484,18 +4484,18 @@ function onSelectedSliceEngraveParamsChange() {
 
   if (modeEl && modeEl.value !== cfg.detectMode) {
     cfg.detectMode = modeEl.value;
-    cfg.customNormalizedLoops = null;
+    if (cfg.sourceCanvas) cfg.customNormalizedLoops = null;
   }
   if (thrEl) {
     const newThr = Math.max(15, Math.min(245, parseInt(thrEl.value, 10) || 145));
     if (newThr !== cfg.threshold) {
       cfg.threshold = newThr;
-      cfg.customNormalizedLoops = null;
+      if (cfg.sourceCanvas) cfg.customNormalizedLoops = null;
     }
   }
   if (invEl && Boolean(invEl.checked) !== cfg.invert) {
     cfg.invert = Boolean(invEl.checked);
-    cfg.customNormalizedLoops = null;
+    if (cfg.sourceCanvas) cfg.customNormalizedLoops = null;
   }
   if (clipEl) cfg.clipToSlice = Boolean(clipEl.checked);
 
@@ -4626,7 +4626,7 @@ function applyVectorizedImageToSelectedSlice() {
       isHole: Boolean(l.isHole)
     }));
   } else {
-    cfg.customNormalizedLoops = null;
+    if (cfg.sourceCanvas) cfg.customNormalizedLoops = null;
   }
 
   state.sliceEngravePanelOpen = true;
@@ -4815,10 +4815,10 @@ function setSliceImageEngravingParams(key, val) {
   else if (key === 'offsetXMM') cfg.offsetXMM = Number(val) || 0;
   else if (key === 'offsetYMM') cfg.offsetYMM = Number(val) || 0;
   else if (key === 'rotationDeg') cfg.rotationDeg = Number(val) || 0;
-  else if (key === 'threshold') { cfg.threshold = Math.max(15, Math.min(245, Number(val) || 145)); cfg.customNormalizedLoops = null; }
-  else if (key === 'detectMode' || key === 'mode') { cfg.detectMode = String(val || 'smart_drawing'); cfg.customNormalizedLoops = null; }
+  else if (key === 'threshold') { cfg.threshold = Math.max(15, Math.min(245, Number(val) || 145)); if (cfg.sourceCanvas) cfg.customNormalizedLoops = null; }
+  else if (key === 'detectMode' || key === 'mode') { cfg.detectMode = String(val || 'smart_drawing'); if (cfg.sourceCanvas) cfg.customNormalizedLoops = null; }
   else if (key === 'engraveStyle') cfg.engraveStyle = String(val || 'vector_fill');
-  else if (key === 'invert') { cfg.invert = Boolean(val); cfg.customNormalizedLoops = null; }
+  else if (key === 'invert') { cfg.invert = Boolean(val); if (cfg.sourceCanvas) cfg.customNormalizedLoops = null; }
   else if (key === 'flipX') cfg.flipX = Boolean(val);
   else if (key === 'clipToSlice') cfg.clipToSlice = Boolean(val);
   refreshActiveSliceEngravingAndRender();
