@@ -87,10 +87,11 @@ function onViewportClick(e) {
   mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
   raycaster.setFromCamera(mouse, camera);
   const intersects = raycaster.intersectObjects(sliceGroup3D.children, false);
-  if (intersects.length > 0) {
-    const hit = intersects[0].object;
+  const visibleHit = intersects.find((it) => it.object && it.object.visible);
+  if (visibleHit) {
+    const hit = visibleHit.object;
     if (typeof hit.userData.sliceIndex === 'number') {
-      selectActiveSlice(hit.userData.sliceIndex);
+      selectActiveSlice(hit.userData.sliceIndex, hit.userData.sectorCode || null);
     }
   }
 }

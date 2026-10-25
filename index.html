@@ -38,17 +38,17 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
 
   <!-- Hoja de estilos principal -->
-  <link rel="stylesheet" href="css/styles.css?v=3.0.17" />
+  <link rel="stylesheet" href="css/styles.css?v=3.0.18" />
 
   <!-- Módulos de la aplicación (cargados en orden de dependencia con defer y cache-busting) -->
-  <script src="js/state.js?v=3.0.17" defer></script>
-  <script src="js/viewer3d.js?v=3.0.17" defer></script>
-  <script src="js/slicer.js?v=3.0.17" defer></script>
-  <script src="js/nesting.js?v=3.0.17" defer></script>
-  <script src="js/modals-guide.js?v=3.0.17" defer></script>
-  <script src="js/viewer2d.js?v=3.0.17" defer></script>
-  <script src="js/exporters.js?v=3.0.17" defer></script>
-  <script src="js/vectorizer2d.js?v=3.0.17" defer></script>
+  <script src="js/state.js?v=3.0.18" defer></script>
+  <script src="js/viewer3d.js?v=3.0.18" defer></script>
+  <script src="js/slicer.js?v=3.0.18" defer></script>
+  <script src="js/nesting.js?v=3.0.18" defer></script>
+  <script src="js/modals-guide.js?v=3.0.18" defer></script>
+  <script src="js/viewer2d.js?v=3.0.18" defer></script>
+  <script src="js/exporters.js?v=3.0.18" defer></script>
+  <script src="js/vectorizer2d.js?v=3.0.18" defer></script>
 </head>
 <body class="h-screen w-screen flex flex-col">
 
@@ -1217,6 +1217,7 @@
             </div>
             <button onclick="resetCamera3D()" class="px-2.5 py-1 rounded-lg bg-slate-900/85 hover:bg-slate-800 border border-slate-700 text-[11px] text-slate-300">🎯 Centrar Cámara</button>
           </div>
+          <div id="viewer3DPieceBoardBadge" class="hidden absolute bottom-3 left-3 right-3 z-10 flex flex-wrap items-center justify-between gap-2 bg-slate-900/92 backdrop-blur border border-emerald-500/45 px-3 py-1.5 rounded-lg shadow-lg text-[11px] text-slate-200"></div>
           <div id="viewer3D" class="flex-1 w-full h-full cursor-grab active:cursor-grabbing"></div>
         </div>
 
@@ -1227,6 +1228,7 @@
               <div class="flex items-center gap-2 flex-wrap">
                 <span id="slice2DTitle" class="text-xs font-bold text-white">Lasca #1 / 24</span>
                 <span id="slice2DCoord" class="text-[11px] px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/30 font-mono">Z = 0.00 mm</span>
+                <button type="button" id="slice2DSelectedBoardBadge" onclick="jumpToActiveSliceBoard()" class="hidden text-[11px] px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/35 text-emerald-300 border border-emerald-500/40 font-semibold transition cursor-pointer" title="Clic para abrir el tablero donde se aloja esta pieza">🧩 Tablero #1</button>
                 <div id="inspectorPuzzleRibMoveBox" class="hidden items-center gap-1 bg-slate-800/90 border border-emerald-500/35 rounded-lg px-1.5 py-0.5">
                   <span class="text-[9px] text-emerald-300 font-semibold">Mover:</span>
                   <button type="button" onclick="stepSelectedPuzzleRib(-1)" class="w-4 h-4 flex items-center justify-center rounded bg-slate-900 hover:bg-slate-700 border border-slate-700 text-emerald-300 font-bold text-[10px] leading-none" title="Mover esta costilla -1 mm en su eje">−</button>

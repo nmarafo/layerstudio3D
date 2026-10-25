@@ -484,7 +484,19 @@ function syncPuzzleSelectedRibUI() {
 
   const isCapSelected = Boolean(info.slice && info.slice.isPuzzleSolidCap);
   if (titleEl) {
-    titleEl.textContent = '🎯 Costilla ' + info.ribCode + (isCapSelected ? ' + Tapa' : '') + ' (Eje ' + info.axis.toUpperCase() + ')';
+    let boardSuffix = '';
+    if (typeof getSliceBoardPlacementsInfo === 'function' && info.slice) {
+      const bInfo = getSliceBoardPlacementsInfo(info.slice.index, state.activeSectorCode || null);
+      if (bInfo && bInfo.boardNumbers && bInfo.boardNumbers.length > 0) {
+        boardSuffix = bInfo.boardNumbers.length === 1
+          ? (' · 🧩 Tablero #' + bInfo.boardNumbers[0])
+          : (' · 🧩 Tableros #' + bInfo.boardNumbers.join(', #'));
+      }
+    }
+    titleEl.textContent = '🎯 Costilla ' + info.ribCode + (isCapSelected ? ' + Tapa' : '') + ' (Eje ' + info.axis.toUpperCase() + ')' + boardSuffix;
+  }
+  if (typeof updatePieceBoardLocationUI === 'function') {
+    updatePieceBoardLocationUI();
   }
   if (deltaEl) {
     const sign = info.ribOffset >= 0 ? '+' : '';
@@ -3342,8 +3354,10 @@ function applyModelSplitToExistingSlices(triggerRender = true) {
 
   if (triggerRender) {
     build3DSlicesMesh();
-    if (state.nestingEnabled) {
+    if (typeof recomputeBoardNesting === 'function') {
       recomputeBoardNesting();
+    }
+    if (state.nestingEnabled) {
       // Si el tablero activo no contiene la lámina activa dividida, saltar al tablero donde está su primera parte (A1)
       if (state.splitModelEnabled && state.nestedBoards && state.nestedBoards.length > 0) {
         const curBoard = state.nestedBoards[state.activeBoardIndex];
@@ -3558,9 +3572,10 @@ function rebuildGhostAndSlices() {
   }
 
   build3DSlicesMesh();
-  if (state.nestingEnabled) {
+  if (typeof recomputeBoardNesting === 'function') {
     recomputeBoardNesting();
-  } else {
+  }
+  if (!state.nestingEnabled) {
     document.getElementById('currentSliceSlider').max = Math.max(0, state.slices.length - 1);
     document.getElementById('currentSliceSlider').value = state.activeSliceIndex;
   }
@@ -4492,9 +4507,15 @@ function update3DSlicesTransforms() {
     if (isActive) {
       const isMultiPart = state.splitModelEnabled && ((mesh.userData.gridCols || 1) > 1 || (mesh.userData.gridRows || 1) > 1);
       if (isMultiPart) {
+        const isClickedSector = state.activeSectorCode && mesh.userData.sectorCode === state.activeSectorCode;
         const parity = ((mesh.userData.sectorCol || 0) + (mesh.userData.sectorRow || 0)) % 2;
-        mesh.material.color.setHex(parity === 0 ? 0xf43f5e : 0xe879f9);
-        mesh.material.emissive.setHex(parity === 0 ? 0x4c0519 : 0x4a044e);
+        if (isClickedSector) {
+          mesh.material.color.setHex(0xfbbf24);
+          mesh.material.emissive.setHex(0x78350f);
+        } else {
+          mesh.material.color.setHex(parity === 0 ? 0xf43f5e : 0xe879f9);
+          mesh.material.emissive.setHex(parity === 0 ? 0x4c0519 : 0x4a044e);
+        }
       } else {
         mesh.material.color.setHex(0xf43f5e);
         mesh.material.emissive.setHex(0x4c0519);

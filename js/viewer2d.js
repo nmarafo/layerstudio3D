@@ -121,6 +121,7 @@ function setupCanvas2DInteraction() {
 
       let hitSliceIdx = -1;
       let hitBoardIdx = -1;
+      let hitSectorCode = null;
       let minArea = Infinity;
       carrier.boardPlacements.forEach((bPl) => {
         bPl.transformedPlacements.forEach((pl) => {
@@ -129,6 +130,7 @@ function setupCanvas2DInteraction() {
               minArea = pl.island.outerArea;
               hitSliceIdx = pl.island.sliceIndex;
               hitBoardIdx = bPl.boardIndex;
+              hitSectorCode = pl.island.sectorCode || null;
             }
           }
         });
@@ -136,7 +138,9 @@ function setupCanvas2DInteraction() {
 
       if (hitSliceIdx !== -1) {
         state.activeSliceIndex = hitSliceIdx;
+        state.activeSectorCode = hitSectorCode;
         if (hitBoardIdx !== -1) state.activeBoardIndex = hitBoardIdx;
+        update2DInspectorHeader();
         update3DSlicesTransforms();
         highlightActiveCardInStrip();
         render2DSlice();
@@ -152,6 +156,19 @@ function setupCanvas2DInteraction() {
       const px = e.clientX - rect.left;
       const py = e.clientY - rect.top;
 
+      // Comprobar primero si se pulsó una parte (A1, A2, A3...) dentro del recuadro del Mapa de Lámina Dividida
+      if (Array.isArray(state._lastSplitInsetHitBoxes) && state._lastSplitInsetHitBoxes.length > 0) {
+        for (let i = 0; i < state._lastSplitInsetHitBoxes.length; i++) {
+          const hb = state._lastSplitInsetHitBoxes[i];
+          if (px >= hb.x && px <= hb.x + hb.w && py >= hb.y && py <= hb.y + hb.h) {
+            if (typeof jumpToSliceBoard === 'function') {
+              jumpToSliceBoard(hb.sliceIndex, hb.sectorCode, hb.boardIndex);
+            }
+            return;
+          }
+        }
+      }
+
       const pad = 36;
       const baseScale = Math.min((canvas.width - pad * 2) / board.width, (canvas.height - pad * 2) / board.height);
       const scale = baseScale * state.view2D.zoom;
@@ -163,21 +180,82 @@ function setupCanvas2DInteraction() {
 
       // Buscar la isla más pequeña que contenga el punto clicado
       let hitSliceIdx = -1;
+      let hitSectorCode = null;
       let minArea = Infinity;
       board.placements.forEach((pl) => {
         if (isPointInIslandMaterial({ x: boardX, y: boardY }, pl.outerPoints, pl.holes)) {
           if (pl.island.outerArea < minArea) {
             minArea = pl.island.outerArea;
             hitSliceIdx = pl.island.sliceIndex;
+            hitSectorCode = pl.island.sectorCode || null;
           }
         }
       });
 
       if (hitSliceIdx !== -1) {
         state.activeSliceIndex = hitSliceIdx;
+        state.activeSectorCode = hitSectorCode;
+        update2DInspectorHeader();
         update3DSlicesTransforms();
         highlightActiveCardInStrip();
         render2DSlice();
+      }
+      return;
+    }
+
+    // En vista de lasca individual (Tablero: OFF): permitir clic sobre el banner de tablero o sobre una parte dividida (A1, A2...)
+    if (!state.view2D.hasMoved && !state.nestingEnabled && state.slices && state.slices.length > 0) {
+      const rect = canvas.getBoundingClientRect();
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+
+      if (state._lastSliceBoardBannerRect) {
+        const br = state._lastSliceBoardBannerRect;
+        if (px >= br.x && px <= br.x + br.w && py >= br.y && py <= br.y + br.h) {
+          if (typeof jumpToSliceBoard === 'function') {
+            jumpToSliceBoard(state.activeSliceIndex, state.activeSectorCode || null);
+          }
+          return;
+        }
+      }
+
+      const slice = state.slices[state.activeSliceIndex];
+      if (!slice || !slice.loops || slice.loops.length === 0) return;
+      const docB = getModelBounds2D();
+      const pad = 42;
+      const baseScale = Math.min((canvas.width - pad * 2) / docB.width, (canvas.height - pad * 2) / docB.height);
+      const scale = baseScale * state.view2D.zoom;
+      const centerX = canvas.width / 2 + state.view2D.panX;
+      const centerY = canvas.height / 2 + state.view2D.panY;
+      const worldX = (px - centerX) / scale + docB.cx;
+      const worldY = (centerY - py) / scale + docB.cy;
+
+      let clickedSec = null;
+      for (let i = 0; i < slice.loops.length; i++) {
+        const l = slice.loops[i];
+        if (!l.isHole && l.points && l.points.length >= 3 && isPointInPolygon({ x: worldX, y: worldY }, l.points)) {
+          clickedSec = l.sectorCode || 'A1';
+          break;
+        }
+      }
+      if (!clickedSec && state.splitModelEnabled && slice.splitGrid && slice.splitGrid.totalParts > 1) {
+        const g = slice.splitGrid;
+        if (worldX >= g.minX && worldX <= g.maxX && worldY >= g.minY && worldY <= g.maxY) {
+          let colIdx = 0;
+          for (let c = 0; c < g.xCuts.length; c++) {
+            if (worldX > g.xCuts[c]) colIdx = c + 1;
+          }
+          let rowIdx = 0;
+          for (let r = 0; r < g.yCuts.length; r++) {
+            if (worldY > g.yCuts[r]) rowIdx = r + 1;
+          }
+          const displayRow = (g.rows - 1) - rowIdx;
+          const rowLetter = String.fromCharCode(65 + Math.max(0, Math.min(25, displayRow)));
+          clickedSec = rowLetter + (colIdx + 1);
+        }
+      }
+      if (clickedSec) {
+        selectActiveSlice(state.activeSliceIndex, clickedSec);
       }
     }
   };
@@ -282,13 +360,18 @@ function getAlignmentHoles2D(slice) {
   ];
 }
 
-function selectActiveSlice(idx) {
+function selectActiveSlice(idx, preferredSectorCode = null) {
   if (state.slices.length === 0) return;
   state.activeSliceIndex = Math.max(0, Math.min(state.slices.length - 1, idx));
+  state.activeSectorCode = preferredSectorCode || null;
+
   if (state.carrierEnabled && state.nestedCarriers.length > 0) {
     const foundCarrierIdx = state.nestedCarriers.findIndex((c) =>
       c.boardPlacements.some((bPl) =>
-        bPl.transformedPlacements.some((pl) => pl.island.sliceIndex === state.activeSliceIndex)
+        bPl.transformedPlacements.some((pl) =>
+          pl.island.sliceIndex === state.activeSliceIndex &&
+          (!preferredSectorCode || pl.island.sectorCode === preferredSectorCode)
+        )
       )
     );
     if (foundCarrierIdx !== -1) {
@@ -299,10 +382,18 @@ function selectActiveSlice(idx) {
   } else if (!state.nestingEnabled) {
     document.getElementById('currentSliceSlider').value = state.activeSliceIndex;
   } else {
-    // Si estamos en vista de tablero, saltar al tablero donde se encuentra esta lasca
-    const foundBoardIdx = state.nestedBoards.findIndex((b) =>
-      b.placements.some((pl) => pl.island.sliceIndex === state.activeSliceIndex)
-    );
+    // Si estamos en vista de tablero, saltar al tablero donde se encuentra esta pieza (y su sector específico si está dividida)
+    let foundBoardIdx = -1;
+    if (preferredSectorCode) {
+      foundBoardIdx = state.nestedBoards.findIndex((b) =>
+        b.placements.some((pl) => pl.island.sliceIndex === state.activeSliceIndex && pl.island.sectorCode === preferredSectorCode)
+      );
+    }
+    if (foundBoardIdx === -1) {
+      foundBoardIdx = state.nestedBoards.findIndex((b) =>
+        b.placements.some((pl) => pl.island.sliceIndex === state.activeSliceIndex)
+      );
+    }
     if (foundBoardIdx !== -1) {
       state.activeBoardIndex = foundBoardIdx;
       document.getElementById('currentSliceSlider').value = state.activeBoardIndex;
@@ -312,6 +403,9 @@ function selectActiveSlice(idx) {
   update2DInspectorHeader();
   if (state.splitModelEnabled && typeof syncSplitModelUI === 'function') {
     syncSplitModelUI();
+  }
+  if (typeof updatePieceBoardLocationUI === 'function') {
+    updatePieceBoardLocationUI();
   }
   update3DSlicesTransforms();
   render2DSlice();
@@ -609,14 +703,19 @@ function render2DBoard(ctx, canvas) {
 
   // Si el modo Gran Formato está activo y este tablero aloja una parte de una lámina dividida (ej. 72 cm en 3 partes A1..A3),
   // dibujar un mini-mapa de ensamblaje de la lámina completa en la esquina superior derecha para visualizar todas sus partes
+  state._lastSplitInsetHitBoxes = [];
   if (state.splitModelEnabled) {
     drawSplitSliceOverviewInsetOnBoard(ctx, canvas, board);
+  }
+  if (typeof updatePieceBoardLocationUI === 'function') {
+    updatePieceBoardLocationUI();
   }
 }
 
 // Dibuja un recuadro flotante en la vista de Tablero mostrando la lámina completa dividida en sus partes (A1, A2, A3...)
-// y resaltando qué parte se encuentra en el tablero actual
+// y resaltando qué parte se encuentra en el tablero actual (permitiendo pulsar cada parte para saltar a su tablero)
 function drawSplitSliceOverviewInsetOnBoard(ctx, canvas, board) {
+  state._lastSplitInsetHitBoxes = [];
   if (!state.splitModelEnabled || !state.slices || state.slices.length === 0) return;
 
   // Buscar una lámina dividida presente en este tablero (priorizando la lámina activa)
@@ -723,7 +822,10 @@ function drawSplitSliceOverviewInsetOnBoard(ctx, canvas, board) {
     ctx.stroke();
   }
 
-  // Etiquetas de cada parte (A1, A2, A3...)
+  // Etiquetas de cada parte (A1, A2, A3...) con su número de Tablero (#N) y registro de zonas clicables
+  const targetBoardInfo = typeof getSliceBoardPlacementsInfo === 'function'
+    ? getSliceBoardPlacementsInfo(targetSlice.index)
+    : null;
   ctx.font = 'bold 9px monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -737,10 +839,28 @@ function drawSplitSliceOverviewInsetOnBoard(ctx, canvas, board) {
       const cellMaxX = c === g.cols - 1 ? g.maxX : g.xCuts[c];
       const secCode = rowLetter + (c + 1);
       const isHere = sectorsOnThisBoard.has(secCode);
+      const secBoards = targetBoardInfo && targetBoardInfo.sectorMap && targetBoardInfo.sectorMap.get(secCode)
+        ? Array.from(targetBoardInfo.sectorMap.get(secCode)).sort((a, b) => a - b)
+        : [];
+      const bTag = secBoards.length > 0 ? (' (T#' + (secBoards[0] + 1) + ')') : '';
       const mx = toMiniX((cellMinX + cellMaxX) * 0.5);
       const my = toMiniY((cellMinY + cellMaxY) * 0.5);
-      ctx.fillStyle = isHere ? '#ffffff' : 'rgba(240, 171, 252, 0.9)';
-      ctx.fillText(secCode, mx, my);
+      ctx.fillStyle = isHere ? '#ffffff' : 'rgba(240, 171, 252, 0.92)';
+      ctx.fillText(secCode + bTag, mx, my);
+
+      const sx1 = toMiniX(cellMinX);
+      const sx2 = toMiniX(cellMaxX);
+      const sy1 = toMiniY(cellMaxY);
+      const sy2 = toMiniY(cellMinY);
+      state._lastSplitInsetHitBoxes.push({
+        sliceIndex: targetSlice.index,
+        sectorCode: secCode,
+        boardIdx: secBoards.length > 0 ? secBoards[0] : -1,
+        minX: Math.min(sx1, sx2),
+        maxX: Math.max(sx1, sx2),
+        minY: Math.min(sy1, sy2),
+        maxY: Math.max(sy1, sy2)
+      });
     }
   }
   ctx.restore();
@@ -1042,7 +1162,10 @@ function render2DSlice() {
       ctx.stroke();
     });
 
-    // Etiquetas de sector (A1, A2, B1, B2...) en la esquina superior izquierda de cada celda
+    // Etiquetas de sector (A1, A2, B1, B2...) en la esquina superior izquierda de cada celda + Tablero donde se ubica
+    const sliceBoardInfo = typeof getSliceBoardPlacementsInfo === 'function'
+      ? getSliceBoardPlacementsInfo(slice.index)
+      : null;
     ctx.setLineDash([]);
     ctx.font = 'bold 10px monospace';
     ctx.textAlign = 'left';
@@ -1056,10 +1179,17 @@ function render2DSlice() {
       for (let c = 0; c < g.cols; c++) {
         const cellMinX = c === 0 ? g.minX : g.xCuts[c - 1];
         const secCode = rowLetter + (c + 1);
+        const secBoards = sliceBoardInfo && sliceBoardInfo.sectorMap && sliceBoardInfo.sectorMap.get(secCode)
+          ? Array.from(sliceBoardInfo.sectorMap.get(secCode)).sort((a, b) => a - b)
+          : [];
+        const boardSuffix = secBoards.length > 0
+          ? (' → 🧩 Tablero ' + secBoards.map((b) => '#' + (b + 1)).join(', '))
+          : '';
+        const isActiveSec = state.activeSectorCode === secCode;
         const sx = toScreenX(cellMinX) + 5;
         const sy = toScreenY(cellMaxY) + 4;
-        ctx.fillStyle = 'rgba(232, 121, 249, 0.78)';
-        ctx.fillText('Conjunto ' + secCode + ' (' + partWCm + '×' + partHCm + 'cm)', sx, sy);
+        ctx.fillStyle = isActiveSec ? '#fde047' : 'rgba(232, 121, 249, 0.90)';
+        ctx.fillText('Conjunto ' + secCode + ' (' + partWCm + '×' + partHCm + 'cm)' + boardSuffix, sx, sy);
       }
     }
     ctx.restore();
@@ -1281,6 +1411,54 @@ function render2DSlice() {
       drawAdaptiveIslandTextOnCanvas(ctx, isl.textLayout, toScreenX, toScreenY, scale);
     });
   }
+
+  // Etiqueta flotante interactiva en la esquina superior izquierda del lienzo 2D indicando en qué Tablero (#N) está esta pieza
+  state._lastSliceBoardBannerRect = null;
+  if (typeof getSliceBoardPlacementsInfo === 'function') {
+    const bInfo = getSliceBoardPlacementsInfo(slice.index);
+    if (bInfo && bInfo.boardIndices && bInfo.boardIndices.length > 0) {
+      const pieceName = slice.puzzleCode ? ('Pieza ' + slice.puzzleCode) : ('Lasca #' + (slice.index + 1));
+      let bannerText = '';
+      if (isSplitMulti && bInfo.sectorMap && bInfo.sectorMap.size > 1) {
+        const secEntries = Array.from(bInfo.sectorMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+        const partsStr = secEntries.map(([sec, setB]) => {
+          const bNums = Array.from(setB).sort((x, y) => x - y).map((bi) => '#' + (bi + 1)).join(',');
+          return sec + '→T' + bNums;
+        }).join(' · ');
+        bannerText = '🧩 ' + pieceName + ' en Tableros: ' + partsStr + ' (clic para abrir)';
+      } else {
+        const bList = bInfo.boardIndices.map((bi) => 'Tablero #' + (bi + 1)).join(', ');
+        bannerText = '🧩 ' + pieceName + ' ubicada en ' + bList + ' (clic para ver en tablero)';
+      }
+      ctx.save();
+      ctx.font = 'bold 10px Inter, sans-serif';
+      const textW = ctx.measureText(bannerText).width;
+      const bx = 8;
+      const by = 8;
+      const bw = Math.min(canvas.width - 16, Math.ceil(textW + 18));
+      const bh = 22;
+      ctx.fillStyle = 'rgba(6, 78, 59, 0.90)';
+      ctx.strokeStyle = 'rgba(52, 211, 153, 0.75)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(bx, by, bw, bh, 6);
+      } else {
+        ctx.rect(bx, by, bw, bh);
+      }
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#a7f3d0';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(bannerText, bx + 9, by + bh * 0.5);
+      ctx.restore();
+      state._lastSliceBoardBannerRect = { x: bx, y: by, w: bw, h: bh };
+    }
+  }
+  if (typeof updatePieceBoardLocationUI === 'function') {
+    updatePieceBoardLocationUI();
+  }
 }
 
 function stepSlice(delta) {
@@ -1460,9 +1638,22 @@ function renderSliceStripUI() {
       ? Number(offsetsMap[slice.seriesIndex])
       : 0;
     const isCustomMoved = Math.abs(customDelta) > 0.05;
-    bottomRow.className = 'text-[9px] truncate font-mono ' + (isCustomMoved ? 'text-emerald-300 font-semibold' : 'text-slate-400');
+    bottomRow.className = 'flex items-center justify-between text-[9px] truncate font-mono ' + (isCustomMoved ? 'text-emerald-300 font-semibold' : 'text-slate-400');
     const axTag = slice.puzzleCode ? ((slice.sliceAxis || '').toUpperCase() + ':') : '';
-    bottomRow.textContent = (isCustomMoved ? '↔' : '') + axTag + slice.coord.toFixed(1) + 'mm';
+    const coordStr = (isCustomMoved ? '↔' : '') + axTag + slice.coord.toFixed(0) + 'mm';
+
+    let boardBadgeHtml = '';
+    if (typeof getSliceBoardPlacementsInfo === 'function') {
+      const bInfo = getSliceBoardPlacementsInfo(idx);
+      if (bInfo && bInfo.boardIndices && bInfo.boardIndices.length > 0) {
+        const bText = bInfo.boardIndices.length === 1
+          ? ('T#' + (bInfo.boardIndices[0] + 1))
+          : ('T#' + (bInfo.boardIndices[0] + 1) + '..#' + (bInfo.boardIndices[bInfo.boardIndices.length - 1] + 1));
+        const bTitle = 'Ubicada en Tablero ' + bInfo.boardIndices.map((bi) => '#' + (bi + 1)).join(', ');
+        boardBadgeHtml = '<span class="px-1 py-0 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[8px] font-bold shrink-0" title="' + bTitle + '">' + bText + '</span>';
+      }
+    }
+    bottomRow.innerHTML = '<span class="truncate">' + coordStr + '</span>' + boardBadgeHtml;
 
     card.appendChild(topRow);
     card.appendChild(bottomRow);

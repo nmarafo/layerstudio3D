@@ -1450,9 +1450,213 @@ function update2DInspectorHeader() {
   if (typeof syncPuzzleSelectedRibUI === 'function') {
     syncPuzzleSelectedRibUI();
   }
+  if (typeof updatePieceBoardLocationUI === 'function') {
+    updatePieceBoardLocationUI();
+  }
   if (typeof syncSliceImageEngraveUI === 'function') {
     syncSliceImageEngraveUI();
   }
+}
+
+// Devuelve información detallada de en qué tablero(s) está alojada una lasca/costilla (y cada una de sus partes A1, A2...)
+function getSliceBoardPlacementsInfo(sliceIndex, preferredSectorCode = null) {
+  const sIdx = typeof sliceIndex === 'number' ? sliceIndex : state.activeSliceIndex;
+  const slice = state.slices && state.slices[sIdx];
+  if (!slice) return null;
+
+  if ((!state.nestedBoards || state.nestedBoards.length === 0) &&
+      state.unfitIslandsCount === 0 &&
+      state.slices && state.slices.some((s) => s.selected)) {
+    recomputeBoardNesting();
+  }
+
+  const boards = state.nestedBoards || [];
+  const matches = [];
+  const sectorToBoardMap = {};
+  const sectorMap = new Map();
+  const boardNumsSet = new Set();
+  const boardIndicesSet = new Set();
+
+  for (let bIdx = 0; bIdx < boards.length; bIdx++) {
+    const b = boards[bIdx];
+    if (!b || !b.placements) continue;
+    for (let pIdx = 0; pIdx < b.placements.length; pIdx++) {
+      const pl = b.placements[pIdx];
+      if (pl && pl.island && pl.island.sliceIndex === sIdx) {
+        const sec = pl.island.sectorCode || 'A1';
+        const bNum = bIdx + 1;
+        boardNumsSet.add(bNum);
+        boardIndicesSet.add(bIdx);
+        if (!sectorToBoardMap[sec]) {
+          sectorToBoardMap[sec] = bNum;
+        }
+        if (!sectorMap.has(sec)) {
+          sectorMap.set(sec, new Set());
+        }
+        sectorMap.get(sec).add(bIdx);
+        matches.push({
+          boardIndex: bIdx,
+          boardNumber: bNum,
+          sectorCode: sec,
+          rotated: Boolean(pl.rotated),
+          placement: pl
+        });
+      }
+    }
+  }
+
+  matches.sort((a, b) => a.sectorCode.localeCompare(b.sectorCode) || (a.boardIndex - b.boardIndex));
+  const boardNumbers = Array.from(boardNumsSet).sort((a, b) => a - b);
+  const boardIndices = Array.from(boardIndicesSet).sort((a, b) => a - b);
+  let primaryMatch = matches[0] || null;
+  if (preferredSectorCode) {
+    const foundSec = matches.find((m) => m.sectorCode === preferredSectorCode);
+    if (foundSec) primaryMatch = foundSec;
+  }
+
+  const pieceName = (state.constructionMode === 'puzzle3d' && slice.puzzleCode)
+    ? ((slice.isPuzzleSolidCap ? 'Tapa ' : 'Costilla ') + slice.puzzleCode)
+    : ('Lasca #' + (sIdx + 1));
+
+  return {
+    sliceIndex: sIdx,
+    slice,
+    pieceName,
+    pieceCode: slice.puzzleCode || ('#' + (sIdx + 1)),
+    matches,
+    primaryMatch,
+    boardNumbers,
+    boardIndices,
+    sectorToBoardMap,
+    sectorMap,
+    totalBoards: boards.length
+  };
+}
+
+// Activa la vista de Tablero (si estaba desactivada) y salta directamente al tablero donde se ubica la pieza o parte indicada
+function jumpToSliceBoard(sliceIndex, preferredSectorCode = null, boardIndexOverride = null) {
+  const sIdx = typeof sliceIndex === 'number' ? sliceIndex : state.activeSliceIndex;
+  state.activeSliceIndex = sIdx;
+  if (preferredSectorCode) {
+    state.activeSectorCode = preferredSectorCode;
+  }
+  const info = getSliceBoardPlacementsInfo(sIdx, preferredSectorCode || state.activeSectorCode || null);
+  let targetBoardIdx = typeof boardIndexOverride === 'number'
+    ? boardIndexOverride
+    : (info && info.primaryMatch ? info.primaryMatch.boardIndex : 0);
+
+  if (!state.nestingEnabled) {
+    setNestingEnabled(true);
+  }
+  if (state.nestedBoards && state.nestedBoards.length > 0) {
+    targetBoardIdx = Math.max(0, Math.min(state.nestedBoards.length - 1, targetBoardIdx));
+    selectActiveBoard(targetBoardIdx);
+  }
+}
+
+function jumpToActiveSliceBoard() {
+  jumpToSliceBoard(state.activeSliceIndex, state.activeSectorCode || null);
+}
+
+// Actualiza los indicadores visuales en el Visor 3D y en la cabecera del Inspector 2D mostrando en qué tablero está la pieza activa
+function updatePieceBoardLocationUI() {
+  const badge3D = document.getElementById('viewer3DPieceBoardBadge');
+  const badge2D = document.getElementById('slice2DSelectedBoardBadge');
+  const info = getSliceBoardPlacementsInfo(state.activeSliceIndex, state.activeSectorCode || null);
+
+  if (!info || !info.slice) {
+    if (badge3D) badge3D.classList.add('hidden');
+    if (badge2D) badge2D.classList.add('hidden');
+    return;
+  }
+
+  const isMultiSplit = Boolean(state.splitModelEnabled && info.slice.splitGrid && info.slice.splitGrid.totalParts > 1);
+  const axisTag = (state.constructionMode === 'puzzle3d' && info.slice.sliceAxis)
+    ? (' (Eje ' + info.slice.sliceAxis.toUpperCase() + ')')
+    : '';
+
+  if (info.matches.length === 0) {
+    if (badge3D) {
+      badge3D.classList.remove('hidden');
+      badge3D.innerHTML =
+        '<span>🎯 <strong>' + info.pieceName + '</strong>' + axisTag + '</span>' +
+        '<span class="text-amber-300 font-semibold">' +
+        (!info.slice.selected ? '⚠️ Excluida de exportación (no asignada a tablero)' : '⚠️ Supera el tamaño del tablero actual') +
+        '</span>';
+    }
+    if (badge2D) {
+      badge2D.classList.remove('hidden');
+      badge2D.textContent = !info.slice.selected ? '⚠️ Excluida' : '⚠️ No cabe en tablero';
+    }
+    return;
+  }
+
+  const targetMatch = info.primaryMatch || info.matches[0];
+  const primaryBoardNum = targetMatch.boardNumber;
+
+  // 1. Actualizar insignia clicable en la cabecera del Inspector 2D
+  if (badge2D) {
+    badge2D.classList.remove('hidden');
+    if (isMultiSplit && info.matches.length > 1) {
+      const pairs = info.matches.map((m) => m.sectorCode + '→#' + m.boardNumber).join(' · ');
+      badge2D.textContent = '🧩 Tableros: ' + pairs;
+      badge2D.title = 'Clic para abrir el Tablero #' + primaryBoardNum + ' en el Inspector 2D';
+    } else {
+      badge2D.textContent = '🧩 En Tablero #' + primaryBoardNum + ' / ' + info.totalBoards;
+      badge2D.title = 'Clic para ver ' + info.pieceName + ' en el Tablero #' + primaryBoardNum;
+    }
+  }
+
+  // 2. Actualizar barra flotante en la parte inferior del Visor 3D
+  if (badge3D) {
+    badge3D.classList.remove('hidden');
+    const secLabel = (isMultiSplit && state.activeSectorCode)
+      ? (' · Parte <strong class="text-fuchsia-300">' + state.activeSectorCode + '</strong>')
+      : '';
+
+    let rightHtml = '';
+    if (isMultiSplit && info.matches.length > 1) {
+      const chips = info.matches.map((m) => {
+        const isCurrent = (state.nestingEnabled && state.activeBoardIndex === m.boardIndex) ||
+                          (!state.nestingEnabled && state.activeSectorCode === m.sectorCode);
+        const cls = isCurrent
+          ? 'px-2 py-0.5 rounded bg-emerald-500/30 border border-emerald-400 text-emerald-200 font-bold text-[10px] transition'
+          : 'px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 font-semibold text-[10px] transition';
+        return '<button type="button" onclick="jumpToSliceBoard(' + info.sliceIndex + ', \'' + m.sectorCode + '\', ' + m.boardIndex + ')" class="' + cls + '" title="Ir al Tablero #' + m.boardNumber + ' (Parte ' + m.sectorCode + ')">' +
+          m.sectorCode + ' → Tablero #' + m.boardNumber +
+          '</button>';
+      }).join('');
+      rightHtml = '<div class="flex flex-wrap items-center gap-1">' + chips + '</div>';
+    } else {
+      const btnText = (state.nestingEnabled && state.activeBoardIndex === targetMatch.boardIndex)
+        ? ('✅ Viendo Tablero #' + primaryBoardNum + ' / ' + info.totalBoards)
+        : ('🔍 Ver en Tablero #' + primaryBoardNum + ' / ' + info.totalBoards);
+      rightHtml =
+        '<button type="button" onclick="jumpToSliceBoard(' + info.sliceIndex + ', null, ' + targetMatch.boardIndex + ')" class="px-2.5 py-0.5 rounded bg-emerald-500/25 hover:bg-emerald-500/40 border border-emerald-500/50 text-emerald-200 font-bold text-[10px] transition">' +
+        btnText +
+        '</button>';
+    }
+
+    const locationText = (isMultiSplit && info.matches.length > 1)
+      ? (state.activeSectorCode
+          ? ('Ubicada en <strong class="text-emerald-300">Tablero #' + primaryBoardNum + '</strong> (de ' + info.totalBoards + ')')
+          : ('Dividida en <strong class="text-emerald-300">Tableros #' + info.boardNumbers.join(', #') + '</strong>'))
+      : ('Ubicada en <strong class="text-emerald-300">Tablero #' + primaryBoardNum + '</strong> (de ' + info.totalBoards + ')');
+
+    badge3D.innerHTML =
+      '<div class="flex items-center gap-1.5 flex-wrap">' +
+        '<span>🎯 <strong>' + info.pieceName + '</strong>' + axisTag + secLabel + ':</span>' +
+        '<span>🧩 ' + locationText + '</span>' +
+      '</div>' +
+      rightHtml;
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.getSliceBoardPlacementsInfo = getSliceBoardPlacementsInfo;
+  window.jumpToSliceBoard = jumpToSliceBoard;
+  window.jumpToActiveSliceBoard = jumpToActiveSliceBoard;
+  window.updatePieceBoardLocationUI = updatePieceBoardLocationUI;
 }
 
 function on2DSliderInput(val) {
@@ -1473,8 +1677,16 @@ function selectActiveBoard(bIdx) {
   if (state.nestedBoards.length === 0) return;
   state.activeBoardIndex = Math.max(0, Math.min(state.nestedBoards.length - 1, bIdx));
   const curBoard = state.nestedBoards[state.activeBoardIndex];
-  if (curBoard && curBoard.placements && curBoard.placements.length > 0 && curBoard.placements[0].island) {
-    state.activeSliceIndex = curBoard.placements[0].island.sliceIndex;
+  if (curBoard && curBoard.placements && curBoard.placements.length > 0) {
+    const keepMatch = curBoard.placements.find((pl) =>
+      pl.island && pl.island.sliceIndex === state.activeSliceIndex &&
+      (!state.activeSectorCode || pl.island.sectorCode === state.activeSectorCode)
+    );
+    const chosenPl = keepMatch || curBoard.placements[0];
+    if (chosenPl && chosenPl.island) {
+      state.activeSliceIndex = chosenPl.island.sliceIndex;
+      state.activeSectorCode = chosenPl.island.sectorCode || null;
+    }
   }
   const slider = document.getElementById('currentSliceSlider');
   if (slider) slider.value = state.activeBoardIndex;
