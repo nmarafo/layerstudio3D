@@ -17,7 +17,10 @@
       "entryPointModular": "index.html",
       "entryPointStandalone": "indexstandalone.html",
       "repository": "https://github.com/nmarafo/layerstudio3D",
+      "liveUrl": "https://nmarafo.github.io/layerstudio3D/",
       "companionLaserRepository": "https://github.com/nmarafo/laserpc13-90-II",
+      "companionLaserOkfManifest": "https://raw.githubusercontent.com/nmarafo/laserpc13-90-II/main/okf.json",
+      "companionLaserGasWebApp": "https://script.google.com/a/macros/canariaseducacion.es/s/AKfycbySyWkg6eYIH14Fkv4raczCxI566rlyEQVtrzbdm0KZzVWKlbeTPD3Gl6E5ChoE3iDxeg/exec",
       "runtime": "Client-Side Browser HTML5 + WebGL (Three.js r128) + Canvas 2D"
     },
     "authors": [
@@ -507,6 +510,23 @@
       "3. PREGUNTAR EXPLÍCITAMENTE a la persona usuaria: «¿Desea previsualizar primero el proyecto (.lasca) en LayerStudio 3D (https://nmarafo.github.io/layerstudio3D/ → botón 📂 Abrir) para verificar la orientación de los ejes y las costillas antes de exportar los archivos definitivos de corte (.ZIP / .DXF / .SVG / .OUD)?».",
       "4. Esperar la confirmación de la persona usuaria (salvo que esta haya solicitado expresamente exportar directamente sin previsualización previa) antes de ejecutar exportZipBatch(), exportAllDXFLayout(), exportAllSVGLayout() o la compilación a .oud/.oue."
     ]
+  },
+  "companionLaserCompilerOud": {
+    "machineModel": "Pérez Camps PC 13/90 II (1300 x 900 mm, Controladora Han's Yueming YM-5th Normal System, machine_menu = 6)",
+    "okfManifestUrl": "https://raw.githubusercontent.com/nmarafo/laserpc13-90-II/main/okf.json",
+    "repositoryUrl": "https://github.com/nmarafo/laserpc13-90-II",
+    "localWorkspacePath": "c:\\Users\\norbe\\Documents\\CortadoraLáser PC 13_90II",
+    "gasWebAppUrl": "https://script.google.com/a/macros/canariaseducacion.es/s/AKfycbySyWkg6eYIH14Fkv4raczCxI566rlyEQVtrzbdm0KZzVWKlbeTPD3Gl6E5ChoE3iDxeg/exec",
+    "gasWebAppSourcePath": "pruebas/google_apps_script_oud/Index.html",
+    "cliCompilerScript": "tools/compile_dxf_to_oud.py",
+    "cliBatchCommandExample": "python \"c:\\Users\\norbe\\Documents\\CortadoraLáser PC 13_90II\\tools\\compile_dxf_to_oud.py\" \"ruta\\DXF_Tableros_Anidados\" --batch-dir \"ruta\\OUD_PC1390_UDISK\" --prefix \"TAB\" --engrave-speed 160 --engrave-min 16 --engrave-max 19 --cut-speed 30 --cut-min 60 --cut-max 70",
+    "udiskOutputFormat": "Pares binarios encriptados .oud + .oue con nombres DOS 8.3 en mayúsculas (TAB01.oud, TAB01.oue...) en pendrive MBR + FAT32.",
+    "calibratedPresetsWithWheelAt65To70": {
+      "carton_3mm": { "engraveSpeedMMS": 160, "engraveMinPct": 16, "engraveMaxPct": 19, "cutSpeedMMS": 30, "cutMinPct": 60, "cutMaxPct": 70 },
+      "dm_3mm": { "engraveSpeedMMS": 100, "engraveMinPct": 25, "engraveMaxPct": 32, "cutSpeedMMS": 18, "cutMinPct": 75, "cutMaxPct": 85 },
+      "dm_4mm": { "engraveSpeedMMS": 100, "engraveMinPct": 25, "engraveMaxPct": 32, "cutSpeedMMS": 12, "cutMinPct": 80, "cutMaxPct": 90 },
+      "metacrilato_3mm": { "engraveSpeedMMS": 120, "engraveMinPct": 25, "engraveMaxPct": 30, "cutSpeedMMS": 15, "cutMinPct": 75, "cutMaxPct": 85 }
+    }
   },
   "llmRecommendations": {
     "preferredContextFiles": [
