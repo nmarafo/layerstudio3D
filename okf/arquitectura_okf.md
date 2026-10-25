@@ -2,7 +2,6 @@
 
 > **Autor**: Norberto Martín Afonso (`normaafo@gmail.com`)  
 > **Repositorio**: `https://github.com/nmarafo/layerstudio3D`  
-> **Repositorio Compañero (Compilador Láser PC 13/90 II)**: `https://github.com/nmarafo/laserpc13-90-II`  
 > **Licencia**: GNU Affero General Public License v3.0 or later (con cláusula Sección 7b de atribución obligatoria)  
 > **Versión OKF**: `1.3.0` (`urn:okf:software:layerstudio3d:2026:v3.0.15`)
 
@@ -37,7 +36,7 @@ flowchart TD
     J -->|"Activado"| L["Nesting Multi-Tablero (Rotación 90° + Part-in-Hole)<br/>+ Plancha Madre Opcional (Carrier Sheet)"]
     K --> P["COMPUERTA OBLIGATORIA OKF:<br/>1. Generar Proyecto (.lasca)<br/>2. ¿Desea previsualizar el .lasca antes de exportar?"]
     L --> P
-    P -->|"Tras Validar / Confirmar"| M["Exportación CAD/CAM 1:1 en mm<br/>.SVG · .DXF (R12) · .STL (Binario) · .ZIP · .OUD/.OUE"]
+    P -->|"Tras Validar / Confirmar"| M["Exportación CAD/CAM 1:1 en mm<br/>.SVG · .DXF (R12) · .STL (Binario) · .ZIP"]
 ```
 
 ---

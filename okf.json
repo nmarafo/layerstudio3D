@@ -18,9 +18,6 @@
       "entryPointStandalone": "indexstandalone.html",
       "repository": "https://github.com/nmarafo/layerstudio3D",
       "liveUrl": "https://nmarafo.github.io/layerstudio3D/",
-      "companionLaserRepository": "https://github.com/nmarafo/laserpc13-90-II",
-      "companionLaserOkfManifest": "https://raw.githubusercontent.com/nmarafo/laserpc13-90-II/main/okf.json",
-      "companionLaserGasWebApp": "https://script.google.com/a/macros/canariaseducacion.es/s/AKfycbySyWkg6eYIH14Fkv4raczCxI566rlyEQVtrzbdm0KZzVWKlbeTPD3Gl6E5ChoE3iDxeg/exec",
       "runtime": "Client-Side Browser HTML5 + WebGL (Three.js r128) + Canvas 2D"
     },
     "authors": [
@@ -503,30 +500,13 @@
   "preExportPreviewProtocol": {
     "mandatoryGate": true,
     "ruleId": "OKF-GATE-LASCA-PREVIEW-BEFORE-EXPORT",
-    "summary": "Antes de exportar cualquier paquete de archivos de fabricación (.ZIP, .DXF, .SVG, .STL) o de compilar binarios (.oud/.oue) para la cortadora láser, todo agente de IA DEBE generar primero el archivo de proyecto (.lasca) y preguntar explícitamente a la persona usuaria si desea previsualizar el proyecto (.lasca) en LayerStudio 3D antes de proceder con la exportación final.",
+    "summary": "Antes de exportar cualquier paquete de archivos de fabricación (.ZIP, .DXF, .SVG, .STL), todo agente de IA DEBE generar primero el archivo de proyecto (.lasca) y preguntar explícitamente a la persona usuaria si desea previsualizar el proyecto (.lasca) en LayerStudio 3D antes de proceder con la exportación final.",
     "requiredSteps": [
       "1. Configurar el modelo 3D y los parámetros óptimos en LayerStudio 3D (eje/ejes de cruce con autoSelectBestPuzzleAxes(), modo de costilla autosustentante puzzleSelfSupporting, grosor de material y dimensiones de tablero).",
       "2. Generar y entregar en primer lugar el archivo de proyecto autónomo (.lasca) invocando exportProjectFile() (o guardándolo en el espacio de trabajo) junto con un resumen de la configuración elegida.",
-      "3. PREGUNTAR EXPLÍCITAMENTE a la persona usuaria: «¿Desea previsualizar primero el proyecto (.lasca) en LayerStudio 3D (https://nmarafo.github.io/layerstudio3D/ → botón 📂 Abrir) para verificar la orientación de los ejes y las costillas antes de exportar los archivos definitivos de corte (.ZIP / .DXF / .SVG / .OUD)?».",
-      "4. Esperar la confirmación de la persona usuaria (salvo que esta haya solicitado expresamente exportar directamente sin previsualización previa) antes de ejecutar exportZipBatch(), exportAllDXFLayout(), exportAllSVGLayout() o la compilación a .oud/.oue."
+      "3. PREGUNTAR EXPLÍCITAMENTE a la persona usuaria: «¿Desea previsualizar primero el proyecto (.lasca) en LayerStudio 3D (https://nmarafo.github.io/layerstudio3D/ → botón 📂 Abrir) para verificar la orientación de los ejes y las costillas antes de exportar los archivos definitivos de corte (.ZIP / .DXF / .SVG / .STL)?».",
+      "4. Esperar la confirmación de la persona usuaria (salvo que esta haya solicitado expresamente exportar directamente sin previsualización previa) antes de ejecutar exportZipBatch(), exportAllDXFLayout(), exportAllSVGLayout() o exportZipAllSTLs()."
     ]
-  },
-  "companionLaserCompilerOud": {
-    "machineModel": "Pérez Camps PC 13/90 II (1300 x 900 mm, Controladora Han's Yueming YM-5th Normal System, machine_menu = 6)",
-    "okfManifestUrl": "https://raw.githubusercontent.com/nmarafo/laserpc13-90-II/main/okf.json",
-    "repositoryUrl": "https://github.com/nmarafo/laserpc13-90-II",
-    "localWorkspacePath": "c:\\Users\\norbe\\Documents\\CortadoraLáser PC 13_90II",
-    "gasWebAppUrl": "https://script.google.com/a/macros/canariaseducacion.es/s/AKfycbySyWkg6eYIH14Fkv4raczCxI566rlyEQVtrzbdm0KZzVWKlbeTPD3Gl6E5ChoE3iDxeg/exec",
-    "gasWebAppSourcePath": "pruebas/google_apps_script_oud/Index.html",
-    "cliCompilerScript": "tools/compile_dxf_to_oud.py",
-    "cliBatchCommandExample": "python \"c:\\Users\\norbe\\Documents\\CortadoraLáser PC 13_90II\\tools\\compile_dxf_to_oud.py\" \"ruta\\DXF_Tableros_Anidados\" --batch-dir \"ruta\\OUD_PC1390_UDISK\" --prefix \"TAB\" --engrave-speed 160 --engrave-min 16 --engrave-max 19 --cut-speed 30 --cut-min 60 --cut-max 70",
-    "udiskOutputFormat": "Pares binarios encriptados .oud + .oue con nombres DOS 8.3 en mayúsculas (TAB01.oud, TAB01.oue...) en pendrive MBR + FAT32.",
-    "calibratedPresetsWithWheelAt65To70": {
-      "carton_3mm": { "engraveSpeedMMS": 160, "engraveMinPct": 16, "engraveMaxPct": 19, "cutSpeedMMS": 30, "cutMinPct": 60, "cutMaxPct": 70 },
-      "dm_3mm": { "engraveSpeedMMS": 100, "engraveMinPct": 25, "engraveMaxPct": 32, "cutSpeedMMS": 18, "cutMinPct": 75, "cutMaxPct": 85 },
-      "dm_4mm": { "engraveSpeedMMS": 100, "engraveMinPct": 25, "engraveMaxPct": 32, "cutSpeedMMS": 12, "cutMinPct": 80, "cutMaxPct": 90 },
-      "metacrilato_3mm": { "engraveSpeedMMS": 120, "engraveMinPct": 25, "engraveMaxPct": 30, "cutSpeedMMS": 15, "cutMinPct": 75, "cutMaxPct": 85 }
-    }
   },
   "llmRecommendations": {
     "preferredContextFiles": [
@@ -537,7 +517,7 @@
       "AGENTS.md"
     ],
     "agentExecutionTips": [
-      "REGLA OBLIGATORIA DE PREVISUALIZACIÓN ANTES DE EXPORTAR (OKF-GATE-LASCA-PREVIEW-BEFORE-EXPORT): Antes de exportar los archivos de fabricación (.ZIP, .DXF, .SVG, .STL) de LayerStudio 3D o de compilarlos a .oud/.oue, genere SIEMPRE primero el archivo de proyecto (.lasca) y pregunte a la persona usuaria si desea previsualizar el proyecto (.lasca) en LayerStudio 3D antes de exportar. Esto permite validar visualmente en 3D y 2D la combinación de ejes ('xy', 'xz', 'yz', 'xyz'), la rotación de las costillas y el modo autosustentante antes de producir los archivos de máquina.",
+      "REGLA OBLIGATORIA DE PREVISUALIZACIÓN ANTES DE EXPORTAR (OKF-GATE-LASCA-PREVIEW-BEFORE-EXPORT): Antes de exportar los archivos de fabricación (.ZIP, .DXF, .SVG, .STL) de LayerStudio 3D, genere SIEMPRE primero el archivo de proyecto (.lasca) y pregunte a la persona usuaria si desea previsualizar el proyecto (.lasca) en LayerStudio 3D antes de exportar. Esto permite validar visualmente en 3D y 2D la combinación de ejes ('xy', 'xz', 'yz', 'xyz'), la rotación de las costillas y el modo autosustentante antes de producir los archivos finales.",
       "Si el agente opera mediante JavaScript en la consola del navegador o Playwright page.evaluate(), prefiera invocar window.applyOkfProjectConfig(configObj) o las funciones globales documentadas en programmaticApiCatalog en lugar de simular decenas de eventos de ratón.",
       "Si el agente opera mediante clics DOM puros, cambie primero a la pestaña adecuada con setSidebarTab('cut' | 'clean' | 'finish' | 'boards' | 'all') o haciendo clic en #sidebarTab_cut, #sidebarTab_clean, #sidebarTab_finish, #sidebarTab_boards o #sidebarTab_all.",
       "En modo Puzzle 3D ('puzzle3d'), están disponibles tanto las 3 combinaciones de 2 ejes ('xy', 'xz', 'yz', con selección automática óptima mediante autoSelectBestPuzzleAxes()) como la opción de 3 ejes simultáneos ('xyz', con Serie C en el Eje Z y protección anti-cizalladura de ranuras), además de los botones de rotación de 90° de la pieza y costillas (rotateBaseModel90('x' | 'y' | 'z')).",
@@ -546,7 +526,7 @@
       "En modo Puzzle 3D ('puzzle3d'), tenga siempre en cuenta que lo habitual es grabar las costillas primera y última de los ejes (las fachadas exteriores: ej. X1 y XN en la Serie A, y/o Y1/Z1 y YM/ZM en la Serie B), mientras las costillas intermedias actúan como esqueleto estructural interno. Para ello es especialmente útil la función ya existente de grabar imagen en lasca (activando puzzleEngraveEndRibs: true en applyOkfProjectConfig, llamando a applyEngravingToPuzzleEndRibs() o seleccionando la primera y última costilla de cada eje y aplicando applyDemoImageEngravingToSelectedSlice / handleSliceImageEngraveFile), ya que recorta automáticamente el grabado (#008800 / capa C00) al contorno exterior y evita las ranuras de encaje a 90°.",
       "Cuando procese modelos .STL arquitectónicos, escultóricos o generados por IA que sean cáscaras huecas o tengan la base inferior recortada ('Sin Peana'), mantenga activo fillInternalHoles: true en modo 'puzzle3d'. El motor sliceTrianglesAtPlane detecta automáticamente si la sección transversal es una cáscara hueca o abierta (netArea < 0.38 * bboxArea) y reconstruye la envolvente superior v_max(u) apoyada sobre la cota base (Z = minZ) o sobre el contorno flotante autosustentante mediante buildSolidRibLoopFromSegments(), garantizando costillas estructurales macizas y el tallado íntegro de todas las ranuras a 90°.",
       "En mallas de alta densidad (> 500.000 triángulos), active siempre puzzleSimplifyCutLine: true con puzzleSimplifyMode: 'rdp' y puzzleSimplifyToleranceMM: 0.25 para evitar miles de microsegmentos en la cortadora láser sin perder detalle arquitectónico.",
-      "Todo paquete .ZIP exportado por LayerStudio 3D incluye en su raíz el archivo PROYECTO_OKF.lasca con los metadatos del proyecto (incluyendo puzzleMaterialThicknessMM y boardWidthMM/boardHeightMM), permitiendo que el compilador de la cortadora láser Pérez Camps PC 13/90 II (https://github.com/nmarafo/laserpc13-90-II) autoseleccione el preset de velocidades y potencias del material."
+      "Todo paquete .ZIP exportado por LayerStudio 3D incluye en su raíz el archivo PROYECTO_OKF.lasca con los metadatos del proyecto (incluyendo puzzleMaterialThicknessMM y boardWidthMM/boardHeightMM) para facilitar su trazabilidad y postprocesado CAM."
     ]
   }
 }

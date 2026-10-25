@@ -18,7 +18,7 @@
     "requireLascaPreviewBeforeExport": {
       "type": "boolean",
       "default": true,
-      "description": "Compuerta obligatoria OKF: indica a cualquier agente de IA que debe generar y ofrecer primero el archivo de proyecto (.lasca) para su previsualización en LayerStudio 3D y preguntar explícitamente a la persona usuaria si desea previsualizarlo antes de exportar los archivos definitivos de corte (.ZIP / .DXF / .SVG / .OUD)."
+      "description": "Compuerta obligatoria OKF: indica a cualquier agente de IA que debe generar y ofrecer primero el archivo de proyecto (.lasca) para su previsualización en LayerStudio 3D y preguntar explícitamente a la persona usuaria si desea previsualizarlo antes de exportar los archivos definitivos de corte (.ZIP / .DXF / .SVG / .STL)."
     },
     "modelName": {
       "type": "string",
