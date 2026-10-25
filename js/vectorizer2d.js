@@ -4638,15 +4638,17 @@ function applyVectorizedImageToSelectedSlice() {
 // GRABADO AUTOMÁTICO DE LA PRIMERA Y ÚLTIMA COSTILLA DE LOS EJES EN PUZZLE 3D
 // =========================================================================
 
-// Devuelve las costillas extremas (primera y última costilla de cada eje: Serie A y/o Serie B) en modo Puzzle 3D
-function getPuzzleEndCapSlices(targetAxes = 'both') {
+// Devuelve las costillas extremas (primera y última costilla de cada eje: Serie A, Serie B y/o Serie C) en modo Puzzle 3D
+function getPuzzleEndCapSlices(targetAxes = 'all') {
   if (!state.slices || state.slices.length === 0) return [];
-  const normTarget = String(targetAxes || 'both').toUpperCase();
-  const includeA = normTarget === 'BOTH' || normTarget === 'A' || normTarget === 'ALL';
-  const includeB = normTarget === 'BOTH' || normTarget === 'B' || normTarget === 'ALL';
+  const normTarget = String(targetAxes || 'all').toUpperCase();
+  const includeA = normTarget === 'BOTH' || normTarget === 'ALL' || normTarget === 'ABC' || normTarget === 'A';
+  const includeB = normTarget === 'BOTH' || normTarget === 'ALL' || normTarget === 'ABC' || normTarget === 'B';
+  const includeC = normTarget === 'ALL' || normTarget === 'ABC' || normTarget === 'C' || (normTarget === 'BOTH' && state.puzzleAxes === 'xyz');
 
   const slicesA = state.slices.filter((s) => s && s.puzzleSeries === 'A');
   const slicesB = state.slices.filter((s) => s && s.puzzleSeries === 'B');
+  const slicesC = state.slices.filter((s) => s && s.puzzleSeries === 'C');
 
   const result = [];
   const pushFirstAndLast = (seriesArr) => {
@@ -4658,9 +4660,10 @@ function getPuzzleEndCapSlices(targetAxes = 'both') {
     if (last && last !== first) result.push({ slice: last, isLastInSeries: true });
   };
 
-  if (slicesA.length > 0 || slicesB.length > 0) {
+  if (slicesA.length > 0 || slicesB.length > 0 || slicesC.length > 0) {
     if (includeA) pushFirstAndLast(slicesA);
     if (includeB) pushFirstAndLast(slicesB);
+    if (includeC) pushFirstAndLast(slicesC);
   } else {
     pushFirstAndLast(state.slices);
   }

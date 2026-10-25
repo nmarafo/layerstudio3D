@@ -15733,7 +15733,7 @@ function applyOkfProjectConfig(data) {
       clearPuzzleEndRibsEngraving('both');
     }
   }
-  if (data.puzzleEngraveEndRibsAxes === 'both' || data.puzzleEngraveEndRibsAxes === 'A' || data.puzzleEngraveEndRibsAxes === 'B') {
+  if (data.puzzleEngraveEndRibsAxes === 'all' || data.puzzleEngraveEndRibsAxes === 'both' || data.puzzleEngraveEndRibsAxes === 'A' || data.puzzleEngraveEndRibsAxes === 'B' || data.puzzleEngraveEndRibsAxes === 'C') {
     state.puzzleEngraveEndRibsAxes = data.puzzleEngraveEndRibsAxes;
   }
   if (data.puzzleEngraveEndRibsPreset === 'drawing' || data.puzzleEngraveEndRibsPreset === 'crest' || data.puzzleEngraveEndRibsPreset === 'medallion' || data.puzzleEngraveEndRibsPreset === 'badge') {
@@ -16283,7 +16283,7 @@ function copyOkfMasterPromptToClipboard() {
   const promptText = [
     'Actúas como el Agente Operador Oficial de LayerStudio 3D (https://nmarafo.github.io/layerstudio3D/) bajo el estándar OKF v1.3.0 (v3.0.15).',
     'Especificación completa: https://nmarafo.github.io/layerstudio3D/okf.json y https://nmarafo.github.io/layerstudio3D/okf/arquitectura_okf.md',
-    'REGLA CRÍTICA DE PREVISUALIZACIÓN ANTES DE EXPORTAR: Antes de exportar los archivos finales de corte o fabricación (.ZIP, .DXF, .SVG o .STL), genera SIEMPRE primero el archivo de proyecto (.lasca) y pregunta explícitamente a la persona usuaria si desea previsualizar y validar el proyecto (.lasca) en LayerStudio 3D antes de exportar los archivos definitivos.',
+    ''REGLA CRÍTICA DE PREVISUALIZACIÓN Y GRABADO DE COSTILLAS EXTREMAS ANTES DE EXPORTAR: (1) Antes de exportar los archivos finales de corte o fabricación (.ZIP, .DXF, .SVG o .STL), genera SIEMPRE primero el archivo de proyecto (.lasca) y pregunta explícitamente a la persona usuaria si desea previsualizar y validar el proyecto (.lasca) en LayerStudio 3D. (2) En modo Puzzle 3D, después de mostrar el .lasca, pregunta SIEMPRE a la persona usuaria si desea grabar alguna imagen en las lascas de inicio y fin de cada eje (primera y última costilla de las series A, B y/o C: X1/XN, Y1/YM, Z1/ZK) mediante applyEngravingToPuzzleEndRibs() antes de exportar.',
     'Reglas clave en Puzzle 3D (constructionMode: "puzzle3d"):',
     '- Ejes de cruce y medida estándar: en modo Puzzle 3D se utilizan por defecto los 3 ejes simultáneos (puzzleAxes: "xyz", con Serie A en X, Serie B en Y y Serie C en Z con protección anti-cizalladura; o bien 2 ejes "xy"/"xz"/"yz" con autoSelectBestPuzzleAxes), rotación de 90° con rotateBaseModel90("x"|"y"|"z") y el formato estándar habitual de corte de 30 × 25 cm (boardWidthMM: 300, boardHeightMM: 250; setBoardPresetMM(300, 250) / setMaxFootprintMM(300, 250)).',
     '- Modo Costilla Autosustentante (puzzleSelfSupporting: true por defecto): las costillas seleccionadas (puzzleSelfSupportTarget: "outer"|"series_b"|"series_a"|"all"|"custom") no bajan hasta el suelo y se sostienen solas mediante sus ranuras de unión (puzzleSelfSupportStyle: "trim_union"|"arch"|"natural", puzzleSelfSupportClearanceMM: 22.0, puzzleDropUnconnectedIslands: true).',
@@ -20991,15 +20991,17 @@ function applyVectorizedImageToSelectedSlice() {
 // GRABADO AUTOMÁTICO DE LA PRIMERA Y ÚLTIMA COSTILLA DE LOS EJES EN PUZZLE 3D
 // =========================================================================
 
-// Devuelve las costillas extremas (primera y última costilla de cada eje: Serie A y/o Serie B) en modo Puzzle 3D
-function getPuzzleEndCapSlices(targetAxes = 'both') {
+// Devuelve las costillas extremas (primera y última costilla de cada eje: Serie A, Serie B y/o Serie C) en modo Puzzle 3D
+function getPuzzleEndCapSlices(targetAxes = 'all') {
   if (!state.slices || state.slices.length === 0) return [];
-  const normTarget = String(targetAxes || 'both').toUpperCase();
-  const includeA = normTarget === 'BOTH' || normTarget === 'A' || normTarget === 'ALL';
-  const includeB = normTarget === 'BOTH' || normTarget === 'B' || normTarget === 'ALL';
+  const normTarget = String(targetAxes || 'all').toUpperCase();
+  const includeA = normTarget === 'BOTH' || normTarget === 'ALL' || normTarget === 'ABC' || normTarget === 'A';
+  const includeB = normTarget === 'BOTH' || normTarget === 'ALL' || normTarget === 'ABC' || normTarget === 'B';
+  const includeC = normTarget === 'ALL' || normTarget === 'ABC' || normTarget === 'C' || (normTarget === 'BOTH' && state.puzzleAxes === 'xyz');
 
   const slicesA = state.slices.filter((s) => s && s.puzzleSeries === 'A');
   const slicesB = state.slices.filter((s) => s && s.puzzleSeries === 'B');
+  const slicesC = state.slices.filter((s) => s && s.puzzleSeries === 'C');
 
   const result = [];
   const pushFirstAndLast = (seriesArr) => {
@@ -21011,9 +21013,10 @@ function getPuzzleEndCapSlices(targetAxes = 'both') {
     if (last && last !== first) result.push({ slice: last, isLastInSeries: true });
   };
 
-  if (slicesA.length > 0 || slicesB.length > 0) {
+  if (slicesA.length > 0 || slicesB.length > 0 || slicesC.length > 0) {
     if (includeA) pushFirstAndLast(slicesA);
     if (includeB) pushFirstAndLast(slicesB);
+    if (includeC) pushFirstAndLast(slicesC);
   } else {
     pushFirstAndLast(state.slices);
   }

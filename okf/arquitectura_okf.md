@@ -34,7 +34,7 @@ flowchart TD
     I --> J{"Empaquetado 2D<br/>state.nestingEnabled"}
     J -->|"Desactivado"| K["Inspector 2D Individual + Visor 3D Interactivo"]
     J -->|"Activado"| L["Nesting Multi-Tablero (Rotación 90° + Part-in-Hole)<br/>+ Plancha Madre Opcional (Carrier Sheet)"]
-    K --> P["COMPUERTA OBLIGATORIA OKF:<br/>1. Generar Proyecto (.lasca)<br/>2. ¿Desea previsualizar el .lasca antes de exportar?"]
+    K --> P["COMPUERTA OBLIGATORIA OKF:<br/>1. Generar y mostrar Proyecto (.lasca)<br/>2. ¿Desea previsualizar el .lasca?<br/>3. (Puzzle 3D) ¿Desea grabar alguna imagen en las lascas de inicio y fin de cada eje?"]
     L --> P
     P -->|"Tras Validar / Confirmar"| M["Exportación CAD/CAM 1:1 en mm<br/>.SVG · .DXF (R12) · .STL (Binario) · .ZIP"]
 ```
@@ -237,15 +237,16 @@ En un **Puzzle 3D (`puzzle3d`)**, lo normal es grabar las **costillas primera y 
    ```
 3. Los vectores de grabado resultantes se almacenan en `slice.engraveLoops` y se exportan automáticamente en color verde `#008800` (grupo SVG `GRABADO_VECTORIAL_IMAGEN` y capa DXF `C00` de prioridad 1).
 
-### Playbook D: Compuerta Obligatoria de Previsualización del Proyecto (`.lasca`) antes de Exportar Archivos de Producción
+### Playbook D: Compuerta Obligatoria de Previsualización (`.lasca`) y Grabado en Lascas de Inicio y Fin de Cada Eje antes de Exportar
 
 > [!IMPORTANT]
-> **REGLA OBLIGATORIA OKF ANTES DE EXPORTAR (`OKF-GATE-LASCA-PREVIEW-BEFORE-EXPORT`)**:  
+> **REGLA OBLIGATORIA OKF ANTES DE EXPORTAR (`OKF-GATE-LASCA-PREVIEW-AND-END-RIBS-ENGRAVING`)**:  
 > Antes de exportar cualquier paquete de archivos de fabricación (`.ZIP`, `.DXF`, `.SVG`, `.STL` de capas), cualquier Agente de IA **DEBE**:
-> 1. **Generar primero el archivo de proyecto `.lasca`** (`exportProjectFile()`) con la configuración propuesta.
-> 2. **Preguntar explícitamente a la persona usuaria si desea previsualizar el proyecto (`.lasca`) en LayerStudio 3D (`https://nmarafo.github.io/layerstudio3D/` → botón `📂 Abrir`) antes de exportar los archivos definitivos de corte**:
->    > *«He generado el archivo de proyecto `.lasca` con la configuración propuesta (combinación de ejes, número de costillas, modo autosustentante y distribución en tableros). ¿Desea previsualizar primero el proyecto `.lasca` en LayerStudio 3D antes de que exporte los archivos definitivos de corte (`.ZIP` / `.DXF` / `.SVG` / `.STL`)?»*
-> 3. **Esperar la confirmación de la persona usuaria** (salvo que esta indique expresamente que desea exportar directamente sin previsualizar) antes de ejecutar las funciones de exportación final.
+> 1. **Generar y mostrar primero el archivo de proyecto `.lasca`** (`exportProjectFile()`) con la configuración propuesta (por defecto 3 ejes `'xyz'`, costilla autosustentante activa y tablero de `30 × 25 cm` = `300 × 250 mm`).
+> 2. **Preguntar explícitamente a la persona usuaria si desea previsualizar el proyecto (`.lasca`) en LayerStudio 3D (`https://nmarafo.github.io/layerstudio3D/` → botón `📂 Abrir`)**.
+> 3. **En modo Puzzle 3D (`'puzzle3d'`), después de mostrar el `.lasca`, preguntar SIEMPRE a la persona usuaria si desea grabar alguna imagen en las lascas de inicio y fin de cada eje** (`X1`/`XN`, `Y1`/`YM` y/o `Z1`/`ZK`):
+>    > *«He generado el archivo de proyecto `.lasca` con la configuración propuesta. ¿Desea previsualizar primero el proyecto `.lasca` en LayerStudio 3D y desea grabar alguna imagen en las lascas de inicio y fin de cada eje (primera y última costilla de cada eje) antes de exportar los archivos definitivos de corte (`.ZIP` / `.DXF` / `.SVG` / `.STL`)?»*
+> 4. **Esperar la respuesta de la persona usuaria** (aplicando `applyEngravingToPuzzleEndRibs()` si solicita grabar imagen en las costillas extremas) antes de ejecutar las funciones de exportación final.
 
 Una vez validado el proyecto `.lasca` por la persona usuaria, ejecutar la exportación solicitada:
 * **Guardar proyecto autónomo `.lasca` (Paso 1 obligatorio antes de exportar)**: `exportProjectFile()` (si el modelo supera los `36.000` triángulos, compacta automáticamente la malla mediante `compactBaseVerticesForLasca()` en un sólido estanco 2.5D de `~5 MB` para evitar archivos JSON gigantescos).

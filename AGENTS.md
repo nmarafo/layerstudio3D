@@ -6,17 +6,18 @@ Cualquier agente de IA que opere o modifique **LayerStudio 3D** (`https://nmaraf
 
 ---
 
-## 1. Compuerta Obligatoria de Previsualización del Proyecto (`.lasca`) antes de Exportar (`OKF-GATE-LASCA-PREVIEW-BEFORE-EXPORT`)
+## 1. Compuerta Obligatoria de Previsualización (`.lasca`) y Grabado en Lascas de Inicio y Fin de Cada Eje antes de Exportar (`OKF-GATE-LASCA-PREVIEW-AND-END-RIBS-ENGRAVING`)
 
-Cuando el usuario solicite crear un proyecto de laminado o **Puzzle 3D** y exportar sus archivos de fabricación (`.ZIP`, `.DXF`, `.SVG`, `.STL`), el agente **NUNCA debe exportar directamente los archivos finales sin ofrecer antes la previsualización del `.lasca`**:
+Cuando el usuario solicite crear un proyecto de laminado o **Puzzle 3D** y exportar sus archivos de fabricación (`.ZIP`, `.DXF`, `.SVG`, `.STL`), el agente **NUNCA debe exportar directamente los archivos finales sin cumplir antes estos pasos**:
 
 1. **Paso 1 — Configurar y Generar primero el `.lasca`**:
-   - Cargar el modelo 3D (`.STL` / `.GLB`), ejecutar la autoselección óptima de ejes (`autoSelectBestPuzzleAxes()`), verificar la orientación con `rotateBaseModel90('x' | 'y' | 'z')` si procede, mantener activo por defecto el modo de **Costilla Autosustentante (`puzzleSelfSupporting: true`)** y generar el archivo de proyecto **`.lasca`** (`exportProjectFile()`).
-2. **Paso 2 — Preguntar explícitamente si desea previsualizar el `.lasca` antes de exportar**:
-   - Entregar la ruta clicable del archivo `.lasca` generado junto con un resumen de la configuración (combinación de ejes e Índice Estructural, número de costillas por serie, modo autosustentante y dimensiones de tablero) y **preguntar a la persona usuaria**:
-     > *«He generado primero el archivo de proyecto `.lasca` con la configuración propuesta. ¿Desea previsualizar el proyecto (`.lasca`) en LayerStudio 3D (`https://nmarafo.github.io/layerstudio3D/` → botón **📂 Abrir**) antes de que exporte los archivos definitivos de corte (`.ZIP` / `.DXF` / `.SVG` / `.STL`)?»*
+   - Cargar el modelo 3D (`.STL` / `.GLB`), configurar en modo **Puzzle 3D** por defecto los **3 ejes simultáneos (`puzzleAxes: 'xyz'`)**, el estándar de corte y tablero de **`30 × 25 cm` (`300 × 250 mm`)** y el modo de **Costilla Autosustentante (`puzzleSelfSupporting: true`)**, y generar el archivo de proyecto **`.lasca`** (`exportProjectFile()`).
+2. **Paso 2 — Mostrar el `.lasca`, ofrecer previsualización y preguntar si desea grabar alguna imagen en las lascas de inicio y fin de cada eje**:
+   - Entregar la ruta clicable del archivo `.lasca` generado junto con el resumen de configuración y **preguntar explícitamente a la persona usuaria**:
+     1. **¿Desea previsualizar el proyecto (`.lasca`) en LayerStudio 3D (`https://nmarafo.github.io/layerstudio3D/` → botón `📂 Abrir`)?**
+     2. **En modo Puzzle 3D: ¿Desea grabar alguna imagen en las lascas de inicio y fin de cada eje (primera y última costilla de cada eje: `X1`/`XN`, `Y1`/`YM`, `Z1`/`ZK`) antes de exportar?** (mediante `applyEngravingToPuzzleEndRibs()` o subiendo una imagen PNG/BMP/JPG que se recorta automáticamente al contorno y a las ranuras a 90°).
 3. **Paso 3 — Exportar tras la validación**:
-   - Una vez que la persona usuaria confirme la previsualización (o indique expresamente que desea exportar directamente sin previsualizar), ejecutar `exportZipBatch()` (o el exportador solicitado).
+   - Una vez que la persona usuaria confirme la previsualización del `.lasca` y si desea o no añadir el grabado en las lascas de inicio y fin de cada eje, ejecutar `exportZipBatch()` (o el exportador solicitado).
 
 ---
 

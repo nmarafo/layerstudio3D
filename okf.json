@@ -526,13 +526,14 @@
   ],
   "preExportPreviewProtocol": {
     "mandatoryGate": true,
-    "ruleId": "OKF-GATE-LASCA-PREVIEW-BEFORE-EXPORT",
-    "summary": "Antes de exportar cualquier paquete de archivos de fabricación (.ZIP, .DXF, .SVG, .STL), todo agente de IA DEBE generar primero el archivo de proyecto (.lasca) y preguntar explícitamente a la persona usuaria si desea previsualizar el proyecto (.lasca) en LayerStudio 3D antes de proceder con la exportación final.",
+    "ruleId": "OKF-GATE-LASCA-PREVIEW-AND-END-RIBS-ENGRAVING",
+    "summary": "Antes de exportar cualquier paquete de archivos de fabricación (.ZIP, .DXF, .SVG, .STL), todo agente de IA DEBE generar primero el archivo de proyecto (.lasca), preguntar explícitamente a la persona usuaria si desea previsualizar el proyecto (.lasca) en LayerStudio 3D y, cuando esté en modo Puzzle 3D ('puzzle3d'), preguntar después de mostrar el .lasca si desea grabar alguna imagen en las lascas de inicio y fin de cada eje antes de proceder con la exportación final.",
     "requiredSteps": [
-      "1. Configurar el modelo 3D y los parámetros óptimos en LayerStudio 3D (eje/ejes de cruce con autoSelectBestPuzzleAxes(), modo de costilla autosustentante puzzleSelfSupporting, grosor de material y dimensiones de tablero).",
-      "2. Generar y entregar en primer lugar el archivo de proyecto autónomo (.lasca) invocando exportProjectFile() (o guardándolo en el espacio de trabajo) junto con un resumen de la configuración elegida.",
-      "3. PREGUNTAR EXPLÍCITAMENTE a la persona usuaria: «¿Desea previsualizar primero el proyecto (.lasca) en LayerStudio 3D (https://nmarafo.github.io/layerstudio3D/ → botón 📂 Abrir) para verificar la orientación de los ejes y las costillas antes de exportar los archivos definitivos de corte (.ZIP / .DXF / .SVG / .STL)?».",
-      "4. Esperar la confirmación de la persona usuaria (salvo que esta haya solicitado expresamente exportar directamente sin previsualización previa) antes de ejecutar exportZipBatch(), exportAllDXFLayout(), exportAllSVGLayout() o exportZipAllSTLs()."
+      "1. Configurar el modelo 3D y los parámetros óptimos en LayerStudio 3D (por defecto en modo Puzzle 3D con los 3 ejes simultáneos puzzleAxes: 'xyz', modo de costilla autosustentante puzzleSelfSupporting: true y formato estándar de corte/tablero de 30 × 25 cm = 300 × 250 mm).",
+      "2. Generar y mostrar en primer lugar el archivo de proyecto autónomo (.lasca) invocando exportProjectFile() junto con un resumen de la configuración elegida.",
+      "3. PREGUNTAR EXPLÍCITAMENTE a la persona usuaria si desea previsualizar el proyecto (.lasca) en LayerStudio 3D (https://nmarafo.github.io/layerstudio3D/ → botón 📂 Abrir) para verificar la orientación de los ejes y las costillas.",
+      "4. EN MODO PUZZLE 3D ('puzzle3d'), DESPUÉS DE MOSTRAR EL .LASCA, PREGUNTAR EXPLÍCITAMENTE a la persona usuaria: «¿Desea grabar alguna imagen en las lascas de inicio y fin de cada eje (primera y última costilla de cada eje: X1/XN, Y1/YM y/o Z1/ZK) antes de exportar los archivos finales?». Si la persona usuaria desea hacerlo, aplicar la imagen indicada o el preset elegido mediante applyEngravingToPuzzleEndRibs({ targetAxes: 'all' | 'both' | 'A' | 'B' | 'C', ... }) o cargarla con handleSliceImageEngraveFile() y actualizar el .lasca.",
+      "5. Esperar la confirmación de la persona usuaria antes de ejecutar exportZipBatch(), exportAllDXFLayout(), exportAllSVGLayout() o exportZipAllSTLs()."
     ]
   },
   "llmRecommendations": {
@@ -544,7 +545,7 @@
       "AGENTS.md"
     ],
     "agentExecutionTips": [
-      "REGLA OBLIGATORIA DE PREVISUALIZACIÓN ANTES DE EXPORTAR (OKF-GATE-LASCA-PREVIEW-BEFORE-EXPORT): Antes de exportar los archivos de fabricación (.ZIP, .DXF, .SVG, .STL) de LayerStudio 3D, genere SIEMPRE primero el archivo de proyecto (.lasca) y pregunte a la persona usuaria si desea previsualizar el proyecto (.lasca) en LayerStudio 3D antes de exportar. Esto permite validar visualmente en 3D y 2D la combinación de ejes ('xy', 'xz', 'yz', 'xyz'), la rotación de las costillas y el modo autosustentante antes de producir los archivos finales.",
+      "REGLA OBLIGATORIA DE PREVISUALIZACIÓN (.LASCA) Y CONSULTA DE GRABADO EN COSTILLAS DE INICIO Y FIN DE CADA EJE ANTES DE EXPORTAR (OKF-GATE-LASCA-PREVIEW-AND-END-RIBS-ENGRAVING): Antes de exportar los archivos de fabricación (.ZIP, .DXF, .SVG, .STL) de LayerStudio 3D, genere SIEMPRE primero el archivo de proyecto (.lasca) y pregunte a la persona usuaria si desea previsualizar el proyecto (.lasca) en LayerStudio 3D. Además, en modo Puzzle 3D ('puzzle3d'), después de mostrar el .lasca pregunte SIEMPRE a la persona usuaria si desea grabar alguna imagen en las lascas de inicio y fin de cada eje (la primera y última costilla de cada eje: X1/XN en Serie A, Y1/YM en Serie B y Z1/ZK en Serie C) antes de exportar.",
       "Si el agente opera mediante JavaScript en la consola del navegador o Playwright page.evaluate(), prefiera invocar window.applyOkfProjectConfig(configObj) o las funciones globales documentadas en programmaticApiCatalog en lugar de simular decenas de eventos de ratón.",
       "Si el agente opera mediante clics DOM puros, cambie primero a la pestaña adecuada con setSidebarTab('cut' | 'clean' | 'finish' | 'boards' | 'all') o haciendo clic en #sidebarTab_cut, #sidebarTab_clean, #sidebarTab_finish, #sidebarTab_boards o #sidebarTab_all.",
       "En modo Puzzle 3D ('puzzle3d'), se utilizan POR DEFECTO los 3 ejes simultáneos (puzzleAxes: 'xyz', con Serie A en X, Serie B en Y y Serie C en Z con protección anti-cizalladura de ranuras) y el formato estándar de corte de 30 × 25 cm (boardWidthMM: 300, boardHeightMM: 250; setBoardPresetMM(300, 250) y setMaxFootprintMM(300, 250)). También están disponibles las combinaciones de 2 ejes ('xy', 'xz', 'yz' o autoSelectBestPuzzleAxes()) y la rotación de 90° de la pieza y costillas (rotateBaseModel90('x' | 'y' | 'z')).",

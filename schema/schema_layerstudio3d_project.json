@@ -18,7 +18,7 @@
     "requireLascaPreviewBeforeExport": {
       "type": "boolean",
       "default": true,
-      "description": "Compuerta obligatoria OKF: indica a cualquier agente de IA que debe generar y ofrecer primero el archivo de proyecto (.lasca) para su previsualización en LayerStudio 3D y preguntar explícitamente a la persona usuaria si desea previsualizarlo antes de exportar los archivos definitivos de corte (.ZIP / .DXF / .SVG / .STL)."
+      "description": "Compuerta obligatoria OKF: indica a cualquier agente de IA que antes de exportar los archivos definitivos (.ZIP / .DXF / .SVG / .STL) debe: (1) generar y mostrar primero el archivo de proyecto (.lasca) preguntando si desea previsualizarlo en LayerStudio 3D, y (2) en modo Puzzle 3D, después de mostrar el .lasca, preguntar si desea grabar alguna imagen en las lascas de inicio y fin de cada eje."
     },
     "modelName": {
       "type": "string",
@@ -262,12 +262,14 @@
     "puzzleEngraveEndRibsAxes": {
       "type": "string",
       "enum": [
+        "all",
         "both",
         "A",
-        "B"
+        "B",
+        "C"
       ],
       "default": "both",
-      "description": "Define en qué ejes del Puzzle 3D se graban automáticamente la primera y última costilla: 'both' (Serie A y Serie B), 'A' (solo Serie A) o 'B' (solo Serie B)."
+      "description": "Ejes cuyas lascas de inicio y fin (primera y última costilla) recibirán el grabado de imagen: 'all' (todos los ejes activos A, B y C), 'both' (A y B), 'A', 'B' o 'C'."
     },
     "puzzleEngraveEndRibsPreset": {
       "type": "string",
