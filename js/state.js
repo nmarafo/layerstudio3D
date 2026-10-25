@@ -62,6 +62,14 @@ const state = {
   puzzleSimplifySmoothPasses: 1,  // Pasadas de suavizado Chaikin cuando puzzleSimplifyMode === 'smooth'
   puzzleRawVerticesCount: 0,      // Total de vértices originales en los contornos base del Puzzle 3D
   puzzleSimplifiedVerticesCount: 0, // Total de vértices tras simplificar la línea de corte del Puzzle 3D
+  // Modo Autosustentante en Puzzle 3D (la costilla no viene desde el suelo y se sostiene sola con la unión)
+  puzzleSelfSupporting: false,        // true = las costillas indicadas no bajan hasta el suelo y se sostienen con la unión
+  puzzleSelfSupportTarget: 'outer',   // 'outer' (Exteriores y voladizos) | 'series_b' (Serie B) | 'series_a' (Serie A) | 'all' (Todas) | 'custom' (Solo individuales)
+  puzzleSelfSupportStyle: 'trim_union', // 'trim_union' (Corte recto bajo unión) | 'arch' (Costilla en arco siguiendo silueta) | 'natural' (Solo perfil 3D flotante)
+  puzzleSelfSupportClearanceMM: 22.0, // Altura libre desde el suelo en mm (protegiendo siempre el encaje de unión)
+  puzzleDropUnconnectedIslands: true, // true = descarta islas aéreas sueltas que no toquen el suelo ni tengan ranuras de unión
+  puzzleSelfSupportRibs: { A: {}, B: {}, C: {} }, // Override individual por costilla { A: {0: true}, B: {}, C: {} }
+  puzzleSelfSupportCount: 0,          // Total de costillas actualmente autosustentantes (suspendidas por unión)
   explodeFactor: 0,
   showGhost: true,
   isolateCurrent: false,

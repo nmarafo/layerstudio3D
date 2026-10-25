@@ -1810,6 +1810,12 @@ function exportProjectFile() {
     puzzleSimplifyMode: state.puzzleSimplifyMode,
     puzzleSimplifyToleranceMM: state.puzzleSimplifyToleranceMM,
     puzzleSimplifySmoothPasses: state.puzzleSimplifySmoothPasses,
+    puzzleSelfSupporting: state.puzzleSelfSupporting,
+    puzzleSelfSupportTarget: state.puzzleSelfSupportTarget,
+    puzzleSelfSupportStyle: state.puzzleSelfSupportStyle,
+    puzzleSelfSupportClearanceMM: state.puzzleSelfSupportClearanceMM,
+    puzzleDropUnconnectedIslands: state.puzzleDropUnconnectedIslands,
+    puzzleSelfSupportRibs: state.puzzleSelfSupportRibs,
     puzzleHideSeriesA: state.puzzleHideSeriesA,
     puzzleHideSeriesB: state.puzzleHideSeriesB,
     puzzleHiddenRibs: state.puzzleHiddenRibs,
@@ -1956,6 +1962,26 @@ function applyOkfProjectConfig(data) {
   }
   if (typeof data.puzzleSimplifyToleranceMM === 'number') state.puzzleSimplifyToleranceMM = data.puzzleSimplifyToleranceMM;
   if (typeof data.puzzleSimplifySmoothPasses === 'number') state.puzzleSimplifySmoothPasses = data.puzzleSimplifySmoothPasses;
+  if (typeof data.puzzleSelfSupporting === 'boolean') state.puzzleSelfSupporting = data.puzzleSelfSupporting;
+  if (data.puzzleSelfSupportTarget === 'outer' || data.puzzleSelfSupportTarget === 'series_b' || data.puzzleSelfSupportTarget === 'series_a' || data.puzzleSelfSupportTarget === 'all' || data.puzzleSelfSupportTarget === 'custom') {
+    state.puzzleSelfSupportTarget = data.puzzleSelfSupportTarget;
+  }
+  if (data.puzzleSelfSupportStyle === 'trim_union' || data.puzzleSelfSupportStyle === 'arch' || data.puzzleSelfSupportStyle === 'natural') {
+    state.puzzleSelfSupportStyle = data.puzzleSelfSupportStyle;
+  }
+  if (typeof data.puzzleSelfSupportClearanceMM === 'number' && data.puzzleSelfSupportClearanceMM >= 0) {
+    state.puzzleSelfSupportClearanceMM = data.puzzleSelfSupportClearanceMM;
+  }
+  if (typeof data.puzzleDropUnconnectedIslands === 'boolean') {
+    state.puzzleDropUnconnectedIslands = data.puzzleDropUnconnectedIslands;
+  }
+  if (data.puzzleSelfSupportRibs && typeof data.puzzleSelfSupportRibs === 'object') {
+    state.puzzleSelfSupportRibs = {
+      A: Object.assign({}, data.puzzleSelfSupportRibs.A || {}),
+      B: Object.assign({}, data.puzzleSelfSupportRibs.B || {}),
+      C: Object.assign({}, data.puzzleSelfSupportRibs.C || {})
+    };
+  }
   if (typeof data.puzzleHideSeriesA === 'boolean') state.puzzleHideSeriesA = data.puzzleHideSeriesA;
   if (typeof data.puzzleHideSeriesB === 'boolean') state.puzzleHideSeriesB = data.puzzleHideSeriesB;
   if (data.puzzleHiddenRibs && typeof data.puzzleHiddenRibs === 'object') {
@@ -2184,6 +2210,12 @@ function getOkfRecipePayload(includeVertices = false) {
     puzzleSimplifyMode: state.puzzleSimplifyMode,
     puzzleSimplifyToleranceMM: state.puzzleSimplifyToleranceMM,
     puzzleSimplifySmoothPasses: state.puzzleSimplifySmoothPasses,
+    puzzleSelfSupporting: state.puzzleSelfSupporting,
+    puzzleSelfSupportTarget: state.puzzleSelfSupportTarget,
+    puzzleSelfSupportStyle: state.puzzleSelfSupportStyle,
+    puzzleSelfSupportClearanceMM: state.puzzleSelfSupportClearanceMM,
+    puzzleDropUnconnectedIslands: state.puzzleDropUnconnectedIslands,
+    puzzleSelfSupportRibs: state.puzzleSelfSupportRibs,
     puzzleEngraveEndRibs: Boolean(state.puzzleEngraveEndRibs),
     puzzleEngraveEndRibsAxes: state.puzzleEngraveEndRibsAxes || 'both',
     puzzleEngraveEndRibsPreset: state.puzzleEngraveEndRibsPreset || 'drawing',

@@ -38,17 +38,17 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
 
   <!-- Hoja de estilos principal -->
-  <link rel="stylesheet" href="css/styles.css?v=3.0.12" />
+  <link rel="stylesheet" href="css/styles.css?v=3.0.13" />
 
   <!-- Módulos de la aplicación (cargados en orden de dependencia con defer y cache-busting) -->
-  <script src="js/state.js?v=3.0.12" defer></script>
-  <script src="js/viewer3d.js?v=3.0.12" defer></script>
-  <script src="js/slicer.js?v=3.0.12" defer></script>
-  <script src="js/nesting.js?v=3.0.12" defer></script>
-  <script src="js/modals-guide.js?v=3.0.12" defer></script>
-  <script src="js/viewer2d.js?v=3.0.12" defer></script>
-  <script src="js/exporters.js?v=3.0.12" defer></script>
-  <script src="js/vectorizer2d.js?v=3.0.12" defer></script>
+  <script src="js/state.js?v=3.0.13" defer></script>
+  <script src="js/viewer3d.js?v=3.0.13" defer></script>
+  <script src="js/slicer.js?v=3.0.13" defer></script>
+  <script src="js/nesting.js?v=3.0.13" defer></script>
+  <script src="js/modals-guide.js?v=3.0.13" defer></script>
+  <script src="js/viewer2d.js?v=3.0.13" defer></script>
+  <script src="js/exporters.js?v=3.0.13" defer></script>
+  <script src="js/vectorizer2d.js?v=3.0.13" defer></script>
 </head>
 <body class="h-screen w-screen flex flex-col">
 
@@ -408,6 +408,60 @@
               </button>
             </div>
             <div id="puzzleAxesAutoScoreBadge" class="hidden text-[9px] text-emerald-300/90 text-center pt-1 font-mono"></div>
+
+            <!-- Opción prominente de Costilla Autosustentante (sin bajar al suelo, sujeta por la unión) -->
+            <div class="mt-2 bg-emerald-950/35 border border-emerald-500/40 rounded-lg p-2 space-y-1.5">
+              <label class="flex items-center justify-between text-[11px] font-bold text-emerald-300 cursor-pointer" title="Permite que las costillas seleccionadas no bajen hasta el suelo (sin pedestal inferior) y se sostengan solas en el aire mediante el encaje con las costillas perpendiculares">
+                <span>🧲 Costilla autosustentante (sin bajar al suelo)</span>
+                <input type="checkbox" id="puzzleSelfSupportingCheck" onchange="setPuzzleSelfSupporting(this.checked)" class="accent-emerald-500 w-3.5 h-3.5" />
+              </label>
+
+              <div class="grid grid-cols-4 gap-1">
+                <button type="button" id="puzzleSelfSupTargetBtn_outer" onclick="setPuzzleSelfSupportTarget('outer')" class="py-1 px-1.5 rounded border border-slate-700 bg-slate-950 text-[9px] font-semibold text-slate-300 hover:bg-slate-800 transition" title="Las costillas exteriores quedan suspendidas sujetas por la unión mientras el núcleo central apoya en el suelo">Exteriores</button>
+                <button type="button" id="puzzleSelfSupTargetBtn_series_b" onclick="setPuzzleSelfSupportTarget('series_b')" class="py-1 px-1.5 rounded border border-slate-700 bg-slate-950 text-[9px] font-semibold text-slate-300 hover:bg-slate-800 transition" title="Toda la Serie B se sostiene sola colgada de las uniones con la Serie A (la Serie A apoya en el suelo)">Serie B</button>
+                <button type="button" id="puzzleSelfSupTargetBtn_series_a" onclick="setPuzzleSelfSupportTarget('series_a')" class="py-1 px-1.5 rounded border border-slate-700 bg-slate-950 text-[9px] font-semibold text-slate-300 hover:bg-slate-800 transition" title="Toda la Serie A se sostiene sola encajada sobre la Serie B (la Serie B apoya en el suelo)">Serie A</button>
+                <button type="button" id="puzzleSelfSupTargetBtn_all" onclick="setPuzzleSelfSupportTarget('all')" class="py-1 px-1.5 rounded border border-slate-700 bg-slate-950 text-[9px] font-semibold text-slate-300 hover:bg-slate-800 transition" title="Aplicar recorte autosustentante o silueta sin pedestal a todas las costillas posibles">Todas</button>
+              </div>
+
+              <div id="puzzleSelfSupportBox" class="hidden space-y-1.5 pt-1 border-t border-emerald-500/25 transition">
+                <div class="flex items-center justify-between gap-1 text-[10px]">
+                  <span class="text-slate-300">Modo de base:</span>
+                  <select id="puzzleSelfSupportStyleSelect" onchange="onPuzzleSelfSupportParamsChange()" class="bg-slate-900 border border-slate-700 rounded px-1.5 py-0.5 text-[10px] text-emerald-300 outline-none">
+                    <option value="trim_union" selected>Recorte recto bajo unión</option>
+                    <option value="arch">Arco aligerado entre uniones</option>
+                    <option value="natural">Solo silueta 3D real (sin pedestal)</option>
+                  </select>
+                </div>
+
+                <div class="space-y-1">
+                  <div class="flex items-center justify-between text-[10px]">
+                    <span class="text-slate-300" title="Altura libre desde el suelo hasta el borde inferior de la costilla autosustentante (se limita automáticamente para conservar siempre la unión)">Elevación sobre el suelo (mm):</span>
+                    <div class="flex items-center gap-1">
+                      <button type="button" onclick="stepPuzzleSelfSupportClearance(-2)" class="w-4 h-4 flex items-center justify-center rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-emerald-300 font-bold text-[10px] leading-none" title="Reducir elevación (-2 mm)">−</button>
+                      <input type="number" id="puzzleSelfSupportClearanceInput" value="22.0" min="0" max="250" step="1" onchange="onPuzzleSelfSupportClearanceInput(this.value)" class="w-12 bg-slate-900 border border-slate-700 rounded px-1 py-0 text-[10px] text-right font-bold text-emerald-300 font-mono" />
+                      <button type="button" onclick="stepPuzzleSelfSupportClearance(2)" class="w-4 h-4 flex items-center justify-center rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-emerald-300 font-bold text-[10px] leading-none" title="Aumentar elevación (+2 mm)">+</button>
+                      <button type="button" onclick="resetAllPuzzleSelfSupportRibs()" class="px-1 py-0 rounded bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[9px] text-rose-300 transition" title="Restaurar todas las costillas al suelo">↺ Suelo</button>
+                    </div>
+                  </div>
+                  <input type="range" id="puzzleSelfSupportClearanceSlider" min="0" max="120" step="1" value="22" oninput="onPuzzleSelfSupportClearanceInput(this.value)" class="w-full accent-emerald-500" />
+                </div>
+
+                <div class="grid grid-cols-3 gap-1 pt-0.5">
+                  <button type="button" onclick="setPuzzleSelfSupportPreset('outer', 'trim_union', 0.25)" class="py-0.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300 transition" title="Elevar costillas exteriores un 25% de la altura total">Ext. 25%</button>
+                  <button type="button" onclick="setPuzzleSelfSupportPreset('series_b', 'trim_union', 0.35)" class="py-0.5 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 rounded text-[9px] text-emerald-300 font-semibold transition" title="Toda la Serie B suspendida a un 35% sobre el suelo sujeta por la Serie A">Serie B Flotante</button>
+                  <button type="button" onclick="setPuzzleSelfSupportPreset('all', 'arch', 0.22)" class="py-0.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-300 transition" title="Recorte en arco entre uniones para estilizar la base">Arco Ligero</button>
+                </div>
+
+                <label class="flex items-center justify-between text-[9px] text-slate-300 pt-0.5 cursor-pointer" title="Descarta automáticamente fragmentos o islas aéreas que no toquen el suelo y tampoco tengan ninguna ranura de encaje con otra costilla">
+                  <span>Descartar islas aéreas sin unión</span>
+                  <input type="checkbox" id="puzzleDropUnconnectedCheck" checked onchange="onPuzzleSelfSupportParamsChange()" class="accent-emerald-500 w-3 h-3" />
+                </label>
+              </div>
+
+              <div id="puzzleSelfSupportStatsBadge" class="text-[9px] text-slate-400 text-center pt-0.5">
+                Seleccione Exteriores, Serie B, Serie A o marque la casilla para sostener por la unión
+              </div>
+            </div>
           </div>
 
           <div class="space-y-2 pt-1 border-t border-slate-800">
@@ -545,7 +599,12 @@
                 </button>
               </div>
 
-              <!-- Acceso directo para grabar una imagen en la costilla seleccionada -->
+              <!-- Acceso directo para grabar una imagen en la costilla seleccionada y conmutador autosustentante -->
+              <div class="pt-1 border-t border-slate-800/80 flex items-center gap-1">
+                <button type="button" id="puzzleToggleSelectedRibSelfSupBtn" onclick="toggleSelectedPuzzleRibSelfSupporting()" class="w-full py-1 px-1.5 rounded border border-slate-700 bg-slate-900 hover:bg-slate-800 text-[9px] font-semibold text-slate-300 transition truncate" title="Alternar si esta costilla apoya en el suelo o queda autosustentante (suspendida en el aire sujetándose solo por las ranuras de unión)">
+                  ⚓ Costilla apoyada en el suelo
+                </button>
+              </div>
               <div class="pt-1 border-t border-slate-800/80 flex items-center gap-1">
                 <button type="button" onclick="toggleSliceImageEngravePanel(true)" class="flex-1 py-1 px-2 rounded border border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25 text-[9px] font-bold text-emerald-300 transition truncate" title="Abrir el panel para grabar una imagen (PNG/BMP/JPG) en esta costilla respetando sus ranuras">
                   🖼️ Grabar Imagen en esta Costilla
@@ -617,6 +676,8 @@
               </div>
             </div>
           </div>
+
+
 
           <div id="puzzleSummaryBadge" class="text-[10px] text-amber-200 bg-amber-950/40 border border-amber-500/30 rounded-lg p-2 text-center font-medium leading-snug">
             Ranura de encaje: <strong>5.00 mm</strong> · 14 costillas (7 X + 7 Y)
@@ -1146,6 +1207,7 @@
               <button type="button" id="viewer3DVisBtn_b" onclick="togglePuzzleSeriesVisibility('b')" class="px-1.5 py-0.5 rounded bg-amber-500/15 hover:bg-amber-500/30 border border-amber-500/35 text-[10px] font-semibold text-amber-300 transition" title="Ocultar o mostrar en la vista 3D todas las costillas del 2.º eje">👁️ Eje Y</button>
               <button type="button" id="viewer3DVisBtn_c" onclick="togglePuzzleSeriesVisibility('c')" class="hidden px-1.5 py-0.5 rounded bg-emerald-500/15 hover:bg-emerald-500/30 border border-emerald-500/35 text-[10px] font-semibold text-emerald-300 transition" title="Ocultar o mostrar en la vista 3D todas las costillas del 3.er eje (Z)">👁️ Eje Z</button>
               <button type="button" id="viewer3DVisBtn_rib" onclick="toggleSelectedPuzzleRibVisibility()" class="px-1.5 py-0.5 rounded bg-emerald-500/15 hover:bg-emerald-500/30 border border-emerald-500/35 text-[10px] font-semibold text-emerald-300 transition" title="Ocultar o mostrar en la vista 3D únicamente la costilla seleccionada">👁️ Costilla</button>
+              <button type="button" id="viewer3DSelfSupBtn" onclick="toggleSelectedPuzzleRibSelfSupporting()" class="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-600 text-[10px] font-semibold text-slate-200 transition" title="Alternar si la costilla seleccionada apoya en el suelo o es autosustentante (suspendida por la unión)">⚓ Al suelo</button>
               <button type="button" id="viewer3DVisBtn_all" onclick="showAllPuzzleRibsInView()" class="hidden px-1.5 py-0.5 rounded bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-[10px] font-bold text-rose-300 transition" title="Mostrar todas las costillas y ejes ocultos">👁️ Todo</button>
             </div>
             <button onclick="resetCamera3D()" class="px-2.5 py-1 rounded-lg bg-slate-900/85 hover:bg-slate-800 border border-slate-700 text-[11px] text-slate-300">🎯 Centrar Cámara</button>
@@ -1170,6 +1232,7 @@
                   <button type="button" id="inspToggleSelectedRibVisBtn" onclick="toggleSelectedPuzzleRibVisibility()" class="px-1.5 py-0 rounded bg-slate-900 hover:bg-slate-700 border border-slate-700 text-[9px] text-slate-200 font-medium" title="Ocultar o mostrar en la vista esta costilla">👁️ Costilla</button>
                   <button type="button" id="inspToggleActiveAxisVisBtn" onclick="toggleActivePuzzleAxisVisibility()" class="px-1.5 py-0 rounded bg-slate-900 hover:bg-slate-700 border border-slate-700 text-[9px] text-slate-200 font-medium" title="Ocultar o mostrar en la vista todo el eje de esta costilla">👁️ Eje</button>
                   <div class="h-3 w-px bg-slate-700 mx-0.5"></div>
+                  <button type="button" id="inspToggleRibSelfSupBtn" onclick="toggleSelectedPuzzleRibSelfSupporting()" class="px-1.5 py-0 rounded bg-slate-900 hover:bg-slate-700 border border-slate-700 text-[9px] text-slate-300 font-medium transition" title="Alternar si esta costilla apoya en el suelo o se sostiene sola por la unión (autosustentante)">⚓ Al suelo</button>
                   <button type="button" id="inspTogglePuzzleSimplifyBtn" onclick="setPuzzleSimplifyCutLine(!state.puzzleSimplifyCutLine)" class="px-1.5 py-0 rounded bg-slate-900 hover:bg-slate-700 border border-slate-700 text-[9px] text-slate-300 font-medium transition" title="Activar o desactivar la simplificación de la línea de corte en el Puzzle 3D">✂️ Simplificar Corte</button>
                 </div>
               </div>

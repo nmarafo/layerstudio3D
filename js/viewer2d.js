@@ -849,6 +849,30 @@ function render2DSlice() {
   ctx.strokeRect(docX, docY, docB.width * scale, docB.height * scale);
   ctx.restore();
 
+  // Indicador visual de cota de suelo y elevación para costillas autosustentantes en Puzzle 3D
+  if (state.constructionMode === 'puzzle3d' && slice.sliceAxis !== 'z' && (slice.isFloatingAboveFloor || slice.isSelfSupporting)) {
+    const floorScreenY = toScreenY(docB.minY);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(16, 185, 129, 0.45)';
+    ctx.setLineDash([5, 4]);
+    ctx.lineWidth = 1.25;
+    ctx.beginPath();
+    ctx.moveTo(docX, floorScreenY);
+    ctx.lineTo(docX + docB.width * scale, floorScreenY);
+    ctx.stroke();
+
+    ctx.setLineDash([]);
+    ctx.font = 'bold 10px Inter, sans-serif';
+    ctx.fillStyle = 'rgba(52, 211, 153, 0.92)';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
+    const clrTxt = slice.floatingClearanceMM > 0
+      ? ('+' + Number(slice.floatingClearanceMM).toFixed(1) + ' mm sobre el suelo · Sujeta por la unión')
+      : 'Modo Autosustentante (sin bajar al suelo)';
+    ctx.fillText('🧲 ' + (slice.puzzleCode || 'Costilla') + ' Autosustentante (' + clrTxt + ')', docX + 6, floorScreenY - 4);
+    ctx.restore();
+  }
+
   // Marco configurable 2D de corte/grabado alrededor del lienzo 2D
   if (state.slicerFrameEnabled && typeof get2DBoardFrameGeometry === 'function') {
     const frameGeom = get2DBoardFrameGeometry(docB.minX, docB.minY, docB.maxX, docB.maxY, slice.loops, false);
@@ -1222,10 +1246,13 @@ function renderSliceStripUI() {
     const hiddenTag = isHiddenInView
       ? '<span class="ml-0.5 text-[9px]" title="Oculta en la vista">🙈</span>'
       : '';
+    const selfSupTag = (slice.isFloatingAboveFloor || slice.isSelfSupporting)
+      ? '<span class="ml-0.5 text-[9px]" title="Costilla autosustentante (sostenida por la unión, sin apoyar en el suelo)">🧲</span>'
+      : '';
     const engraveTag = (slice.hasCustomImageEngraving || (slice.engraveLoops && slice.engraveLoops.length > 0))
       ? '<span class="ml-0.5 text-[9px]" title="Contiene imagen grabada">🖼️</span>'
       : '';
-    topRow.innerHTML = '<span class="font-bold ' + codeColor + ' flex items-center">' + codeLabel + capTag + hiddenTag + engraveTag + '</span>';
+    topRow.innerHTML = '<span class="font-bold ' + codeColor + ' flex items-center">' + codeLabel + capTag + hiddenTag + selfSupTag + engraveTag + '</span>';
 
     const chk = document.createElement('input');
     chk.type = 'checkbox';

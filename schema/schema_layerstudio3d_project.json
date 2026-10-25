@@ -137,6 +137,35 @@
       "maximum": 5,
       "default": 1
     },
+    "puzzleSelfSupporting": {
+      "type": "boolean",
+      "default": false,
+      "description": "Si es true, las costillas seleccionadas en Puzzle 3D no bajan hasta el suelo y se sostienen solas mediante sus ranuras de encaje a media madera."
+    },
+    "puzzleSelfSupportTarget": {
+      "type": "string",
+      "enum": ["outer", "series_b", "series_a", "all", "custom"],
+      "default": "outer"
+    },
+    "puzzleSelfSupportStyle": {
+      "type": "string",
+      "enum": ["trim_union", "arch", "natural"],
+      "default": "trim_union"
+    },
+    "puzzleSelfSupportClearanceMM": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 250,
+      "default": 22.0
+    },
+    "puzzleDropUnconnectedIslands": {
+      "type": "boolean",
+      "default": true
+    },
+    "puzzleSelfSupportRibs": {
+      "type": "object",
+      "description": "Mapa de overrides individuales { A: { idx: bool }, B: { idx: bool }, C: { idx: bool } } para costillas autosustentantes."
+    },
     "puzzleHideSeriesA": {
       "type": "boolean",
       "default": false

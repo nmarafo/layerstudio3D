@@ -633,6 +633,221 @@ function syncPuzzleSelectedRibUI() {
   if (v3dBtnAll) {
     v3dBtnAll.classList.toggle('hidden', !hasAnyHidden);
   }
+
+  // Sincronizar botón individual de costilla autosustentante (en panel lateral e inspector 2D)
+  const activeSlice = state.slices && state.slices[state.activeSliceIndex] ? state.slices[state.activeSliceIndex] : null;
+  const countInSer = info.series === 'C' ? (state.puzzleCountC || 4) : (info.series === 'B' ? state.puzzleCountB : state.puzzleCountA);
+  const isRibSelfSup = activeSlice
+    ? isPuzzleRibSelfSupporting(activeSlice, countInSer)
+    : isPuzzleRibSelfSupporting({ puzzleSeries: info.series, seriesIndex: info.seriesIndex, sliceAxis: info.axis }, countInSer);
+  const isHorizontalRib = info.axis === 'z';
+
+  const btnRibSelfSup = document.getElementById('puzzleToggleSelectedRibSelfSupBtn');
+  if (btnRibSelfSup) {
+    btnRibSelfSup.classList.toggle('hidden', isHorizontalRib);
+    if (!isHorizontalRib) {
+      btnRibSelfSup.textContent = isRibSelfSup
+        ? ('🧲 ' + info.ribCode + ' Autosustentante (Flotante)')
+        : ('⚓ ' + info.ribCode + ' Apoyada en el suelo');
+      btnRibSelfSup.className = isRibSelfSup
+        ? 'w-full py-1 px-1.5 rounded border border-emerald-500/60 bg-emerald-500/20 hover:bg-emerald-500/30 text-[9px] font-bold text-emerald-300 transition truncate'
+        : 'w-full py-1 px-1.5 rounded border border-slate-700 bg-slate-900 hover:bg-slate-800 text-[9px] font-semibold text-slate-300 transition truncate';
+    }
+  }
+
+  const inspBtnSelfSup = document.getElementById('inspToggleRibSelfSupBtn');
+  if (inspBtnSelfSup) {
+    inspBtnSelfSup.classList.toggle('hidden', isHorizontalRib);
+    if (!isHorizontalRib) {
+      inspBtnSelfSup.textContent = isRibSelfSup
+        ? ('🧲 ' + info.ribCode + ' Autosustentante')
+        : ('⚓ ' + info.ribCode + ' Al suelo');
+      inspBtnSelfSup.className = isRibSelfSup
+        ? 'px-1.5 py-0 rounded bg-emerald-500/25 hover:bg-emerald-500/35 border border-emerald-500/50 text-[9px] text-emerald-300 font-bold transition'
+        : 'px-1.5 py-0 rounded bg-slate-900 hover:bg-slate-700 border border-slate-700 text-[9px] text-slate-300 font-medium transition';
+    }
+  }
+
+  const v3dSelfSupBtn = document.getElementById('viewer3DSelfSupBtn');
+  if (v3dSelfSupBtn) {
+    v3dSelfSupBtn.classList.toggle('hidden', isHorizontalRib);
+    if (!isHorizontalRib) {
+      v3dSelfSupBtn.textContent = isRibSelfSup
+        ? ('🧲 ' + info.ribCode + ' Flotante')
+        : ('⚓ ' + info.ribCode + ' Al suelo');
+      v3dSelfSupBtn.className = isRibSelfSup
+        ? 'px-1.5 py-0.5 rounded bg-emerald-500/25 hover:bg-emerald-500/35 border border-emerald-500/50 text-[10px] font-bold text-emerald-300 transition'
+        : 'px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-600 text-[10px] font-semibold text-slate-200 transition';
+    }
+  }
+}
+
+function hasAnyPuzzleSelfSupportingRib() {
+  if (state.puzzleSelfSupporting) return true;
+  const map = state.puzzleSelfSupportRibs;
+  if (!map) return false;
+  for (const ser of ['A', 'B', 'C']) {
+    const sub = map[ser];
+    if (sub) {
+      for (const k in sub) {
+        if (sub[k] === true) return true;
+      }
+    }
+  }
+  return false;
+}
+
+function isPuzzleRibSelfSupporting(slice, countInSeries) {
+  if (!slice || slice.isPuzzleSolidCap) return false;
+  if (slice.sliceAxis === 'z') return false; // Las plantas horizontales en Z ya flotan a su cota Z
+  const ser = slice.puzzleSeries || 'A';
+  const idx = typeof slice.seriesIndex === 'number' ? slice.seriesIndex : 0;
+  const total = countInSeries || (ser === 'B' ? state.puzzleCountB : (ser === 'C' ? state.puzzleCountC : state.puzzleCountA)) || 2;
+
+  if (state.puzzleSelfSupportRibs && state.puzzleSelfSupportRibs[ser] && typeof state.puzzleSelfSupportRibs[ser][idx] === 'boolean') {
+    return state.puzzleSelfSupportRibs[ser][idx];
+  }
+  if (!state.puzzleSelfSupporting) return false;
+
+  const target = state.puzzleSelfSupportTarget || 'outer';
+  if (target === 'all') return true;
+  if (target === 'series_b') return ser === 'B';
+  if (target === 'series_a') return ser === 'A';
+  if (target === 'outer') {
+    if (total <= 2) return idx === total - 1;
+    const margin = total >= 6 ? Math.max(1, Math.floor(total * 0.25)) : 1;
+    return idx < margin || idx >= total - margin;
+  }
+  return false;
+}
+
+function toggleSelectedPuzzleRibSelfSupporting() {
+  const info = getSelectedPuzzleRibInfo();
+  if (info.axis === 'z') return;
+  if (!state.puzzleSelfSupportRibs) {
+    state.puzzleSelfSupportRibs = { A: {}, B: {}, C: {} };
+  }
+  if (!state.puzzleSelfSupportRibs[info.series]) {
+    state.puzzleSelfSupportRibs[info.series] = {};
+  }
+  const countInSer = info.series === 'C' ? (state.puzzleCountC || 4) : (info.series === 'B' ? state.puzzleCountB : state.puzzleCountA);
+  const currentVal = isPuzzleRibSelfSupporting({
+    puzzleSeries: info.series,
+    seriesIndex: info.seriesIndex,
+    sliceAxis: info.axis
+  }, countInSer);
+  state.puzzleSelfSupportRibs[info.series][info.seriesIndex] = !currentVal;
+
+  if (state.constructionMode === 'puzzle3d') {
+    rebuildGhostAndSlices();
+  }
+  syncConstructionModeUI();
+}
+
+function setPuzzleSelfSupporting(enabled) {
+  state.puzzleSelfSupporting = Boolean(enabled);
+  if (state.constructionMode === 'puzzle3d') {
+    rebuildGhostAndSlices();
+  } else {
+    syncConstructionModeUI();
+  }
+}
+
+function setPuzzleSelfSupportTarget(target) {
+  state.puzzleSelfSupportTarget = target || 'outer';
+  state.puzzleSelfSupporting = true;
+  // Limpiar overrides manuales para que el objetivo grupal se aplique limpiamente
+  state.puzzleSelfSupportRibs = { A: {}, B: {}, C: {} };
+  if (state.constructionMode === 'puzzle3d') {
+    rebuildGhostAndSlices();
+  } else {
+    syncConstructionModeUI();
+  }
+}
+
+function onPuzzleSelfSupportParamsChange() {
+  const styleEl = document.getElementById('puzzleSelfSupportStyleSelect');
+  const clearEl = document.getElementById('puzzleSelfSupportClearanceInput');
+  const dropEl = document.getElementById('puzzleDropUnconnectedCheck');
+  if (styleEl && styleEl.value) {
+    state.puzzleSelfSupportStyle = styleEl.value;
+  }
+  if (clearEl) {
+    const val = parseFloat(clearEl.value);
+    if (Number.isFinite(val) && val >= 0) {
+      state.puzzleSelfSupportClearanceMM = Math.max(0, Math.min(250, Number(val.toFixed(1))));
+    }
+  }
+  if (dropEl) {
+    state.puzzleDropUnconnectedIslands = Boolean(dropEl.checked);
+  }
+  if (state.constructionMode === 'puzzle3d') {
+    rebuildGhostAndSlices();
+  } else {
+    syncConstructionModeUI();
+  }
+}
+
+function onPuzzleSelfSupportClearanceInput(val) {
+  const parsed = parseFloat(val);
+  if (!Number.isFinite(parsed) || parsed < 0) return;
+  state.puzzleSelfSupportClearanceMM = Math.max(0, Math.min(250, Number(parsed.toFixed(1))));
+  if (!state.puzzleSelfSupporting && !hasAnyPuzzleSelfSupportingRib()) {
+    state.puzzleSelfSupporting = true;
+  }
+  if (state.constructionMode === 'puzzle3d') {
+    rebuildGhostAndSlices();
+  } else {
+    syncConstructionModeUI();
+  }
+}
+
+function stepPuzzleSelfSupportClearance(deltaMM) {
+  const cur = Number(state.puzzleSelfSupportClearanceMM) || 22.0;
+  const spanZ = (state.dimsMM && state.dimsMM.z) ? state.dimsMM.z : 100;
+  const next = Math.max(2, Math.min(Math.round(spanZ * 0.8), Number((cur + (Number(deltaMM) || 0)).toFixed(1))));
+  state.puzzleSelfSupportClearanceMM = next;
+  if (!state.puzzleSelfSupporting && !hasAnyPuzzleSelfSupportingRib()) {
+    state.puzzleSelfSupporting = true;
+  }
+  if (state.constructionMode === 'puzzle3d') {
+    rebuildGhostAndSlices();
+  } else {
+    syncConstructionModeUI();
+  }
+}
+
+function setPuzzleSelfSupportPreset(target, style, clearanceRatioOrMM) {
+  state.puzzleSelfSupporting = true;
+  if (target) {
+    state.puzzleSelfSupportTarget = target;
+    state.puzzleSelfSupportRibs = { A: {}, B: {}, C: {} };
+  }
+  if (style) {
+    state.puzzleSelfSupportStyle = style;
+  }
+  if (typeof clearanceRatioOrMM === 'number' && clearanceRatioOrMM > 0) {
+    const spanZ = (state.dimsMM && state.dimsMM.z) ? state.dimsMM.z : 100;
+    const mm = clearanceRatioOrMM <= 1.0
+      ? Math.max(8, Math.round(spanZ * clearanceRatioOrMM))
+      : clearanceRatioOrMM;
+    state.puzzleSelfSupportClearanceMM = mm;
+  }
+  if (state.constructionMode === 'puzzle3d') {
+    rebuildGhostAndSlices();
+  } else {
+    syncConstructionModeUI();
+  }
+}
+
+function resetAllPuzzleSelfSupportRibs() {
+  state.puzzleSelfSupportRibs = { A: {}, B: {}, C: {} };
+  state.puzzleSelfSupporting = false;
+  if (state.constructionMode === 'puzzle3d') {
+    rebuildGhostAndSlices();
+  } else {
+    syncConstructionModeUI();
+  }
 }
 
 function onSelectedPuzzleRibCoordChange(val) {
@@ -936,6 +1151,62 @@ function syncConstructionModeUI() {
     }
   }
 
+  // Sincronizar controles de Costilla Autosustentante (sin bajar al suelo)
+  const anySelfSup = hasAnyPuzzleSelfSupportingRib();
+  const selfSupChk = document.getElementById('puzzleSelfSupportingCheck');
+  if (selfSupChk) selfSupChk.checked = Boolean(state.puzzleSelfSupporting || anySelfSup);
+
+  const selfSupBox = document.getElementById('puzzleSelfSupportBox');
+  if (selfSupBox) {
+    selfSupBox.classList.toggle('hidden', !anySelfSup);
+    selfSupBox.classList.toggle('opacity-45', !anySelfSup);
+  }
+
+  ['outer', 'series_b', 'series_a', 'all'].forEach((tKey) => {
+    const tBtn = document.getElementById('puzzleSelfSupTargetBtn_' + tKey);
+    if (!tBtn) return;
+    if (tKey === 'series_b') {
+      tBtn.textContent = 'Serie B (' + cfg.axisB.toUpperCase() + ')';
+    } else if (tKey === 'series_a') {
+      tBtn.textContent = 'Serie A (' + cfg.axisA.toUpperCase() + ')';
+    }
+    const isSelected = state.puzzleSelfSupporting && (state.puzzleSelfSupportTarget || 'outer') === tKey;
+    tBtn.className = isSelected
+      ? 'py-1 px-1.5 rounded border border-emerald-500 bg-emerald-500/20 text-[9px] font-bold text-emerald-300 transition'
+      : 'py-1 px-1.5 rounded border border-slate-700 bg-slate-950 text-[9px] font-semibold text-slate-300 hover:bg-slate-800 transition';
+  });
+
+  const selfSupStyleSel = document.getElementById('puzzleSelfSupportStyleSelect');
+  if (selfSupStyleSel) selfSupStyleSel.value = state.puzzleSelfSupportStyle || 'trim_union';
+
+  const spanZ = Math.max(15, (state.dimsMM && state.dimsMM.z) ? state.dimsMM.z : 100);
+  const clearVal = Number(state.puzzleSelfSupportClearanceMM || 22.0);
+  const selfSupClearSlider = document.getElementById('puzzleSelfSupportClearanceSlider');
+  const selfSupClearInput = document.getElementById('puzzleSelfSupportClearanceInput');
+  if (selfSupClearSlider) {
+    selfSupClearSlider.max = String(Math.max(30, Math.round(spanZ * 0.78)));
+    selfSupClearSlider.value = String(clearVal);
+  }
+  if (selfSupClearInput) selfSupClearInput.value = clearVal.toFixed(1);
+
+  const dropIslandsChk = document.getElementById('puzzleDropUnconnectedCheck');
+  if (dropIslandsChk) dropIslandsChk.checked = state.puzzleDropUnconnectedIslands !== false;
+
+  const selfSupStats = document.getElementById('puzzleSelfSupportStatsBadge');
+  if (selfSupStats) {
+    const floatCnt = state.puzzleSelfSupportCount || 0;
+    if (!anySelfSup) {
+      selfSupStats.className = 'text-[9px] text-slate-400 text-center pt-0.5';
+      selfSupStats.textContent = 'Desactivado (todas las costillas apoyan desde el suelo)';
+    } else if (floatCnt > 0) {
+      selfSupStats.className = 'text-[9px] text-emerald-300 font-semibold text-center pt-0.5';
+      selfSupStats.textContent = '🧲 ' + floatCnt + (floatCnt === 1 ? ' costilla elevada' : ' costillas elevadas') + ' sobre el suelo · Sujetas por la unión';
+    } else {
+      selfSupStats.className = 'text-[9px] text-emerald-300/80 text-center pt-0.5';
+      selfSupStats.textContent = '🧲 Modo autosustentante activo (sin pedestal forzado al suelo)';
+    }
+  }
+
   const slotW = Math.max(0.4, state.puzzleMaterialThicknessMM + state.puzzleSlotClearanceMM);
   const sumBadge = document.getElementById('puzzleSummaryBadge');
   if (sumBadge) {
@@ -948,6 +1219,7 @@ function syncConstructionModeUI() {
       'Ancho ranura: <strong>' + slotW.toFixed(2) + ' mm</strong> · ' +
       totalRibs + ' costillas (' + breakdown + ')' +
       (state.puzzleTotalSlotsCount > 0 ? (' · <strong>' + state.puzzleTotalSlotsCount + ' encajes</strong>') : '') +
+      ((state.puzzleSelfSupportCount || 0) > 0 ? (' · <strong>🧲 ' + state.puzzleSelfSupportCount + ' autosustentantes</strong>') : '') +
       (state.puzzleSimplifyCutLine ? ' · <strong>✂️ Corte simplificado</strong>' : '');
   }
   syncPuzzleSelectedRibUI();
@@ -1689,6 +1961,174 @@ function setPuzzleSimplifyPreset(mode, tolMM) {
   recomputePuzzleCutLineSimplification();
 }
 
+// Recorta la base inferior de las costillas marcadas como "Autosustentantes" para que no apoyen en el suelo
+// y se sostengan exclusivamente mediante sus ranuras de encaje a media madera con las costillas perpendiculares.
+function applyPuzzleSelfSupportingTrim(slicesA, slicesB, axisA, axisB, slicesC = null, axisC = null) {
+  const slotW = Math.max(0.4, state.puzzleMaterialThicknessMM + state.puzzleSlotClearanceMM);
+  const spanZ = Math.max(10, (state.dimsMM && state.dimsMM.z) ? state.dimsMM.z : 100);
+  const baseZ = -spanZ * 0.5;
+  const clearanceMM = Math.max(0, Number(state.puzzleSelfSupportClearanceMM) || 0);
+  const style = state.puzzleSelfSupportStyle || 'trim_union';
+  const minEngagement = Math.max(slotW * 2.4, 9.0);
+
+  const hasC = Boolean(slicesC && slicesC.length > 0 && axisC);
+  const allPuzzleSlices = hasC ? slicesA.concat(slicesB, slicesC) : slicesA.concat(slicesB);
+
+  allPuzzleSlices.forEach((s) => {
+    const countInSer = s.puzzleSeries === 'C'
+      ? (slicesC ? slicesC.length : 0)
+      : (s.puzzleSeries === 'B' ? slicesB.length : slicesA.length);
+    s.isSelfSupporting = isPuzzleRibSelfSupporting(s, countInSer);
+    s.selfSupportClearanceAppliedMM = 0;
+  });
+
+  if (!hasAnyPuzzleSelfSupportingRib()) return;
+
+  allPuzzleSlices.forEach((s) => {
+    if (!s.isSelfSupporting || s.sliceAxis === 'z' || s.isPuzzleSolidCap) return;
+    if (!s.baseLoops || s.baseLoops.length === 0) return;
+
+    // Si el estilo es 'natural' y el usuario no forzó manualmente esta costilla individual,
+    // basta con no haber proyectado el pedestal hasta el suelo en sliceTrianglesAtPlane
+    const hasManualOverride = Boolean(
+      state.puzzleSelfSupportRibs &&
+      state.puzzleSelfSupportRibs[s.puzzleSeries] &&
+      state.puzzleSelfSupportRibs[s.puzzleSeries][s.seriesIndex] === true
+    );
+    if (style === 'natural' && !hasManualOverride) return;
+    if (clearanceMM < 1.0) return;
+
+    // Medir cota vertical Z (eje Y en el plano 2D de una costilla vertical X o Y)
+    let ribMinY = Infinity;
+    let ribMaxY = -Infinity;
+    let ribMinX = Infinity;
+    let ribMaxX = -Infinity;
+    s.baseLoops.forEach((l) => {
+      if (l.isHole) return;
+      (l.points || []).forEach((p) => {
+        if (p.y < ribMinY) ribMinY = p.y;
+        if (p.y > ribMaxY) ribMaxY = p.y;
+        if (p.x < ribMinX) ribMinX = p.x;
+        if (p.x > ribMaxX) ribMaxX = p.x;
+      });
+    });
+    if (!(ribMaxY > ribMinY + minEngagement + 2.0)) return;
+
+    // Localizar las costillas perpendiculares que cruzan esta costilla para proteger el solape de las uniones
+    const perpLists = [];
+    if (s.puzzleSeries === 'A') {
+      perpLists.push({ list: slicesB, ax: axisB });
+      if (hasC) perpLists.push({ list: slicesC, ax: axisC });
+    } else if (s.puzzleSeries === 'B') {
+      perpLists.push({ list: slicesA, ax: axisA });
+      if (hasC) perpLists.push({ list: slicesC, ax: axisC });
+    } else if (s.puzzleSeries === 'C') {
+      perpLists.push({ list: slicesA, ax: axisA });
+      perpLists.push({ list: slicesB, ax: axisB });
+    }
+
+    const validCrossings = [];
+    perpLists.forEach((grp) => {
+      if (grp.ax === 'z') return; // Las plantas Z tienen cota fija
+      const infoS = getPuzzleSlice2DAxes(s.sliceAxis, grp.ax);
+      const infoP = getPuzzleSlice2DAxes(grp.ax, s.sliceAxis);
+      if (infoS.vAxis !== 'y') return;
+
+      for (let j = 0; j < grp.list.length; j++) {
+        const pSlice = grp.list[j];
+        if (!pSlice.baseLoops || pSlice.baseLoops.length === 0) continue;
+        const intS = getSolidIntervalsAlongLine(s.baseLoops, infoS.uAxis, infoS.vAxis, pSlice.coord);
+        const intP = getSolidIntervalsAlongLine(pSlice.baseLoops, infoP.uAxis, infoP.vAxis, s.coord);
+        if (intS.length === 0 || intP.length === 0) continue;
+        const common = intersect1DIntervalLists(intS, intP);
+        for (let k = 0; k < common.length; k++) {
+          const cMin = common[k][0];
+          const cMax = common[k][1];
+          if (cMax - cMin >= minEngagement * 0.65) {
+            validCrossings.push({ uCoord: pSlice.coord, vMin: cMin, vMax: cMax });
+          }
+        }
+      }
+    });
+
+    // Calcular la cota máxima de recorte inferior vCut que garantiza al menos una unión sólida de soporte
+    let maxAllowedCutY = ribMaxY - minEngagement;
+    if (validCrossings.length > 0) {
+      let highestCrossingSafeCut = -Infinity;
+      const safeCuts = [];
+      for (let c = 0; c < validCrossings.length; c++) {
+        const sc = validCrossings[c].vMax - minEngagement;
+        safeCuts.push(sc);
+        if (sc > highestCrossingSafeCut) highestCrossingSafeCut = sc;
+      }
+      safeCuts.sort((a, b) => b - a);
+      // Garantizar al menos 2 apoyos de unión (si existen >=2 cruces) o el apoyo principal
+      const targetSafeCut = safeCuts.length >= 2 ? safeCuts[1] : highestCrossingSafeCut;
+      maxAllowedCutY = Math.min(maxAllowedCutY, targetSafeCut);
+    }
+
+    const desiredCutY = baseZ + clearanceMM;
+    const vCut = Math.min(desiredCutY, maxAllowedCutY);
+    if (!(vCut > ribMinY + 0.5)) return;
+
+    let trimmedLoops = clipLoopsToAxisRange(s.baseLoops, 'y', vCut, 1e5);
+
+    // Si el estilo es 'arch' (Arco aligerado entre uniones), elevar aún más el tramo inferior entre costillas de soporte
+    if (style === 'arch' && validCrossings.length >= 1 && trimmedLoops.length > 0) {
+      const pierHalfW = Math.max(slotW * 1.35, 4.5);
+      const archExtraH = Math.min(
+        Math.max(4.0, clearanceMM * 0.45),
+        Math.max(0, (ribMaxY - minEngagement * 0.85) - vCut)
+      );
+      if (archExtraH > 1.5) {
+        const uCoords = validCrossings.map((c) => c.uCoord).sort((a, b) => a - b);
+        const spans = [];
+        let curX = ribMinX - 2.0;
+        for (let idx = 0; idx < uCoords.length; idx++) {
+          const leftPier = uCoords[idx] - pierHalfW;
+          const rightPier = uCoords[idx] + pierHalfW;
+          if (leftPier > curX + 2.0) {
+            spans.push([curX, leftPier]);
+          }
+          curX = Math.max(curX, rightPier);
+        }
+        if (ribMaxX + 2.0 > curX + 2.0) {
+          spans.push([curX, ribMaxX + 2.0]);
+        }
+        for (let sp = 0; sp < spans.length; sp++) {
+          const sMinX = spans[sp][0];
+          const sMaxX = spans[sp][1];
+          const spanW = sMaxX - sMinX;
+          if (spanW < slotW * 1.2) continue;
+          // Recorte escalonado en arco de 2 niveles para suavizar la transición hacia las uniones
+          const step1Rect = {
+            minX: sMinX,
+            maxX: sMaxX,
+            minY: vCut - 2.0,
+            maxY: vCut + archExtraH * 0.55
+          };
+          trimmedLoops = subtractSingleRectFromLoops(trimmedLoops, step1Rect);
+          if (spanW > slotW * 2.8) {
+            const inset = spanW * 0.18;
+            const step2Rect = {
+              minX: sMinX + inset,
+              maxX: sMaxX - inset,
+              minY: vCut - 2.0,
+              maxY: vCut + archExtraH
+            };
+            trimmedLoops = subtractSingleRectFromLoops(trimmedLoops, step2Rect);
+          }
+        }
+      }
+    }
+
+    if (trimmedLoops && trimmedLoops.length > 0) {
+      s.baseLoops = trimmedLoops;
+      s.selfSupportClearanceAppliedMM = Math.max(0, Number((vCut - baseZ).toFixed(1)));
+    }
+  });
+}
+
 // Talla todas las ranuras de encaje a media madera entre las costillas de la Serie A, Serie B y opcionalmente Serie C (3 Ejes X×Y×Z)
 function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB, slicesC = null, axisC = null) {
   const slotW = Math.max(0.4, state.puzzleMaterialThicknessMM + state.puzzleSlotClearanceMM);
@@ -1704,10 +2144,16 @@ function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB, slicesC = 
     s.rawBaseLoops = rawBase;
     rawVertsTotal += countLoopsVertices(rawBase);
     s.baseLoops = state.puzzleSimplifyCutLine ? simplifyPuzzleLoopsList(rawBase) : rawBase.slice();
-    simpVertsTotal += countLoopsVertices(s.baseLoops);
     s.slots = [];
     s.puzzleSlots = s.slots;
     s.slotRects = [];
+  });
+
+  // Aplicar recorte inferior de costillas autosustentantes antes de calcular los cruces y tallar ranuras
+  applyPuzzleSelfSupportingTrim(slicesA, slicesB, axisA, axisB, slicesC, axisC);
+
+  allPuzzleSlices.forEach((s) => {
+    simpVertsTotal += countLoopsVertices(s.baseLoops);
   });
 
   state.puzzleRawVerticesCount = rawVertsTotal;
@@ -1757,77 +2203,155 @@ function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB, slicesC = 
           }
         }
 
-        // Si sA continúa más allá de vMax (porque sB terminó antes), la ranura en sA debe detenerse en vMax + relief
-        // Si vMax coincide con el borde exterior de sA, extender solo lo justo sin tocar el siguiente intervalo de sA
-        let safeMaxVA = vMax + relief;
-        if (idxIntA !== -1 && Math.abs(intervalsA[idxIntA][1] - vMax) < 0.25) {
-          const openExtA = Math.min(2.0, slotW * 0.6);
-          safeMaxVA = (idxIntA + 1 < intervalsA.length)
-            ? Math.min(vMax + openExtA, (vMax + intervalsA[idxIntA + 1][0]) * 0.5)
-            : (vMax + openExtA);
+        // Si sA es una costilla autosustentante flotante cuyo borde inferior empieza en vMin mientras que sB baja hacia el suelo,
+        // invertimos la polaridad del encaje en este cruce para que ambas ranuras abran por sus bordes exteriores
+        // (sA abre por abajo y encaja desde arriba sobre sB, evitando ventanas cerradas a mitad de sB).
+        const aStartsAtVMin = idxIntA !== -1 && Math.abs(intervalsA[idxIntA][0] - vMin) < 0.35;
+        const bExtendsBelowVMin = idxIntB !== -1 && intervalsB[idxIntB][0] < vMin - 0.5;
+        const bEndsAtVMax = idxIntB !== -1 && Math.abs(intervalsB[idxIntB][1] - vMax) < 0.35;
+        const aExtendsAboveVMax = idxIntA !== -1 && intervalsA[idxIntA][1] > vMax + 0.5;
+        const flipSlotPolarity = Boolean(aStartsAtVMin && bExtendsBelowVMin && !(bEndsAtVMax && aExtendsAboveVMax));
+
+        if (!flipSlotPolarity) {
+          // Polaridad estándar: sA abre hacia +v [vMid, safeMaxVA] y sB abre hacia -v [safeMinVB, vMid]
+          let safeMaxVA = vMax + relief;
+          if (idxIntA !== -1 && Math.abs(intervalsA[idxIntA][1] - vMax) < 0.25) {
+            const openExtA = Math.min(2.0, slotW * 0.6);
+            safeMaxVA = (idxIntA + 1 < intervalsA.length)
+              ? Math.min(vMax + openExtA, (vMax + intervalsA[idxIntA + 1][0]) * 0.5)
+              : (vMax + openExtA);
+          }
+
+          let safeMinVB = vMin - relief;
+          if (idxIntB !== -1 && Math.abs(intervalsB[idxIntB][0] - vMin) < 0.25) {
+            const openExtB = Math.min(2.0, slotW * 0.6);
+            safeMinVB = (idxIntB > 0)
+              ? Math.max(vMin - openExtB, (vMin + intervalsB[idxIntB - 1][1]) * 0.5)
+              : (vMin - openExtB);
+          }
+
+          const rectA = infoA.uAxis === 'x'
+            ? { minX: sB.coord - halfW, maxX: sB.coord + halfW, minY: vMid - relief, maxY: safeMaxVA }
+            : { minX: vMid - relief, maxX: safeMaxVA, minY: sB.coord - halfW, maxY: sB.coord + halfW };
+
+          sA.slotRects.push(rectA);
+          sA.slots.push({
+            targetCode: sB.puzzleCode,
+            targetSliceIndex: sB.index,
+            uAxis: infoA.uAxis,
+            vAxis: infoA.vAxis,
+            uCenter: sB.coord,
+            vMid: vMid,
+            vMouth: vMax,
+            x: sB.coord,
+            yStart: vMid,
+            yEnd: vMax,
+            mx: infoA.uAxis === 'x' ? sB.coord : vMax,
+            my: infoA.uAxis === 'x' ? vMax : sB.coord,
+            bx: infoA.uAxis === 'x' ? sB.coord : vMid,
+            by: infoA.uAxis === 'x' ? vMid : sB.coord,
+            fromTop: true,
+            openPositive: true,
+            slotWidth: slotW,
+            rect: rectA
+          });
+
+          const rectB = infoB.uAxis === 'x'
+            ? { minX: sA.coord - halfW, maxX: sA.coord + halfW, minY: safeMinVB, maxY: vMid + relief }
+            : { minX: safeMinVB, maxX: vMid + relief, minY: sA.coord - halfW, maxY: sB.coord + halfW };
+
+          sB.slotRects.push(rectB);
+          sB.slots.push({
+            targetCode: sA.puzzleCode,
+            targetSliceIndex: sA.index,
+            uAxis: infoB.uAxis,
+            vAxis: infoB.vAxis,
+            uCenter: sA.coord,
+            vMid: vMid,
+            vMouth: vMin,
+            x: sA.coord,
+            yStart: vMin,
+            yEnd: vMid,
+            mx: infoB.uAxis === 'x' ? sA.coord : vMin,
+            my: infoB.uAxis === 'x' ? vMin : sA.coord,
+            bx: infoB.uAxis === 'x' ? sA.coord : vMid,
+            by: infoB.uAxis === 'x' ? vMid : sA.coord,
+            fromTop: false,
+            openPositive: false,
+            slotWidth: slotW,
+            rect: rectB
+          });
+        } else {
+          // Polaridad invertida para costilla A autosustentante flotante:
+          // sA abre hacia -v [safeMinVA, vMid] y sB abre hacia +v [vMid, safeMaxVB]
+          let safeMinVA = vMin - relief;
+          if (idxIntA !== -1 && Math.abs(intervalsA[idxIntA][0] - vMin) < 0.25) {
+            const openExtA = Math.min(2.0, slotW * 0.6);
+            safeMinVA = (idxIntA > 0)
+              ? Math.max(vMin - openExtA, (vMin + intervalsA[idxIntA - 1][1]) * 0.5)
+              : (vMin - openExtA);
+          }
+
+          let safeMaxVB = vMax + relief;
+          if (idxIntB !== -1 && Math.abs(intervalsB[idxIntB][1] - vMax) < 0.25) {
+            const openExtB = Math.min(2.0, slotW * 0.6);
+            safeMaxVB = (idxIntB + 1 < intervalsB.length)
+              ? Math.min(vMax + openExtB, (vMax + intervalsB[idxIntB + 1][0]) * 0.5)
+              : (vMax + openExtB);
+          }
+
+          const rectA = infoA.uAxis === 'x'
+            ? { minX: sB.coord - halfW, maxX: sB.coord + halfW, minY: safeMinVA, maxY: vMid + relief }
+            : { minX: safeMinVA, maxX: vMid + relief, minY: sB.coord - halfW, maxY: sB.coord + halfW };
+
+          sA.slotRects.push(rectA);
+          sA.slots.push({
+            targetCode: sB.puzzleCode,
+            targetSliceIndex: sB.index,
+            uAxis: infoA.uAxis,
+            vAxis: infoA.vAxis,
+            uCenter: sB.coord,
+            vMid: vMid,
+            vMouth: vMin,
+            x: sB.coord,
+            yStart: vMin,
+            yEnd: vMid,
+            mx: infoA.uAxis === 'x' ? sB.coord : vMin,
+            my: infoA.uAxis === 'x' ? vMin : sB.coord,
+            bx: infoA.uAxis === 'x' ? sB.coord : vMid,
+            by: infoA.uAxis === 'x' ? vMid : sB.coord,
+            fromTop: false,
+            openPositive: false,
+            slotWidth: slotW,
+            rect: rectA
+          });
+
+          const rectB = infoB.uAxis === 'x'
+            ? { minX: sA.coord - halfW, maxX: sA.coord + halfW, minY: vMid - relief, maxY: safeMaxVB }
+            : { minX: vMid - relief, maxX: safeMaxVB, minY: sA.coord - halfW, maxY: sB.coord + halfW };
+
+          sB.slotRects.push(rectB);
+          sB.slots.push({
+            targetCode: sA.puzzleCode,
+            targetSliceIndex: sA.index,
+            uAxis: infoB.uAxis,
+            vAxis: infoB.vAxis,
+            uCenter: sA.coord,
+            vMid: vMid,
+            vMouth: vMax,
+            x: sA.coord,
+            yStart: vMid,
+            yEnd: vMax,
+            mx: infoB.uAxis === 'x' ? sA.coord : vMax,
+            my: infoB.uAxis === 'x' ? vMax : sA.coord,
+            bx: infoB.uAxis === 'x' ? sA.coord : vMid,
+            by: infoB.uAxis === 'x' ? vMid : sA.coord,
+            fromTop: true,
+            openPositive: true,
+            slotWidth: slotW,
+            rect: rectB
+          });
         }
-
-        let safeMinVB = vMin - relief;
-        if (idxIntB !== -1 && Math.abs(intervalsB[idxIntB][0] - vMin) < 0.25) {
-          const openExtB = Math.min(2.0, slotW * 0.6);
-          safeMinVB = (idxIntB > 0)
-            ? Math.max(vMin - openExtB, (vMin + intervalsB[idxIntB - 1][1]) * 0.5)
-            : (vMin - openExtB);
-        }
-
-        // Rectángulo de ranura en sA (Serie A: abre hacia +v, desde vMid hasta safeMaxVA)
-        const rectA = infoA.uAxis === 'x'
-          ? { minX: sB.coord - halfW, maxX: sB.coord + halfW, minY: vMid - relief, maxY: safeMaxVA }
-          : { minX: vMid - relief, maxX: safeMaxVA, minY: sB.coord - halfW, maxY: sB.coord + halfW };
-
-        sA.slotRects.push(rectA);
-        sA.slots.push({
-          targetCode: sB.puzzleCode,
-          targetSliceIndex: sB.index,
-          uAxis: infoA.uAxis,
-          vAxis: infoA.vAxis,
-          uCenter: sB.coord,
-          vMid: vMid,
-          vMouth: vMax,
-          x: sB.coord,
-          yStart: vMid,
-          yEnd: vMax,
-          mx: infoA.uAxis === 'x' ? sB.coord : vMax,
-          my: infoA.uAxis === 'x' ? vMax : sB.coord,
-          bx: infoA.uAxis === 'x' ? sB.coord : vMid,
-          by: infoA.uAxis === 'x' ? vMid : sB.coord,
-          fromTop: true,
-          openPositive: true,
-          slotWidth: slotW,
-          rect: rectA
-        });
-
-        // Rectángulo de ranura complementaria en sB (Serie B: abre hacia -v, desde safeMinVB hasta vMid)
-        const rectB = infoB.uAxis === 'x'
-          ? { minX: sA.coord - halfW, maxX: sA.coord + halfW, minY: safeMinVB, maxY: vMid + relief }
-          : { minX: safeMinVB, maxX: vMid + relief, minY: sA.coord - halfW, maxY: sB.coord + halfW };
-
-        sB.slotRects.push(rectB);
-        sB.slots.push({
-          targetCode: sA.puzzleCode,
-          targetSliceIndex: sA.index,
-          uAxis: infoB.uAxis,
-          vAxis: infoB.vAxis,
-          uCenter: sA.coord,
-          vMid: vMid,
-          vMouth: vMin,
-          x: sA.coord,
-          yStart: vMin,
-          yEnd: vMid,
-          mx: infoB.uAxis === 'x' ? sA.coord : vMin,
-          my: infoB.uAxis === 'x' ? vMin : sA.coord,
-          bx: infoB.uAxis === 'x' ? sA.coord : vMid,
-          by: infoB.uAxis === 'x' ? vMid : sA.coord,
-          fromTop: false,
-          openPositive: false,
-          slotWidth: slotW,
-          rect: rectB
-        });
 
         totalSlots += 2;
       }
@@ -1851,10 +2375,17 @@ function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB, slicesC = 
     return maxA;
   };
 
+  const spanZ = Math.max(10, (state.dimsMM && state.dimsMM.z) ? state.dimsMM.z : 100);
+  const baseZ = -spanZ * 0.5;
+  const checkDropUnconnected = Boolean(state.puzzleDropUnconnectedIslands !== false && hasAnyPuzzleSelfSupportingRib());
+  let floatingRibsCount = 0;
+
   // Tallar geométricamente todas las ranuras en los contornos 2D de cada costilla estructural
   allPuzzleSlices.forEach((slice) => {
     if (slice.isPuzzleSolidCap) {
       slice.loops = getFullFilledSolidLoops(slice.rawBaseLoops || slice.baseLoops || []);
+      slice.isFloatingAboveFloor = false;
+      slice.floatingClearanceMM = 0;
       return;
     }
     let currentLoops = slice.baseLoops.slice();
@@ -1901,9 +2432,62 @@ function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB, slicesC = 
       const filtered = currentLoops.filter((l) => l.isHole || (l.absArea || 0) >= minSliverArea);
       if (filtered.length > 0) currentLoops = filtered;
     }
+
+    // Si está activo el descarte de islas aéreas sin unión, descartar islas exteriores que ni tocan el suelo ni tienen encaje
+    if (checkDropUnconnected && slice.sliceAxis !== 'z' && currentLoops.length > 1) {
+      const outerLoops = currentLoops.filter((l) => !l.isHole);
+      if (outerLoops.length > 1) {
+        const keptLoops = currentLoops.filter((l) => {
+          if (l.isHole) return true;
+          let lMinX = Infinity, lMaxX = -Infinity, lMinY = Infinity, lMaxY = -Infinity;
+          (l.points || []).forEach((p) => {
+            if (p.x < lMinX) lMinX = p.x;
+            if (p.x > lMaxX) lMaxX = p.x;
+            if (p.y < lMinY) lMinY = p.y;
+            if (p.y > lMaxY) lMaxY = p.y;
+          });
+          // Si apoya en el suelo, se conserva siempre
+          if (lMinY <= baseZ + 1.5) return true;
+          // Comprobar si alguna ranura de encaje intersecta la caja envolvente de esta isla
+          const m = Math.max(1.5, slotW);
+          for (let sr = 0; sr < slice.slotRects.length; sr++) {
+            const r = slice.slotRects[sr];
+            if (r.maxX >= lMinX - m && r.minX <= lMaxX + m && r.maxY >= lMinY - m && r.minY <= lMaxY + m) {
+              return true;
+            }
+          }
+          return false;
+        });
+        if (keptLoops.some((l) => !l.isHole)) {
+          currentLoops = keptLoops;
+        }
+      }
+    }
+
     slice.loops = currentLoops;
+
+    // Medir si la costilla final queda suspendida sobre el suelo sostenida por sus uniones
+    if (slice.sliceAxis !== 'z' && currentLoops.length > 0) {
+      let finalMinY = Infinity;
+      currentLoops.forEach((l) => {
+        if (l.isHole) return;
+        (l.points || []).forEach((p) => {
+          if (p.y < finalMinY) finalMinY = p.y;
+        });
+      });
+      const clearanceFromFloor = Number.isFinite(finalMinY) ? (finalMinY - baseZ) : 0;
+      slice.isFloatingAboveFloor = clearanceFromFloor > 1.2;
+      slice.floatingClearanceMM = slice.isFloatingAboveFloor ? Number(clearanceFromFloor.toFixed(1)) : 0;
+      if (slice.isFloatingAboveFloor) {
+        floatingRibsCount++;
+      }
+    } else {
+      slice.isFloatingAboveFloor = false;
+      slice.floatingClearanceMM = 0;
+    }
   });
 
+  state.puzzleSelfSupportCount = floatingRibsCount;
   state.puzzleTotalSlotsCount = totalSlots;
   return totalSlots;
 }
@@ -2340,7 +2924,8 @@ function rebuildGhostAndSlices() {
 
     for (let i = 0; i < countA; i++) {
       const coordA = coordInfoA.coords[i];
-      const rawLoops = sliceTrianglesAtPlane(verts, cfg.axisA, coordA, spanA);
+      const selfSupA = isPuzzleRibSelfSupporting({ puzzleSeries: 'A', seriesIndex: i, sliceAxis: cfg.axisA }, countA);
+      const rawLoops = sliceTrianglesAtPlane(verts, cfg.axisA, coordA, spanA, selfSupA);
       const filteredRes = filterLoopsByMinIslandSize(rawLoops);
       totalRemovedIslands += filteredRes.removedCount;
       totalFilledHoles += (filteredRes.filledHolesCount || 0);
@@ -2353,6 +2938,7 @@ function rebuildGhostAndSlices() {
         puzzleSeries: 'A',
         seriesIndex: i,
         puzzleCode: codeA,
+        isSelfSupporting: selfSupA,
         selected: true,
         rawLoops: rawLoops,
         rawBaseLoops: filteredRes.loops,
@@ -2365,7 +2951,8 @@ function rebuildGhostAndSlices() {
 
     for (let j = 0; j < countB; j++) {
       const coordB = coordInfoB.coords[j];
-      const rawLoops = sliceTrianglesAtPlane(verts, cfg.axisB, coordB, spanB);
+      const selfSupB = isPuzzleRibSelfSupporting({ puzzleSeries: 'B', seriesIndex: j, sliceAxis: cfg.axisB }, countB);
+      const rawLoops = sliceTrianglesAtPlane(verts, cfg.axisB, coordB, spanB, selfSupB);
       const filteredRes = filterLoopsByMinIslandSize(rawLoops);
       totalRemovedIslands += filteredRes.removedCount;
       totalFilledHoles += (filteredRes.filledHolesCount || 0);
@@ -2378,6 +2965,7 @@ function rebuildGhostAndSlices() {
         puzzleSeries: 'B',
         seriesIndex: j,
         puzzleCode: codeB,
+        isSelfSupporting: selfSupB,
         selected: true,
         rawLoops: rawLoops,
         rawBaseLoops: filteredRes.loops,
@@ -2395,7 +2983,8 @@ function rebuildGhostAndSlices() {
       const coordInfoC = computePuzzleAxisSliceCoords(spanC, countC, state.puzzleStartOffsetCMM || 0, state.puzzleStartMode, state.puzzleRibOffsetsCMM);
       for (let k = 0; k < countC; k++) {
         const coordC = coordInfoC.coords[k];
-        const rawLoops = sliceTrianglesAtPlane(verts, cfg.axisC, coordC, spanC);
+        const selfSupC = isPuzzleRibSelfSupporting({ puzzleSeries: 'C', seriesIndex: k, sliceAxis: cfg.axisC }, countC);
+        const rawLoops = sliceTrianglesAtPlane(verts, cfg.axisC, coordC, spanC, selfSupC);
         const filteredRes = filterLoopsByMinIslandSize(rawLoops);
         totalRemovedIslands += filteredRes.removedCount;
         totalFilledHoles += (filteredRes.filledHolesCount || 0);
@@ -2408,6 +2997,7 @@ function rebuildGhostAndSlices() {
           puzzleSeries: 'C',
           seriesIndex: k,
           puzzleCode: codeC,
+          isSelfSupporting: selfSupC,
           selected: true,
           rawLoops: rawLoops,
           rawBaseLoops: filteredRes.loops,
@@ -2806,7 +3396,7 @@ function setMinIslandSizePreset(valMM) {
   applyIslandFilterToExistingSlices();
 }
 
-function sliceTrianglesAtPlane(verts, axis, planeVal, spanScale) {
+function sliceTrianglesAtPlane(verts, axis, planeVal, spanScale, isSelfSupportingRib = false) {
   const segments = [];
   const eps = 1e-7 * Math.max(1, spanScale);
 
@@ -2870,16 +3460,20 @@ function sliceTrianglesAtPlane(verts, axis, planeVal, spanScale) {
       });
     });
     const bboxArea = Math.max(1, (maxX - minX) * (maxY - minY));
+    const skipPedestal = Boolean(isSelfSupportingRib || state.puzzleSelfSupporting);
     if (netArea < 0.38 * bboxArea) {
+      if (skipPedestal && netArea >= 0.04 * bboxArea) {
+        return classified;
+      }
       const baseZ = -(state.dimsMM && state.dimsMM.z ? state.dimsMM.z : 100) * 0.5;
-      const solidLoops = buildSolidRibLoopFromSegments(segments, baseZ);
+      const solidLoops = buildSolidRibLoopFromSegments(segments, baseZ, skipPedestal);
       if (solidLoops.length > 0) return solidLoops;
     }
   }
   return classified;
 }
 
-function buildSolidRibLoopFromSegments(segments, baseY) {
+function buildSolidRibLoopFromSegments(segments, baseY, selfSupporting = false) {
   if (!segments || segments.length === 0) return [];
   let uMin = Infinity, uMax = -Infinity;
   for (let i = 0; i < segments.length; i++) {
@@ -2892,14 +3486,21 @@ function buildSolidRibLoopFromSegments(segments, baseY) {
   const stepU = 0.25;
   const numBins = Math.max(4, Math.ceil((uMax - uMin) / stepU));
   const vMaxArr = new Float32Array(numBins + 1).fill(-Infinity);
+  const vMinRealArr = new Float32Array(numBins + 1).fill(Infinity);
+  const floorTol = 1.2;
 
   for (let i = 0; i < segments.length; i++) {
     const p0 = segments[i][0], p1 = segments[i][1];
     const x0 = p0.x, y0 = p0.y, x1 = p1.x, y1 = p1.y;
+    const isFloorSeg = Math.abs(y0 - baseY) < floorTol && Math.abs(y1 - baseY) < floorTol;
     const b0 = Math.max(0, Math.min(numBins, Math.round((x0 - uMin) / stepU)));
     const b1 = Math.max(0, Math.min(numBins, Math.round((x1 - uMin) / stepU)));
     if (y0 > vMaxArr[b0]) vMaxArr[b0] = y0;
     if (y1 > vMaxArr[b1]) vMaxArr[b1] = y1;
+    if (!isFloorSeg) {
+      if (y0 > baseY + floorTol && y0 < vMinRealArr[b0]) vMinRealArr[b0] = y0;
+      if (y1 > baseY + floorTol && y1 < vMinRealArr[b1]) vMinRealArr[b1] = y1;
+    }
     const lo = Math.min(b0, b1), hi = Math.max(b0, b1);
     if (hi > lo && Math.abs(x1 - x0) > 1e-6) {
       for (let b = lo; b <= hi; b++) {
@@ -2907,6 +3508,9 @@ function buildSolidRibLoopFromSegments(segments, baseY) {
         const t = Math.max(0, Math.min(1, (u - x0) / (x1 - x0)));
         const y = y0 + t * (y1 - y0);
         if (y > vMaxArr[b]) vMaxArr[b] = y;
+        if (!isFloorSeg && y > baseY + floorTol && y < vMinRealArr[b]) {
+          vMinRealArr[b] = y;
+        }
       }
     }
   }
@@ -2914,6 +3518,9 @@ function buildSolidRibLoopFromSegments(segments, baseY) {
   for (let b = 1; b < numBins; b++) {
     if (vMaxArr[b] === -Infinity && vMaxArr[b - 1] > -Infinity && vMaxArr[b + 1] > -Infinity) {
       vMaxArr[b] = 0.5 * (vMaxArr[b - 1] + vMaxArr[b + 1]);
+    }
+    if (vMinRealArr[b] === Infinity && vMinRealArr[b - 1] < Infinity && vMinRealArr[b + 1] < Infinity) {
+      vMinRealArr[b] = 0.5 * (vMinRealArr[b - 1] + vMinRealArr[b + 1]);
     }
   }
 
@@ -2926,16 +3533,32 @@ function buildSolidRibLoopFromSegments(segments, baseY) {
     while (b <= numBins && vMaxArr[b] > baseY + 1.0) b++;
     const endB = b - 1;
     if (endB - startB >= 4) {
-      const uStart = uMin + startB * stepU;
-      const uEnd = uMin + endB * stepU;
-      const pts = [
-        { x: uStart, y: baseY },
-        { x: uEnd, y: baseY }
-      ];
-      for (let k = endB; k >= startB; k--) {
-        pts.push({ x: uMin + k * stepU, y: vMaxArr[k] });
+      if (!selfSupporting) {
+        const uStart = uMin + startB * stepU;
+        const uEnd = uMin + endB * stepU;
+        const pts = [
+          { x: uStart, y: baseY },
+          { x: uEnd, y: baseY }
+        ];
+        for (let k = endB; k >= startB; k--) {
+          pts.push({ x: uMin + k * stepU, y: vMaxArr[k] });
+        }
+        loops.push(pts);
+      } else {
+        const pts = [];
+        for (let k = startB; k <= endB; k++) {
+          const topY = vMaxArr[k];
+          let botY = vMinRealArr[k];
+          if (!(botY < topY - 2.0)) {
+            botY = Math.max(baseY, topY - Math.max(12.0, (topY - baseY) * 0.45));
+          }
+          pts.push({ x: uMin + k * stepU, y: botY });
+        }
+        for (let k = endB; k >= startB; k--) {
+          pts.push({ x: uMin + k * stepU, y: vMaxArr[k] });
+        }
+        loops.push(pts);
       }
-      loops.push(pts);
     }
   }
   return classifyLoopsOuterAndHoles(loops);
@@ -4633,6 +5256,16 @@ if (typeof window !== 'undefined') {
   window.onPuzzleSimplifyTolInput = onPuzzleSimplifyTolInput;
   window.stepPuzzleSimplifyTolerance = stepPuzzleSimplifyTolerance;
   window.setPuzzleSimplifyPreset = setPuzzleSimplifyPreset;
+  window.hasAnyPuzzleSelfSupportingRib = hasAnyPuzzleSelfSupportingRib;
+  window.isPuzzleRibSelfSupporting = isPuzzleRibSelfSupporting;
+  window.toggleSelectedPuzzleRibSelfSupporting = toggleSelectedPuzzleRibSelfSupporting;
+  window.setPuzzleSelfSupporting = setPuzzleSelfSupporting;
+  window.setPuzzleSelfSupportTarget = setPuzzleSelfSupportTarget;
+  window.onPuzzleSelfSupportParamsChange = onPuzzleSelfSupportParamsChange;
+  window.onPuzzleSelfSupportClearanceInput = onPuzzleSelfSupportClearanceInput;
+  window.stepPuzzleSelfSupportClearance = stepPuzzleSelfSupportClearance;
+  window.setPuzzleSelfSupportPreset = setPuzzleSelfSupportPreset;
+  window.resetAllPuzzleSelfSupportRibs = resetAllPuzzleSelfSupportRibs;
   window.syncSidebarTabsUI = syncSidebarTabsUI;
   window.setSidebarTab = setSidebarTab;
   window.toggleSidebarCard = toggleSidebarCard;
