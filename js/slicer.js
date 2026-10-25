@@ -66,14 +66,11 @@ function getPuzzleSlice2DAxes(sliceAxis, otherAxis) {
 function setConstructionMode(mode) {
   state.constructionMode = mode === 'puzzle3d' ? 'puzzle3d' : 'stacked';
   if (state.constructionMode === 'puzzle3d') {
-    // En el modo Puzzle 3D, activar por defecto Eliminar Islas Pequeñas y Rellenar Huecos Internos
+    // En el modo Puzzle 3D, activar por defecto los 3 ejes ('xyz'), Eliminar Islas Pequeñas y Rellenar Huecos Internos
+    if (!state.puzzleAxes) state.puzzleAxes = 'xyz';
     state.filterSmallIslands = true;
     state.fillInternalHoles = true;
     updateFilteredIslandsUI();
-    if (!state._puzzleAxesEvaluatedForCurrentMesh && state.baseVertices && state.baseVertices.length > 0) {
-      autoSelectBestPuzzleAxes(true);
-      return;
-    }
   }
   syncConstructionModeUI();
   rebuildGhostAndSlices();
@@ -2258,7 +2255,7 @@ function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB, slicesC = 
 
           const rectB = infoB.uAxis === 'x'
             ? { minX: sA.coord - halfW, maxX: sA.coord + halfW, minY: safeMinVB, maxY: vMid + relief }
-            : { minX: safeMinVB, maxX: vMid + relief, minY: sA.coord - halfW, maxY: sB.coord + halfW };
+            : { minX: safeMinVB, maxX: vMid + relief, minY: sA.coord - halfW, maxY: sA.coord + halfW };
 
           sB.slotRects.push(rectB);
           sB.slots.push({
@@ -2328,7 +2325,7 @@ function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB, slicesC = 
 
           const rectB = infoB.uAxis === 'x'
             ? { minX: sA.coord - halfW, maxX: sA.coord + halfW, minY: vMid - relief, maxY: safeMaxVB }
-            : { minX: vMid - relief, maxX: safeMaxVB, minY: sA.coord - halfW, maxY: sB.coord + halfW };
+            : { minX: vMid - relief, maxX: safeMaxVB, minY: sA.coord - halfW, maxY: sA.coord + halfW };
 
           sB.slotRects.push(rectB);
           sB.slots.push({
@@ -2394,31 +2391,48 @@ function carveInterlockingPuzzleSlots(slicesA, slicesB, axisA, axisB, slicesC = 
       if (!hasC) {
         currentLoops = subtractSingleRectFromLoops(currentLoops, rect);
       } else {
-        // En modo 3 Ejes (X×Y×Z), si una ranura perpendicular partiría la costilla en dos pedazos grandes,
-        // reducir su profundidad a una muesca de borde del 28% para conservar el alma monolítica de la pieza
+        // En modo 3 Ejes (X×Y×Z), si una ranura perpendicular partiría la costilla en dos pedazos o incrementaría el nº de islas exteriores,
+        // reducir su profundidad a una muesca de borde para conservar el alma monolítica de la pieza
         const maxAreaBefore = getMaxOuterArea(currentLoops);
+        const outersBefore = currentLoops.filter((l) => !l.isHole && (l.absArea || 0) >= 25.0).length;
         const candidateLoops = subtractSingleRectFromLoops(currentLoops, rect);
         const maxAreaAfter = getMaxOuterArea(candidateLoops);
-        if (maxAreaBefore > 20 && maxAreaAfter < maxAreaBefore * 0.62 && slice.slots[r]) {
+        const outersAfter = candidateLoops.filter((l) => !l.isHole && (l.absArea || 0) >= 25.0).length;
+        if (maxAreaBefore > 20 && (maxAreaAfter < maxAreaBefore * 0.85 || outersAfter > outersBefore) && slice.slots[r]) {
           const sl = slice.slots[r];
-          const notchSpan = Math.abs(sl.vMouth - sl.vMid) * 0.52;
-          const vInner = sl.openPositive ? (sl.vMouth - notchSpan) : (sl.vMouth + notchSpan);
-          const safeRect = sl.uAxis === 'x'
-            ? {
-                minX: rect.minX,
-                maxX: rect.maxX,
-                minY: sl.openPositive ? vInner : rect.minY,
-                maxY: sl.openPositive ? rect.maxY : vInner
-              }
-            : {
-                minX: sl.openPositive ? vInner : rect.minX,
-                maxX: sl.openPositive ? rect.maxX : vInner,
-                minY: rect.minY,
-                maxY: rect.maxY
-              };
-          sl.rect = safeRect;
-          slice.slotRects[r] = safeRect;
-          currentLoops = subtractSingleRectFromLoops(currentLoops, safeRect);
+          const depthRatios = [0.52, 0.34, 0.20, 0.11];
+          let appliedSafe = false;
+          for (let dIdx = 0; dIdx < depthRatios.length; dIdx++) {
+            const notchSpan = Math.abs(sl.vMouth - sl.vMid) * depthRatios[dIdx];
+            const vInner = sl.openPositive ? (sl.vMouth - notchSpan) : (sl.vMouth + notchSpan);
+            const safeRect = sl.uAxis === 'x'
+              ? {
+                  minX: rect.minX,
+                  maxX: rect.maxX,
+                  minY: sl.openPositive ? vInner : rect.minY,
+                  maxY: sl.openPositive ? rect.maxY : vInner
+                }
+              : {
+                  minX: sl.openPositive ? vInner : rect.minX,
+                  maxX: sl.openPositive ? rect.maxX : vInner,
+                  minY: rect.minY,
+                  maxY: rect.maxY
+                };
+            const safeCandidate = subtractSingleRectFromLoops(currentLoops, safeRect);
+            const safeMaxArea = getMaxOuterArea(safeCandidate);
+            const safeOuters = safeCandidate.filter((l) => !l.isHole && (l.absArea || 0) >= 25.0).length;
+            if (safeOuters <= outersBefore && safeMaxArea >= maxAreaBefore * 0.85) {
+              sl.rect = safeRect;
+              slice.slotRects[r] = safeRect;
+              currentLoops = safeCandidate;
+              appliedSafe = true;
+              break;
+            }
+          }
+          if (!appliedSafe) {
+            // Si incluso una muesca mínima seccionaría una esquina por cruzarse con otra ranura perpendicular, preservar la integridad de la pieza
+            sl.skippedForAntiShear = true;
+          }
         } else {
           currentLoops = candidateLoops;
         }
