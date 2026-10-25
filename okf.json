@@ -2,18 +2,18 @@
   "$schema": "https://openknowledgeframework.org/schemas/v1.3.0/okf.schema.json",
   "okfVersion": "1.3.0",
   "metadata": {
-    "id": "urn:okf:software:layerstudio3d:2026:v3.0.12",
-    "title": "LayerStudio 3D — Especificación Operativa OKF para Agentes de IA (Corte Láser SVG/DXF, Puzzle 3D, Grabado Vectorial e Impresión 3D STL)",
-    "shortTitle": "OKF-LayerStudio3D-v3.0.12",
-    "description": "Paquete de Conocimiento Abierto (Open Knowledge Framework - OKF v1.3.0) diseñado para que agentes de Inteligencia Artificial (agentes de navegador DOM/Playwright, asistentes de código, sistemas RAG y LLMs como NotebookLM, Claude, Gemini o ChatGPT) comprendan la arquitectura, interfaz de usuario por pestañas, API programática JavaScript, estándar cromático láser, reconstrucción automática de envolventes macizas en mallas 3D huecas ('Sin Peana') y formato de proyectos (.lasca / .json) de LayerStudio 3D.",
-    "version": "3.0.12",
+    "id": "urn:okf:software:layerstudio3d:2026:v3.0.15",
+    "title": "LayerStudio 3D — Especificación Operativa OKF para Agentes de IA (Corte Láser SVG/DXF, Puzzle 3D 2/3 Ejes, Costillas Autosustentantes, Grabado Vectorial e Impresión 3D STL)",
+    "shortTitle": "OKF-LayerStudio3D-v3.0.15",
+    "description": "Paquete de Conocimiento Abierto (Open Knowledge Framework - OKF v1.3.0) diseñado para que agentes de Inteligencia Artificial (agentes de navegador DOM/Playwright, asistentes de código, sistemas RAG y LLMs como NotebookLM, Claude, Gemini o ChatGPT) comprendan la arquitectura, interfaz de usuario por pestañas, API programática JavaScript, estándar cromático láser, reconstrucción automática de envolventes macizas en mallas 3D huecas ('Sin Peana'), modo de costilla autosustentante ('puzzleSelfSupporting'), cruce en 2 o 3 ejes ('xy', 'xz', 'yz', 'xyz'), rotación 90° de costillas y compuerta obligatoria de previsualización del proyecto (.lasca) antes de exportar archivos de fabricación.",
+    "version": "3.0.15",
     "created": "2026-10-25",
     "modified": "2026-10-25",
     "language": "es-ES",
     "domain": "Manufacturing / CAD-CAM / Laser Cutting / 3D Slicing / Educational FabLab",
     "targetApplication": {
       "name": "LayerStudio 3D",
-      "version": "3.0.12",
+      "version": "3.0.15",
       "entryPointModular": "index.html",
       "entryPointStandalone": "indexstandalone.html",
       "repository": "https://github.com/nmarafo/layerstudio3D",
@@ -226,16 +226,21 @@
         "description": "Cambia la unidad visual de toda la interfaz manteniendo el motor interno en milímetros."
       },
       {
+        "function": "rotateBaseModel90(axis)",
+        "arguments": "axis: 'x' | 'y' | 'z'",
+        "description": "Rota el modelo 3D base y todas sus costillas 90° alrededor del eje indicado ('x' intercambia Y<->Z, 'y' intercambia X<->Z, 'z' intercambia X<->Y en planta) y recalcula inmediatamente el laminado o Puzzle 3D."
+      },
+      {
         "function": "applyOkfProjectConfig(data)",
         "arguments": "data: Object (esquema .lasca o receta ligera OKF)",
-        "description": "Aplica de una sola vez una configuración completa o parcial de proyecto OKF (incluyendo carga opcional de presetModel, escalado, modo constructivo, limpieza, acabados y nesting) y recalcula las láminas."
+        "description": "Aplica de una sola vez una configuración completa o parcial de proyecto OKF (incluyendo carga opcional de presetModel, escalado, modo constructivo, 2 o 3 ejes de cruce, costillas autosustentantes, limpieza, acabados y nesting) y recalcula las láminas."
       }
     ],
     "constructionAndSlicing": [
       {
         "function": "setConstructionMode(mode)",
         "arguments": "mode: 'stacked' | 'puzzle3d'",
-        "description": "Alterna entre Apilado 1 Eje ('stacked') y Puzzle 3D 2 Ejes con ranuras a 90° ('puzzle3d')."
+        "description": "Alterna entre Apilado 1 Eje ('stacked') y Puzzle 3D Encajable ('puzzle3d', en 2 o 3 ejes ortogonales con costillas autosustentantes activas por defecto)."
       },
       {
         "function": "setSliceAxis(axis)",
@@ -259,8 +264,8 @@
       },
       {
         "function": "setPuzzleAxes(pair)",
-        "arguments": "pair: 'xy' | 'xz' | 'yz'",
-        "description": "En modo 'puzzle3d', selecciona el par de ejes ortogonales para las Series A y B de costillas."
+        "arguments": "pair: 'xy' | 'xz' | 'yz' | 'xyz'",
+        "description": "En modo 'puzzle3d', selecciona el par de ejes ortogonales ('xy', 'xz', 'yz') o los 3 ejes simultáneos ('xyz': Serie A = X, Serie B = Y, Serie C = Z con protección anti-cizalladura)."
       },
       {
         "function": "autoSelectBestPuzzleAxes(silent)",
@@ -269,13 +274,33 @@
       },
       {
         "function": "onPuzzleCountChange(series, val)",
-        "arguments": "series: 'A' | 'B', val: number (2..40)",
-        "description": "Cambia el número de costillas de la Serie A o Serie B en modo Puzzle 3D."
+        "arguments": "series: 'a' | 'b' | 'c', val: number (2..60)",
+        "description": "Cambia el número de costillas de la Serie A, Serie B o Serie C (en modo 3 ejes 'xyz') en Puzzle 3D."
       },
       {
         "function": "stepPuzzleCount(series, delta)",
-        "arguments": "series: 'A' | 'B', delta: -1 | 1",
-        "description": "Incrementa o decrementa en 1 el número de costillas de la Serie A o B."
+        "arguments": "series: 'a' | 'b' | 'c', delta: -1 | 1",
+        "description": "Incrementa o decrementa en 1 el número de costillas de la Serie A, B o C."
+      },
+      {
+        "function": "setPuzzleSelfSupporting(enabled)",
+        "arguments": "enabled: boolean",
+        "description": "Activa o desactiva el modo de Costilla Autosustentante en Puzzle 3D (activo por defecto: true), donde las costillas seleccionadas no bajan hasta el suelo y se sostienen solas mediante sus ranuras de unión."
+      },
+      {
+        "function": "setPuzzleSelfSupportTarget(target)",
+        "arguments": "target: 'outer' | 'series_b' | 'series_a' | 'all' | 'custom'",
+        "description": "Define qué costillas actúan como autosustentantes: 'outer' (exteriores y voladizos), 'series_b' (toda la Serie B suspendida sobre A), 'series_a' (toda la Serie A suspendida sobre B), 'all' (todas) o 'custom' (selección individual)."
+      },
+      {
+        "function": "setPuzzleSelfSupportPreset(target, style, clearanceRatioOrMM)",
+        "arguments": "target: string, style: 'trim_union' | 'arch' | 'natural', clearanceRatioOrMM?: number",
+        "description": "Aplica un preset rápido de costilla autosustentante ('trim_union' recorte recto bajo unión, 'arch' arco aligerado entre uniones, 'natural' solo silueta 3D real flotante sin pedestal)."
+      },
+      {
+        "function": "toggleSelectedPuzzleRibSelfSupporting()",
+        "arguments": "none",
+        "description": "Alterna individualmente si la costilla actualmente seleccionada apoya en el suelo o es autosustentante (suspendida por la unión)."
       },
       {
         "function": "setPuzzleStartMode(mode)",
@@ -472,19 +497,34 @@
       "description": "Silueta proyectada de la lámina inmediata inferior (N-1)."
     }
   ],
+  "preExportPreviewProtocol": {
+    "mandatoryGate": true,
+    "ruleId": "OKF-GATE-LASCA-PREVIEW-BEFORE-EXPORT",
+    "summary": "Antes de exportar cualquier paquete de archivos de fabricación (.ZIP, .DXF, .SVG, .STL) o de compilar binarios (.oud/.oue) para la cortadora láser, todo agente de IA DEBE generar primero el archivo de proyecto (.lasca) y preguntar explícitamente a la persona usuaria si desea previsualizar el proyecto (.lasca) en LayerStudio 3D antes de proceder con la exportación final.",
+    "requiredSteps": [
+      "1. Configurar el modelo 3D y los parámetros óptimos en LayerStudio 3D (eje/ejes de cruce con autoSelectBestPuzzleAxes(), modo de costilla autosustentante puzzleSelfSupporting, grosor de material y dimensiones de tablero).",
+      "2. Generar y entregar en primer lugar el archivo de proyecto autónomo (.lasca) invocando exportProjectFile() (o guardándolo en el espacio de trabajo) junto con un resumen de la configuración elegida.",
+      "3. PREGUNTAR EXPLÍCITAMENTE a la persona usuaria: «¿Desea previsualizar primero el proyecto (.lasca) en LayerStudio 3D (https://nmarafo.github.io/layerstudio3D/ → botón 📂 Abrir) para verificar la orientación de los ejes y las costillas antes de exportar los archivos definitivos de corte (.ZIP / .DXF / .SVG / .OUD)?».",
+      "4. Esperar la confirmación de la persona usuaria (salvo que esta haya solicitado expresamente exportar directamente sin previsualización previa) antes de ejecutar exportZipBatch(), exportAllDXFLayout(), exportAllSVGLayout() o la compilación a .oud/.oue."
+    ]
+  },
   "llmRecommendations": {
     "preferredContextFiles": [
       "okf.json",
       "okf/arquitectura_okf.md",
       "okf/prompt_maestro_okf_layerstudio3d.md",
-      "schema/schema_layerstudio3d_project.json"
+      "schema/schema_layerstudio3d_project.json",
+      "AGENTS.md"
     ],
     "agentExecutionTips": [
+      "REGLA OBLIGATORIA DE PREVISUALIZACIÓN ANTES DE EXPORTAR (OKF-GATE-LASCA-PREVIEW-BEFORE-EXPORT): Antes de exportar los archivos de fabricación (.ZIP, .DXF, .SVG, .STL) de LayerStudio 3D o de compilarlos a .oud/.oue, genere SIEMPRE primero el archivo de proyecto (.lasca) y pregunte a la persona usuaria si desea previsualizar el proyecto (.lasca) en LayerStudio 3D antes de exportar. Esto permite validar visualmente en 3D y 2D la combinación de ejes ('xy', 'xz', 'yz', 'xyz'), la rotación de las costillas y el modo autosustentante antes de producir los archivos de máquina.",
       "Si el agente opera mediante JavaScript en la consola del navegador o Playwright page.evaluate(), prefiera invocar window.applyOkfProjectConfig(configObj) o las funciones globales documentadas en programmaticApiCatalog en lugar de simular decenas de eventos de ratón.",
       "Si el agente opera mediante clics DOM puros, cambie primero a la pestaña adecuada con setSidebarTab('cut' | 'clean' | 'finish' | 'boards' | 'all') o haciendo clic en #sidebarTab_cut, #sidebarTab_clean, #sidebarTab_finish, #sidebarTab_boards o #sidebarTab_all.",
+      "En modo Puzzle 3D ('puzzle3d'), están disponibles tanto las 3 combinaciones de 2 ejes ('xy', 'xz', 'yz', con selección automática óptima mediante autoSelectBestPuzzleAxes()) como la opción de 3 ejes simultáneos ('xyz', con Serie C en el Eje Z y protección anti-cizalladura de ranuras), además de los botones de rotación de 90° de la pieza y costillas (rotateBaseModel90('x' | 'y' | 'z')).",
+      "En modo Puzzle 3D ('puzzle3d'), el modo de Costilla Autosustentante (puzzleSelfSupporting: true) está activo por defecto (con puzzleSelfSupportTarget: 'outer' y puzzleSelfSupportStyle: 'trim_union'), permitiendo que las costillas seleccionadas no bajen hasta el suelo (sin pedestal inferior) y se sostengan solas en el aire mediante el encaje con las costillas perpendiculares, descartando además islas aéreas desconectadas (puzzleDropUnconnectedIslands: true).",
       "En modo Puzzle 3D ('puzzle3d'), recuerde que el grosor del tablero (puzzleMaterialThicknessMM) y la holgura de encaje (puzzleSlotClearanceMM) determinan el ancho exacto de las ranuras a 90°: slotWidth = Math.max(0.2, puzzleMaterialThicknessMM + puzzleSlotClearanceMM).",
       "En modo Puzzle 3D ('puzzle3d'), tenga siempre en cuenta que lo habitual es grabar las costillas primera y última de los ejes (las fachadas exteriores: ej. X1 y XN en la Serie A, y/o Y1/Z1 y YM/ZM en la Serie B), mientras las costillas intermedias actúan como esqueleto estructural interno. Para ello es especialmente útil la función ya existente de grabar imagen en lasca (activando puzzleEngraveEndRibs: true en applyOkfProjectConfig, llamando a applyEngravingToPuzzleEndRibs() o seleccionando la primera y última costilla de cada eje y aplicando applyDemoImageEngravingToSelectedSlice / handleSliceImageEngraveFile), ya que recorta automáticamente el grabado (#008800 / capa C00) al contorno exterior y evita las ranuras de encaje a 90°.",
-      "Cuando procese modelos .STL arquitectónicos, escultóricos o generados por IA que sean cáscaras huecas o tengan la base inferior recortada ('Sin Peana'), mantenga activo fillInternalHoles: true en modo 'puzzle3d'. El motor sliceTrianglesAtPlane detecta automáticamente si la sección transversal es una cáscara hueca o abierta (netArea < 0.38 * bboxArea) y reconstruye la envolvente superior v_max(u) apoyada sobre la cota base (Z = minZ) mediante buildSolidRibLoopFromSegments(), garantizando costillas estructurales macizas y el tallado íntegro de todas las ranuras a 90°.",
+      "Cuando procese modelos .STL arquitectónicos, escultóricos o generados por IA que sean cáscaras huecas o tengan la base inferior recortada ('Sin Peana'), mantenga activo fillInternalHoles: true en modo 'puzzle3d'. El motor sliceTrianglesAtPlane detecta automáticamente si la sección transversal es una cáscara hueca o abierta (netArea < 0.38 * bboxArea) y reconstruye la envolvente superior v_max(u) apoyada sobre la cota base (Z = minZ) o sobre el contorno flotante autosustentante mediante buildSolidRibLoopFromSegments(), garantizando costillas estructurales macizas y el tallado íntegro de todas las ranuras a 90°.",
       "En mallas de alta densidad (> 500.000 triángulos), active siempre puzzleSimplifyCutLine: true con puzzleSimplifyMode: 'rdp' y puzzleSimplifyToleranceMM: 0.25 para evitar miles de microsegmentos en la cortadora láser sin perder detalle arquitectónico.",
       "Todo paquete .ZIP exportado por LayerStudio 3D incluye en su raíz el archivo PROYECTO_OKF.lasca con los metadatos del proyecto (incluyendo puzzleMaterialThicknessMM y boardWidthMM/boardHeightMM), permitiendo que el compilador de la cortadora láser Pérez Camps PC 13/90 II (https://github.com/nmarafo/laserpc13-90-II) autoseleccione el preset de velocidades y potencias del material."
     ]

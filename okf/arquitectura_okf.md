@@ -1,10 +1,10 @@
-# Arquitectura y Manual Operativo OKF para Agentes de IA: LayerStudio 3D (`v3.0.12`)
+# Arquitectura y Manual Operativo OKF para Agentes de IA: LayerStudio 3D (`v3.0.15`)
 
 > **Autor**: Norberto Martín Afonso (`normaafo@gmail.com`)  
 > **Repositorio**: `https://github.com/nmarafo/layerstudio3D`  
 > **Repositorio Compañero (Compilador Láser PC 13/90 II)**: `https://github.com/nmarafo/laserpc13-90-II`  
 > **Licencia**: GNU Affero General Public License v3.0 or later (con cláusula Sección 7b de atribución obligatoria)  
-> **Versión OKF**: `1.3.0` (`urn:okf:software:layerstudio3d:2026:v3.0.12`)
+> **Versión OKF**: `1.3.0` (`urn:okf:software:layerstudio3d:2026:v3.0.15`)
 
 ---
 
@@ -19,24 +19,25 @@ Un agente de IA puede interactuar con **LayerStudio 3D** por **tres vías comple
 
 ---
 
-## 2. Diagrama del Pipeline Geométrico de LayerStudio 3D
+## 2. Diagrama del Pipeline Geométrico y Compuerta de Previsualización `.lasca`
 
 ```mermaid
 flowchart TD
-    A["Entrada 3D (.STL / .GLB / .GLTF / .LASCA / Presets)<br/>o Imagen 2D (.PNG / .BMP / .JPG)"] --> B["Normalización y Escalado Métrico Real<br/>state.baseVertices + state.dimsMM (X, Y, Z en mm)"]
+    A["Entrada 3D (.STL / .GLB / .GLTF / .LASCA / Presets)<br/>o Imagen 2D (.PNG / .BMP / .JPG)"] --> B["Normalización, Escalado Métrico y Rotación 90°<br/>state.baseVertices + state.dimsMM + rotateBaseModel90('x'|'y'|'z')"]
     B --> C{"Modo Constructivo<br/>state.constructionMode"}
     C -->|"stacked (1 Eje X/Y/Z)"| D["Intersección Plano-Malla Paralela<br/>Por Nº de Láminas (count) o Grosor Fijo (thickness)"]
-    C -->|"puzzle3d (2 Ejes Ortogonales XY/XZ/YZ)"| E["Generación de Series A y B de Costillas<br/>Sin duplicar extremos + Offset Global/Individual"]
-    E --> F["Simplificación Opcional de Línea de Corte<br/>(RDP / Suavizado Chaikin / Puente Cóncavo / Envolvente)<br/>ANTES de tallar ranuras para preservar encaje exacto"]
-    F --> G["Tallado de Ranuras de Encaje a 90° (Mitad-y-Mitad)<br/>Ancho = puzzleMaterialThicknessMM + puzzleSlotClearanceMM"]
+    C -->|"puzzle3d (2 Ejes XY/XZ/YZ o 3 Ejes XYZ)"| E["Selección Automática (autoSelectBestPuzzleAxes)<br/>+ Series A, B y opcionalmente C (3 Ejes)"]
+    E --> F["Costilla Autosustentante (puzzleSelfSupporting = true)<br/>+ Simplificación Opcional de Línea de Corte ANTES de ranurar"]
+    F --> G["Tallado de Ranuras de Encaje a 90° (2 o 3 Ejes)<br/>Con Protección Anti-Cizalladura + Limpieza de Islas Aéreas"]
     D --> H["Limpieza Topológica 2D<br/>Eliminar Islas Pequeñas + Rellenar Huecos Internos"]
     G --> H
     H --> I["Acabados por Lámina<br/>• Grabado de Imagen recortado al contorno y ranuras<br/>• Varillas de Alineación + Marco 2D + Holding Tabs<br/>• Subdivisión Modular Gran Formato (Cola de Milano / Puzzle)"]
     I --> J{"Empaquetado 2D<br/>state.nestingEnabled"}
     J -->|"Desactivado"| K["Inspector 2D Individual + Visor 3D Interactivo"]
     J -->|"Activado"| L["Nesting Multi-Tablero (Rotación 90° + Part-in-Hole)<br/>+ Plancha Madre Opcional (Carrier Sheet)"]
-    K --> M["Exportación CAD/CAM 1:1 en mm<br/>.SVG · .DXF (R12) · .STL (Binario) · .ZIP · .LASCA"]
-    L --> M
+    K --> P["COMPUERTA OBLIGATORIA OKF:<br/>1. Generar Proyecto (.lasca)<br/>2. ¿Desea previsualizar el .lasca antes de exportar?"]
+    L --> P
+    P -->|"Tras Validar / Confirmar"| M["Exportación CAD/CAM 1:1 en mm<br/>.SVG · .DXF (R12) · .STL (Binario) · .ZIP · .OUD/.OUE"]
 ```
 
 ---
@@ -86,9 +87,18 @@ Desde la versión `3.0.6`, el panel lateral izquierdo (`<aside>`) organiza sus *
   * Cantidad de láminas: `#sliceCountSlider`, `#sliceCountInput` (`2..120`) → `onSliceCountChange(val)` / `stepSliceCount(-1 | 1)`
   * Grosor de material: `#thicknessInput` → `onThicknessChange(val)`
 * **Controles exclusivos del Modo Puzzle 3D (`puzzle3d`)**:
-  * Par de ejes ortogonales: `#puzzleAxes_xy`, `#puzzleAxes_xz`, `#puzzleAxes_yz` → `setPuzzleAxes('xy' | 'xz' | 'yz')`
-  * Nº de costillas Serie A: `#puzzleCountASlider`, `#puzzleCountAInput` → `onPuzzleCountChange('A', val)` / `stepPuzzleCount('A', -1 | 1)`
-  * Nº de costillas Serie B: `#puzzleCountBSlider`, `#puzzleCountBInput` → `onPuzzleCountChange('B', val)` / `stepPuzzleCount('B', -1 | 1)`
+  * Rotación rápida 90° del modelo y costillas: `onclick="rotateBaseModel90('x' | 'y' | 'z')"` (`↻ X 90°`, `↻ Y 90°`, `↻ Z 90°`)
+  * Combinación de ejes ortogonales (2 o 3 ejes): `#puzzleAxesBtn_xy`, `#puzzleAxesBtn_xz`, `#puzzleAxesBtn_yz`, `#puzzleAxesBtn_xyz` → `setPuzzleAxes('xy' | 'xz' | 'yz' | 'xyz')` y botón `🪄 Auto` → `autoSelectBestPuzzleAxes(false)`
+  * **Costilla Autosustentante (sin bajar al suelo, sujeta por la unión — Activa por defecto)**:
+    * Activar/Desactivar: `#puzzleSelfSupportingCheck` → `setPuzzleSelfSupporting(bool)`
+    * Objetivo: `#puzzleSelfSupTargetBtn_outer` (`Exteriores`), `#puzzleSelfSupTargetBtn_series_b` (`Serie B`), `#puzzleSelfSupTargetBtn_series_a` (`Serie A`), `#puzzleSelfSupTargetBtn_all` (`Todas`) → `setPuzzleSelfSupportTarget('outer' | 'series_b' | 'series_a' | 'all' | 'custom')`
+    * Estilo de base suspendida: `#puzzleSelfSupportStyleSelect` (`'trim_union'` Recorte recto bajo unión, `'arch'` Arco aligerado entre uniones, `'natural'` Solo silueta 3D real sin pedestal) → `onPuzzleSelfSupportParamsChange()`
+    * Altura libre desde el suelo (mm): `#puzzleSelfSupportClearanceSlider`, `#puzzleSelfSupportClearanceInput` → `onPuzzleSelfSupportClearanceInput(val)` / `stepPuzzleSelfSupportClearance(deltaMM)`
+    * Descartar islas aéreas sin unión: `#puzzleDropUnconnectedCheck` (`puzzleDropUnconnectedIslands: true`)
+    * Alternar soporte individual en la costilla seleccionada: `#puzzleToggleRibSelfSupBtn` / `#inspToggleRibSelfSupBtn` → `toggleSelectedPuzzleRibSelfSupporting()`
+  * Nº de costillas Serie A: `#puzzleCountASlider`, `#puzzleCountAInput` → `onPuzzleCountChange('a', val)` / `stepPuzzleCount('a', -1 | 1)`
+  * Nº de costillas Serie B: `#puzzleCountBSlider`, `#puzzleCountBInput` → `onPuzzleCountChange('b', val)` / `stepPuzzleCount('b', -1 | 1)`
+  * Nº de costillas Serie C (modo 3 ejes `'xyz'`): `#puzzleCountCSlider`, `#puzzleCountCInput` (`#puzzleSeriesCBox`) → `onPuzzleCountChange('c', val)` / `stepPuzzleCount('c', -1 | 1)`
   * Modo de margen inicial: `#puzzleStartMode_start` (`Desde inicio`), `#puzzleStartMode_symmetric` (`Simétrico`), `#puzzleStartMode_shift` (`Desplazar`) → `setPuzzleStartMode(mode)`
   * Posición inicio Serie A / Serie B: `#puzzleStartASlider`, `#puzzleStartAInput`, `#puzzleStartBSlider`, `#puzzleStartBInput` → `onPuzzleStartOffsetChange('A' | 'B', val)`
   * **Mover SOLO la costilla seleccionada**: `#selectedRibOffsetSlider`, `#selectedRibOffsetInput` → `onSelectedRibOffsetChange(val)`, `stepSelectedRibOffset(-1 | 1)`, `resetSelectedRibOffset()`
@@ -228,12 +238,22 @@ En un **Puzzle 3D (`puzzle3d`)**, lo normal es grabar las **costillas primera y 
    ```
 3. Los vectores de grabado resultantes se almacenan en `slice.engraveLoops` y se exportan automáticamente en color verde `#008800` (grupo SVG `GRABADO_VECTORIAL_IMAGEN` y capa DXF `C00` de prioridad 1).
 
-### Playbook D: Exportar Archivos de Producción y Flujo Directo hacia Cortadora Láser PC 13/90 II
-* **Exportar `.SVG` de todos los tableros o láminas**: `exportAllSVGLayout()`
+### Playbook D: Compuerta Obligatoria de Previsualización del Proyecto (`.lasca`) antes de Exportar Archivos de Producción
+
+> [!IMPORTANT]
+> **REGLA OBLIGATORIA OKF ANTES DE EXPORTAR (`OKF-GATE-LASCA-PREVIEW-BEFORE-EXPORT`)**:  
+> Antes de exportar cualquier paquete de archivos de fabricación (`.ZIP`, `.DXF`, `.SVG`, `.STL` de capas) o de compilar los archivos binarios `.oud` / `.oue` para la cortadora láser **Pérez Camps PC 13/90 II**, cualquier Agente de IA **DEBE**:
+> 1. **Generar primero el archivo de proyecto `.lasca`** (`exportProjectFile()`) con la configuración propuesta.
+> 2. **Preguntar explícitamente a la persona usuaria si desea previsualizar el proyecto (`.lasca`) en LayerStudio 3D (`https://nmarafo.github.io/layerstudio3D/` → botón `📂 Abrir`) antes de exportar los archivos definitivos de corte**:
+>    > *«He generado el archivo de proyecto `.lasca` con la configuración propuesta (combinación de ejes, número de costillas, modo autosustentante y distribución en tableros). ¿Desea previsualizar primero el proyecto `.lasca` en LayerStudio 3D antes de que exporte los archivos definitivos de corte (`.ZIP` / `.DXF` / `.SVG` / `.OUD`)?»*
+> 3. **Esperar la confirmación de la persona usuaria** (salvo que esta indique expresamente que desea exportar directamente sin previsualizar) antes de ejecutar las funciones de exportación final.
+
+Una vez validado el proyecto `.lasca` por la persona usuaria, ejecutar la exportación solicitada:
+* **Guardar proyecto autónomo `.lasca` (Paso 1 obligatorio antes de exportar)**: `exportProjectFile()` (si el modelo supera los `36.000` triángulos, compacta automáticamente la malla mediante `compactBaseVerticesForLasca()` en un sólido estanco 2.5D de `~5 MB` para evitar archivos JSON gigantescos).
 * **Exportar `.ZIP` completo (con `SVG_Corte_Laser/`, `DXF_Corte_Laser/`, `SVG_Tableros_Anidados/`, `DXF_Tableros_Anidados/`, `STL_3D/`, `GUIA_MONTAJE_INTERACTIVA.html` y `PROYECTO_OKF.lasca`)**: `exportZipBatch()`
+* **Exportar `.SVG` de todos los tableros o láminas**: `exportAllSVGLayout()`
 * **Exportar `.DXF` (AutoCAD R12) con capas por color (`C00..C02` `ACI 5` Azul para grabado y `C03..C04` `ACI 1` Rojo para corte)**: `exportAllDXFLayout()`
 * **Exportar `.ZIP` con modelos `.STL` para impresión 3D**: `exportZipAllSTLs()`
-* **Guardar proyecto autónomo `.lasca`**: `exportProjectFile()` (si el modelo supera los `36.000` triángulos, compacta automáticamente la malla mediante `compactBaseVerticesForLasca()` en un sólido estanco 2.5D de `~5 MB` para evitar archivos JSON gigantescos).
 
 ---
 
@@ -257,3 +277,7 @@ A raíz de casos reales con modelos arquitectónicos y esculturas generadas por 
      2. **Expresividad de Silueta / Penalización de «Peines Rectangulares» (`30 pts`)**: Mide el factor de llenado $R = \frac{\text{Área}}{W \times H}$ de cada costilla antes de ranurar y penaliza las series donde las piezas son simples rectángulos planos ($R > 0,80$) sin silueta reconocible.
      3. **Cohesión Topológica (`20 pts`)**: Penaliza las combinaciones que parten una lámina en múltiples islas desconectadas ($\text{islas} > 1$) tras el tallado booleano de ranuras.
      4. **Densidad de Cruces y Cobertura Efectiva (`15 pts`)**: Evalúa la proporción de costillas activas y el número total de encajes a 90°.
+6. **Modo de 3 Ejes Simultáneos (`X × Y × Z`, `puzzleAxes: 'xyz'`) y Rotación 90° de la Malla Base (`rotateBaseModel90`)**:
+   - Permite entramar costillas ortogonales simultáneas en los 3 ejes (`Serie A + Serie B + Serie C`) con ranuras de encaje automático entre cada par de familias (`A-B`, `A-C`, `B-C`), o rotar físicamente la malla 3D base 90° en X, Y o Z (`rotateBaseModel90('x'|'y'|'z')`) antes de laminar.
+7. **Costillas Autosustentantes en el Aire (`Costilla autosustentante`, `puzzleSelfSupporting: true` activo por defecto)**:
+   - Permite que las costillas seleccionadas (`puzzleSelfSupportTarget`: `'outer'` por defecto, `'series_b'`, `'series_a'`, `'all'` o `'custom'`) no bajen hasta la mesa/suelo ($Z = \min Z$), sino que recorten su faldón inferior (`applyPuzzleSelfSupportingTrim` en modo `'trim_union'`, `'arch'` o `'natural'`) respetando un margen de seguridad alrededor de cada ranura de encaje y descartando islas aéreas desconectadas (`puzzleDropUnconnectedIslands: true`), de modo que se sujeten en el aire mediante las uniones ortogonales.

@@ -1792,18 +1792,22 @@ function compactBaseVerticesForLasca(baseVertices, maxTriangles = 36000) {
 function exportProjectFile() {
   const payload = {
     okfVersion: '1.3.0',
-    version: '3.0.7',
+    version: '3.0.15',
+    requireLascaPreviewBeforeExport: true,
     modelName: state.modelName,
     unit: state.unit,
     constructionMode: state.constructionMode,
     puzzleAxes: state.puzzleAxes,
     puzzleCountA: state.puzzleCountA,
     puzzleCountB: state.puzzleCountB,
+    puzzleCountC: state.puzzleCountC || 4,
     puzzleStartOffsetAMM: state.puzzleStartOffsetAMM,
     puzzleStartOffsetBMM: state.puzzleStartOffsetBMM,
+    puzzleStartOffsetCMM: state.puzzleStartOffsetCMM || 0,
     puzzleStartMode: state.puzzleStartMode,
     puzzleRibOffsetsAMM: state.puzzleRibOffsetsAMM,
     puzzleRibOffsetsBMM: state.puzzleRibOffsetsBMM,
+    puzzleRibOffsetsCMM: state.puzzleRibOffsetsCMM || {},
     puzzleMaterialThicknessMM: state.puzzleMaterialThicknessMM,
     puzzleSlotClearanceMM: state.puzzleSlotClearanceMM,
     puzzleSimplifyCutLine: state.puzzleSimplifyCutLine,
@@ -1818,6 +1822,7 @@ function exportProjectFile() {
     puzzleSelfSupportRibs: state.puzzleSelfSupportRibs,
     puzzleHideSeriesA: state.puzzleHideSeriesA,
     puzzleHideSeriesB: state.puzzleHideSeriesB,
+    puzzleHideSeriesC: Boolean(state.puzzleHideSeriesC),
     puzzleHiddenRibs: state.puzzleHiddenRibs,
     splitModelEnabled: state.splitModelEnabled,
     splitMode: state.splitMode,
@@ -1938,13 +1943,16 @@ function applyOkfProjectConfig(data) {
   if (data.constructionMode === 'puzzle3d' || data.constructionMode === 'stacked') {
     state.constructionMode = data.constructionMode;
   }
-  if (data.puzzleAxes === 'xy' || data.puzzleAxes === 'xz' || data.puzzleAxes === 'yz') {
+  if (data.puzzleAxes === 'xy' || data.puzzleAxes === 'xz' || data.puzzleAxes === 'yz' || data.puzzleAxes === 'xyz') {
     state.puzzleAxes = data.puzzleAxes;
+    state._puzzleAxesEvaluatedForCurrentMesh = true;
   }
   if (typeof data.puzzleCountA === 'number') state.puzzleCountA = data.puzzleCountA;
   if (typeof data.puzzleCountB === 'number') state.puzzleCountB = data.puzzleCountB;
+  if (typeof data.puzzleCountC === 'number') state.puzzleCountC = data.puzzleCountC;
   if (typeof data.puzzleStartOffsetAMM === 'number') state.puzzleStartOffsetAMM = data.puzzleStartOffsetAMM;
   if (typeof data.puzzleStartOffsetBMM === 'number') state.puzzleStartOffsetBMM = data.puzzleStartOffsetBMM;
+  if (typeof data.puzzleStartOffsetCMM === 'number') state.puzzleStartOffsetCMM = data.puzzleStartOffsetCMM;
   if (data.puzzleStartMode === 'start' || data.puzzleStartMode === 'symmetric' || data.puzzleStartMode === 'shift') {
     state.puzzleStartMode = data.puzzleStartMode;
   }
@@ -1953,6 +1961,9 @@ function applyOkfProjectConfig(data) {
   }
   if (data.puzzleRibOffsetsBMM && typeof data.puzzleRibOffsetsBMM === 'object') {
     state.puzzleRibOffsetsBMM = data.puzzleRibOffsetsBMM;
+  }
+  if (data.puzzleRibOffsetsCMM && typeof data.puzzleRibOffsetsCMM === 'object') {
+    state.puzzleRibOffsetsCMM = data.puzzleRibOffsetsCMM;
   }
   if (typeof data.puzzleMaterialThicknessMM === 'number') state.puzzleMaterialThicknessMM = data.puzzleMaterialThicknessMM;
   if (typeof data.puzzleSlotClearanceMM === 'number') state.puzzleSlotClearanceMM = data.puzzleSlotClearanceMM;
@@ -1984,6 +1995,7 @@ function applyOkfProjectConfig(data) {
   }
   if (typeof data.puzzleHideSeriesA === 'boolean') state.puzzleHideSeriesA = data.puzzleHideSeriesA;
   if (typeof data.puzzleHideSeriesB === 'boolean') state.puzzleHideSeriesB = data.puzzleHideSeriesB;
+  if (typeof data.puzzleHideSeriesC === 'boolean') state.puzzleHideSeriesC = data.puzzleHideSeriesC;
   if (data.puzzleHiddenRibs && typeof data.puzzleHiddenRibs === 'object') {
     state.puzzleHiddenRibs = data.puzzleHiddenRibs;
   }
@@ -2186,7 +2198,8 @@ function getOkfRecipePayload(includeVertices = false) {
   const presetEl = typeof document !== 'undefined' ? document.getElementById('presetSelect') : null;
   const payload = {
     okfVersion: '1.3.0',
-    version: '3.0.7',
+    version: '3.0.15',
+    requireLascaPreviewBeforeExport: true,
     modelName: state.modelName,
     presetModel: presetEl && presetEl.value ? presetEl.value : 'torus',
     unit: state.unit,
@@ -2199,11 +2212,14 @@ function getOkfRecipePayload(includeVertices = false) {
     puzzleAxes: state.puzzleAxes,
     puzzleCountA: state.puzzleCountA,
     puzzleCountB: state.puzzleCountB,
+    puzzleCountC: state.puzzleCountC || 4,
     puzzleStartOffsetAMM: state.puzzleStartOffsetAMM,
     puzzleStartOffsetBMM: state.puzzleStartOffsetBMM,
+    puzzleStartOffsetCMM: state.puzzleStartOffsetCMM || 0,
     puzzleStartMode: state.puzzleStartMode,
     puzzleRibOffsetsAMM: state.puzzleRibOffsetsAMM,
     puzzleRibOffsetsBMM: state.puzzleRibOffsetsBMM,
+    puzzleRibOffsetsCMM: state.puzzleRibOffsetsCMM || {},
     puzzleMaterialThicknessMM: state.puzzleMaterialThicknessMM,
     puzzleSlotClearanceMM: state.puzzleSlotClearanceMM,
     puzzleSimplifyCutLine: state.puzzleSimplifyCutLine,
@@ -2536,11 +2552,15 @@ function applyQuickOkfSampleRecipe(sampleId) {
 
 function copyOkfMasterPromptToClipboard() {
   const promptText = [
-    'Actúas como el Agente Operador Oficial de LayerStudio 3D (https://nmarafo.github.io/layerstudio3D/) bajo el estándar OKF v1.3.0.',
+    'Actúas como el Agente Operador Oficial de LayerStudio 3D (https://nmarafo.github.io/layerstudio3D/) bajo el estándar OKF v1.3.0 (v3.0.15).',
     'Especificación completa: https://nmarafo.github.io/layerstudio3D/okf.json y https://nmarafo.github.io/layerstudio3D/okf/arquitectura_okf.md',
-    'Regla clave en Puzzle 3D (constructionMode: "puzzle3d"): Lo habitual es grabar las costillas primera y última de los ejes (las fachadas exteriores X1/XN, Y1/YN o Z1/ZN), utilizando la función existente de grabar imagen en lasca (activando puzzleEngraveEndRibs: true con puzzleEngraveEndRibsAxes: "both"|"A"|"B", puzzleEngraveEndRibsPreset: "drawing"|"crest"|"medallion"|"badge", o invocando applyEngravingToPuzzleEndRibs() / applyDemoImageEngravingToSelectedSlice()), la cual recorta automáticamente el grabado al contorno y a las ranuras a 90°.',
+    'REGLA CRÍTICA DE PREVISUALIZACIÓN ANTES DE EXPORTAR: Antes de exportar los archivos finales de corte o fabricación (.ZIP, .DXF, .SVG, .STL o compilación a .oud/.oue), genera SIEMPRE primero el archivo de proyecto (.lasca) y pregunta explícitamente a la persona usuaria si desea previsualizar y validar el proyecto (.lasca) en LayerStudio 3D antes de exportar los archivos definitivos.',
+    'Reglas clave en Puzzle 3D (constructionMode: "puzzle3d"):',
+    '- Ejes de cruce: soporta 2 ejes ("xy", "xz", "yz" con autoselección óptima autoSelectBestPuzzleAxes) o 3 ejes simultáneos ("xyz", con Serie C en eje Z y protección anti-cizalladura), así como rotación de 90° de la pieza/costillas con rotateBaseModel90("x"|"y"|"z").',
+    '- Modo Costilla Autosustentante (puzzleSelfSupporting: true por defecto): las costillas seleccionadas (puzzleSelfSupportTarget: "outer"|"series_b"|"series_a"|"all"|"custom") no bajan hasta el suelo y se sostienen solas mediante sus ranuras de unión (puzzleSelfSupportStyle: "trim_union"|"arch"|"natural", puzzleSelfSupportClearanceMM: 22.0, puzzleDropUnconnectedIslands: true).',
+    '- Grabado en fachadas exteriores: lo habitual es grabar la 1.ª y última costilla de los ejes (X1/XN, Y1/YN o Z1/ZN) usando la función de grabar imagen en lasca (puzzleEngraveEndRibs: true), que recorta el grabado al contorno y a las ranuras a 90°.',
     'Cuando te pida configurar un proyecto de corte láser (.SVG/.DXF) o impresión 3D (.STL), entrégame:',
-    '1) Un bloque JSON compatible con window.applyOkfProjectConfig(data) (con propiedades como presetModel: "torus"|"vase"|"gear"|"crystal", maxDimensionMM, constructionMode: "stacked"|"puzzle3d", puzzleAxes: "xy"|"xz"|"yz", puzzleCountA, puzzleCountB, puzzleMaterialThicknessMM, puzzleSlotClearanceMM, puzzleSimplifyCutLine, puzzleSimplifyMode: "rdp"|"smooth"|"bridge"|"convex", puzzleSimplifyToleranceMM, puzzleEngraveEndRibs: true, puzzleEngraveEndRibsAxes: "both"|"A"|"B", puzzleEngraveEndRibsPreset: "drawing"|"crest"|"medallion"|"badge", filterSmallIslands, fillInternalHoles, nestingEnabled, boardWidthMM, boardHeightMM).',
+    '1) El archivo o bloque JSON (.lasca) compatible con window.applyOkfProjectConfig(data) y pregúntame si deseo previsualizar el proyecto (.lasca) antes de exportar los archivos finales.',
     '2) Un enlace directo clicable a https://nmarafo.github.io/layerstudio3D/?... con esos mismos parámetros en la query string para abrirlo configurado automáticamente.'
   ].join('\n');
 
