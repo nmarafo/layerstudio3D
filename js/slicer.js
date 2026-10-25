@@ -460,6 +460,7 @@ function onSelectedPuzzleRibCoordChange(val) {
     rebuildGhostAndSlices();
   }
   syncPuzzleSelectedRibUI();
+  if (typeof syncSidebarTabsUI === 'function') syncSidebarTabsUI();
 }
 
 function stepSelectedPuzzleRib(deltaMM) {
@@ -479,6 +480,7 @@ function resetSelectedPuzzleRibOffset() {
     rebuildGhostAndSlices();
   }
   syncPuzzleSelectedRibUI();
+  if (typeof syncSidebarTabsUI === 'function') syncSidebarTabsUI();
 }
 
 function resetAllPuzzleRibOffsets() {
@@ -488,6 +490,7 @@ function resetAllPuzzleRibOffsets() {
     rebuildGhostAndSlices();
   }
   syncPuzzleSelectedRibUI();
+  if (typeof syncSidebarTabsUI === 'function') syncSidebarTabsUI();
 }
 
 function onPuzzleStartOffsetChange(which, val) {
@@ -677,6 +680,7 @@ function syncConstructionModeUI() {
 
   const simpBox = document.getElementById('puzzleSimplifyCutBox');
   if (simpBox) {
+    simpBox.classList.toggle('hidden', !state.puzzleSimplifyCutLine);
     simpBox.classList.toggle('opacity-45', !state.puzzleSimplifyCutLine);
   }
 
@@ -718,6 +722,7 @@ function syncConstructionModeUI() {
       (state.puzzleSimplifyCutLine ? ' · <strong>✂️ Corte simplificado</strong>' : '');
   }
   syncPuzzleSelectedRibUI();
+  if (typeof syncSidebarTabsUI === 'function') syncSidebarTabsUI();
 }
 
 function setSliceAxis(ax) {
@@ -2369,7 +2374,10 @@ function updateFilteredIslandsUI() {
   if (nestUnit) nestUnit.textContent = unitSuffix;
 
   const box = document.getElementById('filterSmallIslandsBox');
-  if (box) box.classList.toggle('opacity-45', !state.filterSmallIslands);
+  if (box) {
+    box.classList.toggle('hidden', !state.filterSmallIslands);
+    box.classList.toggle('opacity-45', !state.filterSmallIslands);
+  }
 
   const badge = document.getElementById('filteredIslandsBadge');
   if (badge) {
@@ -2392,7 +2400,10 @@ function updateFilteredIslandsUI() {
   if (fhChk2) fhChk2.checked = Boolean(state.fillInternalHoles);
 
   const fhBox = document.getElementById('fillInternalHolesBox');
-  if (fhBox) fhBox.classList.toggle('opacity-45', !state.fillInternalHoles);
+  if (fhBox) {
+    fhBox.classList.toggle('hidden', !state.fillInternalHoles);
+    fhBox.classList.toggle('opacity-45', !state.fillInternalHoles);
+  }
 
   const fhModeSel = document.getElementById('fillHolesModeSelect');
   if (fhModeSel) fhModeSel.value = state.fillHolesMode || 'all';
@@ -3001,7 +3012,10 @@ function setIncludeLabels(v) {
 function updateGuideOptionsBoxOpacity() {
   const anyGuide = state.includeNextSliceGuide || state.includePrevSliceGuide;
   const optBox = document.getElementById('nextGuideOptionsBox');
-  if (optBox) optBox.classList.toggle('opacity-40', !anyGuide);
+  if (optBox) {
+    optBox.classList.toggle('hidden', !anyGuide);
+    optBox.classList.toggle('opacity-40', !anyGuide);
+  }
 }
 
 function setIncludeNextGuide(v) {
@@ -4096,6 +4110,98 @@ function setSlicerFramePreset(shape, laserMode, thicknessMM, marginMM, radiusMM,
   applySlicerFrameToExistingSlices(true);
 }
 
+// =========================================================================
+// NAVEGACIÓN POR PESTAÑAS DE FLUJO DE TRABAJO Y PANELES PLEGABLES (UI LIMPIA)
+// =========================================================================
+
+function syncSidebarTabsUI() {
+  const activeTab = state.activeSidebarTab || 'cut';
+  const tabMap = {
+    cut: [1, 2],
+    clean: [4],
+    finish: [3],
+    boards: [5, 6],
+    all: [1, 2, 3, 4, 5, 6]
+  };
+  const visibleCards = tabMap[activeTab] || tabMap.cut;
+
+  ['cut', 'clean', 'finish', 'boards', 'all'].forEach((tKey) => {
+    const btn = document.getElementById('sidebarTabBtn_' + tKey);
+    if (!btn) return;
+    const isAct = activeTab === tKey;
+    btn.className = isAct
+      ? ' py-1.5 px-1 rounded-lg bg-sky-500/20 border border-sky-500/60 text-sky-300 text-[10px] font-bold transition flex flex-col items-center justify-center gap-0.5 shadow-sm'
+      : ' py-1.5 px-1 rounded-lg bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-slate-200 text-[10px] font-medium transition flex flex-col items-center justify-center gap-0.5';
+  });
+
+  if (!state.collapsedSidebarCards) state.collapsedSidebarCards = {};
+  for (let cNum = 1; cNum <= 6; cNum++) {
+    const cardEl = document.getElementById('sidebarCard_' + cNum);
+    const bodyEl = document.getElementById('sidebarCardBody_' + cNum);
+    const chevEl = document.getElementById('sidebarCardChev_' + cNum);
+    const inActiveTab = visibleCards.includes(cNum);
+    if (cardEl) {
+      cardEl.classList.toggle('hidden', !inActiveTab);
+    }
+    const isCollapsed = Boolean(state.collapsedSidebarCards[cNum]);
+    if (bodyEl) {
+      bodyEl.classList.toggle('hidden', isCollapsed);
+    }
+    if (chevEl) {
+      chevEl.textContent = isCollapsed ? '▸' : '▾';
+    }
+  }
+}
+
+function setSidebarTab(tabKey) {
+  state.activeSidebarTab = tabKey || 'cut';
+  syncSidebarTabsUI();
+}
+
+function toggleSidebarCard(cardNum) {
+  if (!state.collapsedSidebarCards) state.collapsedSidebarCards = {};
+  state.collapsedSidebarCards[cardNum] = !state.collapsedSidebarCards[cardNum];
+  syncSidebarTabsUI();
+}
+
+function toggle2DLegend() {
+  state.legend2DCollapsed = !state.legend2DCollapsed;
+  const itemsBox = document.getElementById('canvas2DLegendItems');
+  const btn = document.getElementById('btnToggle2DLegend');
+  if (itemsBox) {
+    itemsBox.classList.toggle('hidden', state.legend2DCollapsed);
+    itemsBox.classList.toggle('flex', !state.legend2DCollapsed);
+  }
+  if (btn) {
+    btn.textContent = state.legend2DCollapsed ? '🎨 Leyenda ▸' : '🎨 Leyenda ▾';
+  }
+}
+
+function toggleBottomStripCollapse() {
+  state.bottomStripCollapsed = !state.bottomStripCollapsed;
+  const wrap = document.getElementById('bottomStripWrapper');
+  const strip = document.getElementById('sliceStripContainer');
+  const btn = document.getElementById('btnToggleBottomStrip');
+  if (wrap) {
+    wrap.className = state.bottomStripCollapsed
+      ? 'h-7 bg-slate-900 border-t border-slate-800 flex flex-col shrink-0 transition-all'
+      : 'h-28 bg-slate-900 border-t border-slate-800 flex flex-col shrink-0 transition-all';
+  }
+  if (strip) {
+    strip.classList.toggle('hidden', state.bottomStripCollapsed);
+  }
+  if (btn) {
+    btn.textContent = state.bottomStripCollapsed ? '▲ Mostrar tira' : '▼ Compactar';
+  }
+  // Redimensionar visores 3D y 2D tras cambiar el alto disponible
+  if (typeof onWindowResize3D === 'function') {
+    setTimeout(() => onWindowResize3D(), 30);
+  }
+  if (typeof render2DSlice === 'function') {
+    setTimeout(() => render2DSlice(), 30);
+  }
+}
+
 if (typeof window !== 'undefined') {
   window.getSlicerFrameDimensionsForAxis = getSlicerFrameDimensionsForAxis;
   window.generate2DFramePolygon = generate2DFramePolygon;
@@ -4112,6 +4218,11 @@ if (typeof window !== 'undefined') {
   window.onPuzzleSimplifyTolInput = onPuzzleSimplifyTolInput;
   window.stepPuzzleSimplifyTolerance = stepPuzzleSimplifyTolerance;
   window.setPuzzleSimplifyPreset = setPuzzleSimplifyPreset;
+  window.syncSidebarTabsUI = syncSidebarTabsUI;
+  window.setSidebarTab = setSidebarTab;
+  window.toggleSidebarCard = toggleSidebarCard;
+  window.toggle2DLegend = toggle2DLegend;
+  window.toggleBottomStripCollapse = toggleBottomStripCollapse;
 }
 
 

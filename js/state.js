@@ -40,6 +40,10 @@ const state = {
   puzzleHiddenRibs: { A: {}, B: {} }, // Costillas individuales ocultas en la vista { A: { [seriesIndex]: true }, B: { [seriesIndex]: true } }
   sliceImageEngravings: {},    // Grabado de imagen personalizado por lámina / costilla { [sliceKey]: config }
   sliceEngravePanelOpen: false,// true = muestra el panel de grabado de imagen sobre la lámina seleccionada en el Inspector 2D
+  activeSidebarTab: 'cut',     // 'cut' (1-2: Pieza y Corte) | 'clean' (4: Islas y Huecos) | 'finish' (3: Vista 3D y Acabado) | 'boards' (5-6: Tableros) | 'all' (Todo)
+  collapsedSidebarCards: {},   // Tarjetas plegadas individualmente en la barra lateral { [cardNum]: boolean }
+  legend2DCollapsed: false,    // true = oculta el desglose de colores de la leyenda flotante del visor 2D
+  bottomStripCollapsed: false, // true = pliega la galería inferior de miniaturas para dar más altura a los visores 3D y 2D
   puzzleMaterialThicknessMM: 5.0, // Grosor del tablero/poliexpan en mm
   puzzleSlotClearanceMM: 0.0,  // Holgura/tolerancia de encaje en mm (ancho ranura = grosor + holgura)
   puzzleTotalSlotsCount: 0,    // Total de ranuras de encaje generadas

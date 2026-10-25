@@ -59,7 +59,10 @@ function setNestingEnabled(val) {
 
   if (c1) c1.checked = state.nestingEnabled;
   if (c2) c2.checked = state.nestingEnabled;
-  if (box) box.classList.toggle('opacity-45', !state.nestingEnabled);
+  if (box) {
+    box.classList.toggle('hidden', !state.nestingEnabled);
+    box.classList.toggle('opacity-45', !state.nestingEnabled);
+  }
   if (modalSubOpts) modalSubOpts.classList.toggle('hidden', !state.nestingEnabled);
 
   if (btnInfoHeader) {
@@ -84,11 +87,11 @@ function setNestingEnabled(val) {
 
   if (btnToggle) {
     if (state.nestingEnabled) {
-      btnToggle.textContent = '🧩 Vista Tablero: ON';
-      btnToggle.className = 'text-[11px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold transition';
+      btnToggle.textContent = '🧩 Tablero: ON';
+      btnToggle.className = 'text-[11px] px-2 py-1 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-semibold transition';
     } else {
-      btnToggle.textContent = '🧩 Distribuir en Tablero: OFF';
-      btnToggle.className = 'text-[11px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-semibold transition';
+      btnToggle.textContent = '🧩 Tablero: OFF';
+      btnToggle.className = 'text-[11px] px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-semibold transition';
     }
   }
 
@@ -1457,15 +1460,18 @@ function syncCarrierUIState() {
 
   if (c1) c1.checked = Boolean(state.carrierEnabled);
   if (c2) c2.checked = Boolean(state.carrierEnabled);
-  if (box) box.classList.toggle('opacity-45', !state.carrierEnabled);
+  if (box) {
+    box.classList.toggle('hidden', !state.carrierEnabled);
+    box.classList.toggle('opacity-45', !state.carrierEnabled);
+  }
 
   if (btnToggleCarrier) {
     if (state.carrierEnabled) {
-      btnToggleCarrier.textContent = '📦 Soporte Mayor: ON';
-      btnToggleCarrier.className = 'text-[11px] px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold transition';
+      btnToggleCarrier.textContent = '📦 Soporte: ON';
+      btnToggleCarrier.className = 'text-[11px] px-2 py-1 rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold transition';
     } else {
-      btnToggleCarrier.textContent = '📦 Soporte Mayor: OFF';
-      btnToggleCarrier.className = 'text-[11px] px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-semibold transition';
+      btnToggleCarrier.textContent = '📦 Soporte: OFF';
+      btnToggleCarrier.className = 'text-[11px] px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-semibold transition';
     }
   }
 }
