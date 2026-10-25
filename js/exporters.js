@@ -1894,6 +1894,52 @@ function applyOkfProjectConfig(data) {
   if (data.puzzleHiddenRibs && typeof data.puzzleHiddenRibs === 'object') {
     state.puzzleHiddenRibs = data.puzzleHiddenRibs;
   }
+  if (typeof data.puzzleEngraveEndRibs === 'boolean') {
+    state.puzzleEngraveEndRibs = data.puzzleEngraveEndRibs;
+    if (!data.puzzleEngraveEndRibs && typeof clearPuzzleEndRibsEngraving === 'function') {
+      clearPuzzleEndRibsEngraving('both');
+    }
+  }
+  if (data.puzzleEngraveEndRibsAxes === 'both' || data.puzzleEngraveEndRibsAxes === 'A' || data.puzzleEngraveEndRibsAxes === 'B') {
+    state.puzzleEngraveEndRibsAxes = data.puzzleEngraveEndRibsAxes;
+  }
+  if (data.puzzleEngraveEndRibsPreset === 'drawing' || data.puzzleEngraveEndRibsPreset === 'crest' || data.puzzleEngraveEndRibsPreset === 'medallion' || data.puzzleEngraveEndRibsPreset === 'badge') {
+    state.puzzleEngraveEndRibsPreset = data.puzzleEngraveEndRibsPreset;
+  }
+  if (typeof data.puzzleEngraveEndRibsScalePct === 'number') {
+    state.puzzleEngraveEndRibsScalePct = Math.max(10, Math.min(250, data.puzzleEngraveEndRibsScalePct));
+  }
+  if (typeof data.puzzleEngraveEndRibsMirrorLast === 'boolean') {
+    state.puzzleEngraveEndRibsMirrorLast = data.puzzleEngraveEndRibsMirrorLast;
+  }
+  if (data.sliceImageEngravings && typeof data.sliceImageEngravings === 'object') {
+    if (!state.sliceImageEngravings) state.sliceImageEngravings = {};
+    Object.keys(data.sliceImageEngravings).forEach((k) => {
+      const entry = data.sliceImageEngravings[k];
+      if (entry && typeof entry === 'object') {
+        state.sliceImageEngravings[k] = Object.assign({
+          enabled: true,
+          imageName: entry.imageName || 'Ilustracion_Lasca',
+          presetName: entry.presetName || 'drawing',
+          sourceCanvas: null,
+          aspectRatio: 1.0,
+          scalePct: 75,
+          offsetXMM: 0,
+          offsetYMM: 0,
+          rotationDeg: 0,
+          flipX: false,
+          flipY: false,
+          detectMode: 'smart_drawing',
+          engraveStyle: 'vector_fill',
+          threshold: 145,
+          invert: false,
+          clipToSlice: true,
+          marginMM: 0.5,
+          customNormalizedLoops: null
+        }, entry);
+      }
+    });
+  }
   if (typeof syncConstructionModeUI === 'function') syncConstructionModeUI();
 
   if (typeof data.splitModelEnabled === 'boolean') state.splitModelEnabled = data.splitModelEnabled;
@@ -2021,6 +2067,17 @@ function applyOkfProjectConfig(data) {
     applyIslandFilterToExistingSlices();
   }
 
+  if (state.constructionMode === 'puzzle3d' && state.puzzleEngraveEndRibs && typeof applyEngravingToPuzzleEndRibs === 'function') {
+    applyEngravingToPuzzleEndRibs({
+      targetAxes: state.puzzleEngraveEndRibsAxes || 'both',
+      presetName: state.puzzleEngraveEndRibsPreset || 'drawing',
+      scalePct: state.puzzleEngraveEndRibsScalePct || 75,
+      mirrorLastRib: state.puzzleEngraveEndRibsMirrorLast !== false
+    });
+  } else if (data.sliceImageEngravings && typeof reapplyAllSliceImageEngravings === 'function') {
+    reapplyAllSliceImageEngravings();
+  }
+
   if (Array.isArray(data.selectedIndices)) {
     const setSel = new Set(data.selectedIndices);
     state.slices.forEach((s) => { s.selected = setSel.has(s.index); });
@@ -2060,6 +2117,11 @@ function getOkfRecipePayload(includeVertices = false) {
     puzzleSimplifyMode: state.puzzleSimplifyMode,
     puzzleSimplifyToleranceMM: state.puzzleSimplifyToleranceMM,
     puzzleSimplifySmoothPasses: state.puzzleSimplifySmoothPasses,
+    puzzleEngraveEndRibs: Boolean(state.puzzleEngraveEndRibs),
+    puzzleEngraveEndRibsAxes: state.puzzleEngraveEndRibsAxes || 'both',
+    puzzleEngraveEndRibsPreset: state.puzzleEngraveEndRibsPreset || 'drawing',
+    puzzleEngraveEndRibsScalePct: state.puzzleEngraveEndRibsScalePct || 75,
+    puzzleEngraveEndRibsMirrorLast: state.puzzleEngraveEndRibsMirrorLast !== false,
     filterSmallIslands: state.filterSmallIslands,
     minIslandSizeMM: state.minIslandSizeMM,
     minIslandCriteria: state.minIslandCriteria,
@@ -2131,6 +2193,7 @@ function parseOkfUrlQuery(searchStr) {
 
   const boolKeys = [
     'puzzleSimplifyCutLine', 'puzzleHideSeriesA', 'puzzleHideSeriesB',
+    'puzzleEngraveEndRibs', 'puzzleEngraveEndRibsMirrorLast',
     'filterSmallIslands', 'fillInternalHoles', 'splitModelEnabled', 'splitStaggerLayers',
     'includeLabels', 'includeNextSliceGuide', 'includePrevSliceGuide',
     'slicerFrameEnabled', 'tabsEnabled', 'nestingEnabled', 'nestAllowRotate',
@@ -2140,6 +2203,7 @@ function parseOkfUrlQuery(searchStr) {
     'maxDimensionMM', 'sliceCount', 'thickness', 'puzzleCountA', 'puzzleCountB',
     'puzzleStartOffsetAMM', 'puzzleStartOffsetBMM', 'puzzleMaterialThicknessMM',
     'puzzleSlotClearanceMM', 'puzzleSimplifyToleranceMM', 'puzzleSimplifySmoothPasses',
+    'puzzleEngraveEndRibsScalePct',
     'minIslandSizeMM', 'fillHolesMaxSizeMM', 'splitMaxPartWidthMM', 'splitMaxPartHeightMM',
     'splitCols', 'splitRows', 'splitJointDepthMM', 'rodCount', 'rodDiameter',
     'boardWidthMM', 'boardHeightMM', 'nestSpacingMM', 'nestMarginMM',
@@ -2147,8 +2211,9 @@ function parseOkfUrlQuery(searchStr) {
   ];
   const strKeys = [
     'presetModel', 'modelName', 'unit', 'constructionMode', 'axis', 'mode',
-    'puzzleAxes', 'puzzleStartMode', 'puzzleSimplifyMode', 'minIslandCriteria',
-    'fillHolesMode', 'splitMode', 'splitJointType'
+    'puzzleAxes', 'puzzleStartMode', 'puzzleSimplifyMode',
+    'puzzleEngraveEndRibsAxes', 'puzzleEngraveEndRibsPreset',
+    'minIslandCriteria', 'fillHolesMode', 'splitMode', 'splitJointType'
   ];
 
   boolKeys.forEach((k) => {
@@ -2205,6 +2270,12 @@ function buildOkfShareUrl(baseUrl) {
       q.push('puzzleSimplifyMode=' + encodeURIComponent(state.puzzleSimplifyMode));
       q.push('puzzleSimplifyToleranceMM=' + encodeURIComponent(state.puzzleSimplifyToleranceMM));
       q.push('puzzleSimplifySmoothPasses=' + encodeURIComponent(state.puzzleSimplifySmoothPasses));
+    }
+    if (state.puzzleEngraveEndRibs) {
+      q.push('puzzleEngraveEndRibs=true');
+      q.push('puzzleEngraveEndRibsAxes=' + encodeURIComponent(state.puzzleEngraveEndRibsAxes || 'both'));
+      q.push('puzzleEngraveEndRibsPreset=' + encodeURIComponent(state.puzzleEngraveEndRibsPreset || 'drawing'));
+      q.push('puzzleEngraveEndRibsScalePct=' + encodeURIComponent(state.puzzleEngraveEndRibsScalePct || 75));
     }
   } else {
     q.push('axis=' + encodeURIComponent(state.axis));
@@ -2312,6 +2383,11 @@ function applyQuickOkfSampleRecipe(sampleId) {
       puzzleSimplifyMode: 'smooth',
       puzzleSimplifyToleranceMM: 1.5,
       puzzleSimplifySmoothPasses: 2,
+      puzzleEngraveEndRibs: true,
+      puzzleEngraveEndRibsAxes: 'both',
+      puzzleEngraveEndRibsPreset: 'drawing',
+      puzzleEngraveEndRibsScalePct: 75,
+      puzzleEngraveEndRibsMirrorLast: true,
       filterSmallIslands: true,
       fillInternalHoles: true,
       nestingEnabled: true,
@@ -2363,8 +2439,9 @@ function copyOkfMasterPromptToClipboard() {
   const promptText = [
     'Actúas como el Agente Operador Oficial de LayerStudio 3D (https://nmarafo.github.io/layerstudio3D/) bajo el estándar OKF v1.3.0.',
     'Especificación completa: https://nmarafo.github.io/layerstudio3D/okf.json y https://nmarafo.github.io/layerstudio3D/okf/arquitectura_okf.md',
+    'Regla clave en Puzzle 3D (constructionMode: "puzzle3d"): Lo habitual es grabar las costillas primera y última de los ejes (las fachadas exteriores X1/XN, Y1/YN o Z1/ZN), utilizando la función existente de grabar imagen en lasca (activando puzzleEngraveEndRibs: true con puzzleEngraveEndRibsAxes: "both"|"A"|"B", puzzleEngraveEndRibsPreset: "drawing"|"crest"|"medallion"|"badge", o invocando applyEngravingToPuzzleEndRibs() / applyDemoImageEngravingToSelectedSlice()), la cual recorta automáticamente el grabado al contorno y a las ranuras a 90°.',
     'Cuando te pida configurar un proyecto de corte láser (.SVG/.DXF) o impresión 3D (.STL), entrégame:',
-    '1) Un bloque JSON compatible con window.applyOkfProjectConfig(data) (con propiedades como presetModel: "torus"|"vase"|"gear"|"crystal", maxDimensionMM, constructionMode: "stacked"|"puzzle3d", puzzleAxes: "xy"|"xz"|"yz", puzzleCountA, puzzleCountB, puzzleMaterialThicknessMM, puzzleSlotClearanceMM, puzzleSimplifyCutLine, puzzleSimplifyMode: "rdp"|"smooth"|"bridge"|"convex", puzzleSimplifyToleranceMM, filterSmallIslands, fillInternalHoles, nestingEnabled, boardWidthMM, boardHeightMM).',
+    '1) Un bloque JSON compatible con window.applyOkfProjectConfig(data) (con propiedades como presetModel: "torus"|"vase"|"gear"|"crystal", maxDimensionMM, constructionMode: "stacked"|"puzzle3d", puzzleAxes: "xy"|"xz"|"yz", puzzleCountA, puzzleCountB, puzzleMaterialThicknessMM, puzzleSlotClearanceMM, puzzleSimplifyCutLine, puzzleSimplifyMode: "rdp"|"smooth"|"bridge"|"convex", puzzleSimplifyToleranceMM, puzzleEngraveEndRibs: true, puzzleEngraveEndRibsAxes: "both"|"A"|"B", puzzleEngraveEndRibsPreset: "drawing"|"crest"|"medallion"|"badge", filterSmallIslands, fillInternalHoles, nestingEnabled, boardWidthMM, boardHeightMM).',
     '2) Un enlace directo clicable a https://nmarafo.github.io/layerstudio3D/?... con esos mismos parámetros en la query string para abrirlo configurado automáticamente.'
   ].join('\n');
 

@@ -45,15 +45,18 @@ Tu misión es ayudar a las personas usuarias (utilizando siempre la norma culta 
    - Para desplazar **solo una costilla específica** sin alterar las demás: selecciona la costilla (`selectActiveSlice(idx)`) y usa `onSelectedRibOffsetChange(offsetMM)` o define el mapa `puzzleRibOffsetsAMM` / `puzzleRibOffsetsBMM`.
    - Para inspeccionar el interior del modelo 3D: usa `togglePuzzleSeriesVisibility('A' | 'B')` o `toggleSelectedRibVisibility()`.
 
-5. **Grabado de Imagen en Lámina Seleccionada (`imageEngraving`)**:
-   - Permite cargar cualquier imagen (`.png`, `.bmp`, `.jpg`, `.webp`) sobre la lámina o costilla activa desde el botón **🖼️ Grabar Imagen** del Inspector 2D o de la pestaña **3. Acabado**.
-   - El motor recorta automáticamente todos los trazos del grabado (`contour`, `hatch`, `both` o `relief`) para que nunca salgan del perímetro exterior ni invadan huecos internos o ranuras de encaje del Puzzle 3D.
+5. **Grabado en las Costillas Primera y Última en Puzzle 3D y Función de Grabar Imagen en Lasca (`puzzleEngraveEndRibs` / `sliceImageEngravings`)**:
+   - **Regla fundamental cuando se piensa en un Puzzle 3D (`constructionMode: 'puzzle3d'`)**: Lo normal y recomendable es **grabar las costillas primera y última de los ejes** (por ejemplo, `X1` y `XN` en el Eje A, y/o `Y1`/`Z1` y `YM`/`ZM` en el Eje B), dado que esas costillas extremas conforman las **fachadas exteriores visibles** del modelo mientras las costillas intermedias actúan como esqueleto estructural interno.
+   - Para ello resulta especialmente útil la **función ya existente de grabar imagen en lasca** (`applyDemoImageEngravingToSelectedSlice`, `handleSliceImageEngraveFile`, `openVectorizerForSelectedSlice`, `applyVectorizedImageToSelectedSlice` o `applyEngravingToPuzzleEndRibs` / botón **🧩 1.ª y Última Costilla (Ejes)** dentro del panel **🖼️ Grabar Imagen**):
+     - Recorta automáticamente (`clipToSlice: true`, `isPointInsideSliceSolid2D`) todos los trazos del grabado (`slice.engraveLoops`) para que **nunca sobresalgan del contorno exterior ni invadan los huecos internos o las ranuras de encaje a 90° (`slice.slots`)** de la costilla.
+     - En la última costilla de cada eje aplica por defecto espejo horizontal (`flipX: true` / `puzzleEngraveEndRibsMirrorLast: true`) para que ambas fachadas opuestas miren simétricamente hacia el exterior.
+     - En las recetas JSON OKF (`window.applyOkfProjectConfig`) o enlaces de GitHub Pages, activa `puzzleEngraveEndRibs: true` junto con `puzzleEngraveEndRibsAxes: "both" | "A" | "B"`, `puzzleEngraveEndRibsPreset: "drawing" | "crest" | "medallion" | "badge"` y `puzzleEngraveEndRibsScalePct: 75`.
 
-6. **Estándar Cromático para LightBurn / RDWorks / AutoCAD**:
-   - `#ff0000` (`CORTE_EXTERIOR`): Perímetro exterior y ranuras Puzzle 3D (Prioridad de corte 2).
-   - `#0055ff` (`CORTE_INTERIOR`): Huecos internos y agujeros de varillas (Prioridad de corte 1: cortar antes del exterior).
-   - `#d946ef` (`GRABADO_TEXTO`): Etiquetas de numeración y grabado vectorial de imágenes por lámina.
-   - `#10b981` (`GUIA_SUPERIOR`) y `#f59e0b` (`GUIA_INFERIOR`): Marcado superficial para alinear el pegado de capas contiguas.
+6. **Estándar Cromático y de Capas DXF para LightBurn / RDWorks / AutoCAD**:
+   - `#008800` (`GRABADO_VECTORIAL` / capa DXF `C00`): Etiquetas de numeración y grabado vectorial de imágenes en lascas y costillas extremas (Prioridad 1: grabar primero).
+   - `#ff8800` (`GUIA_SUPERIOR_ADICIONAL` / capa DXF `C01`) y `#9900ff` (`GUIA_INFERIOR_ADICIONAL` / capa DXF `C02`): Marcado superficial para alinear el pegado de capas contiguas (Prioridad 1).
+   - `#0055ff` (`CORTE_INTERIOR_HUECOS` / capa DXF `C03`): Huecos internos y agujeros de varillas (Prioridad 2: cortar antes del perímetro exterior).
+   - `#ff0000` (`CORTE_EXTERIOR` / capa DXF `C04`): Perímetro exterior y ranuras Puzzle 3D (Prioridad Final: cortar al final).
 
 ---
 

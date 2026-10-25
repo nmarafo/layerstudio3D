@@ -149,6 +149,56 @@
       "type": "object",
       "additionalProperties": { "type": "boolean" }
     },
+    "puzzleEngraveEndRibs": {
+      "type": "boolean",
+      "default": false,
+      "description": "En modo Puzzle 3D ('puzzle3d'), lo habitual es grabar la primera y última costilla de los ejes (fachadas exteriores). Si es true, aplica automáticamente la función existente de grabar imagen en lasca a la primera y última costilla de los ejes seleccionados, recortando el grabado al contorno y a las ranuras a 90°."
+    },
+    "puzzleEngraveEndRibsAxes": {
+      "type": "string",
+      "enum": ["both", "A", "B"],
+      "default": "both",
+      "description": "Define en qué ejes del Puzzle 3D se graban automáticamente la primera y última costilla: 'both' (Serie A y Serie B), 'A' (solo Serie A) o 'B' (solo Serie B)."
+    },
+    "puzzleEngraveEndRibsPreset": {
+      "type": "string",
+      "enum": ["drawing", "crest", "medallion", "badge"],
+      "default": "drawing",
+      "description": "Ilustración integrada para el grabado automático en las costillas extremas (primera y última) cuando no se ha subido un bitmap personalizado."
+    },
+    "puzzleEngraveEndRibsScalePct": {
+      "type": "number",
+      "minimum": 10,
+      "maximum": 250,
+      "default": 75,
+      "description": "Escala porcentual (10..250%) del grabado de imagen sobre las costillas primera y última de los ejes."
+    },
+    "puzzleEngraveEndRibsMirrorLast": {
+      "type": "boolean",
+      "default": true,
+      "description": "Si es true, voltea horizontalmente (flipX) el grabado en la última costilla de cada eje para mantener simetría en las fachadas opuestas."
+    },
+    "sliceImageEngravings": {
+      "type": "object",
+      "description": "Mapa de grabados de imagen por lasca o costilla individual (ej. 'puzzle_X1', 'puzzle_X8', 'puzzle_Z1', 'puzzle_Z8' o 'stacked_0') utilizando la función de grabar imagen en lasca.",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "enabled": { "type": "boolean", "default": true },
+          "presetName": { "type": "string", "enum": ["drawing", "crest", "medallion", "badge"] },
+          "imageName": { "type": "string" },
+          "scalePct": { "type": "number", "default": 75 },
+          "offsetXMM": { "type": "number", "default": 0 },
+          "offsetYMM": { "type": "number", "default": 0 },
+          "rotationDeg": { "type": "number", "default": 0 },
+          "flipX": { "type": "boolean", "default": false },
+          "detectMode": { "type": "string", "enum": ["smart_drawing", "line_art", "global_threshold"], "default": "smart_drawing" },
+          "threshold": { "type": "number", "default": 145 },
+          "invert": { "type": "boolean", "default": false },
+          "clipToSlice": { "type": "boolean", "default": true }
+        }
+      }
+    },
     "filterSmallIslands": {
       "type": "boolean",
       "default": true

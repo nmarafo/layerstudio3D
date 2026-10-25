@@ -4253,6 +4253,15 @@ function recomputeSliceImageEngraving(slice) {
 
 function reapplyAllSliceImageEngravings() {
   if (!state.slices || state.slices.length === 0) return;
+  if (state.constructionMode === 'puzzle3d' && state.puzzleEngraveEndRibs) {
+    applyEngravingToPuzzleEndRibs({
+      targetAxes: state.puzzleEngraveEndRibsAxes || 'both',
+      presetName: state.puzzleEngraveEndRibsPreset || 'drawing',
+      scalePct: state.puzzleEngraveEndRibsScalePct || 75,
+      mirrorLastRib: state.puzzleEngraveEndRibsMirrorLast !== false,
+      triggerRender: false
+    });
+  }
   state.slices.forEach((slice) => {
     const cfg = getSliceImageEngravingConfig(slice);
     if ((cfg && cfg.enabled) || slice.hasCustomImageEngraving) {
@@ -4546,6 +4555,7 @@ function resetSelectedSliceEngraveTransform() {
 function clearSelectedSliceImageEngraving() {
   const slice = state.slices && state.slices[state.activeSliceIndex];
   if (!slice) return;
+  state.puzzleEngraveEndRibs = false;
   const key = getSliceEngravingKey(slice);
   if (key && state.sliceImageEngravings) {
     delete state.sliceImageEngravings[key];
@@ -4624,6 +4634,200 @@ function applyVectorizedImageToSelectedSlice() {
   closeImageVectorizerModal();
 }
 
+// =========================================================================
+// GRABADO AUTOMÁTICO DE LA PRIMERA Y ÚLTIMA COSTILLA DE LOS EJES EN PUZZLE 3D
+// =========================================================================
+
+// Devuelve las costillas extremas (primera y última costilla de cada eje: Serie A y/o Serie B) en modo Puzzle 3D
+function getPuzzleEndCapSlices(targetAxes = 'both') {
+  if (!state.slices || state.slices.length === 0) return [];
+  const normTarget = String(targetAxes || 'both').toUpperCase();
+  const includeA = normTarget === 'BOTH' || normTarget === 'A' || normTarget === 'ALL';
+  const includeB = normTarget === 'BOTH' || normTarget === 'B' || normTarget === 'ALL';
+
+  const slicesA = state.slices.filter((s) => s && s.puzzleSeries === 'A');
+  const slicesB = state.slices.filter((s) => s && s.puzzleSeries === 'B');
+
+  const result = [];
+  const pushFirstAndLast = (seriesArr) => {
+    if (!seriesArr || seriesArr.length === 0) return;
+    const sorted = seriesArr.slice().sort((a, b) => (a.seriesIndex ?? a.index ?? 0) - (b.seriesIndex ?? b.index ?? 0));
+    const first = sorted[0];
+    const last = sorted[sorted.length - 1];
+    if (first) result.push({ slice: first, isLastInSeries: false });
+    if (last && last !== first) result.push({ slice: last, isLastInSeries: true });
+  };
+
+  if (slicesA.length > 0 || slicesB.length > 0) {
+    if (includeA) pushFirstAndLast(slicesA);
+    if (includeB) pushFirstAndLast(slicesB);
+  } else {
+    pushFirstAndLast(state.slices);
+  }
+  return result;
+}
+
+// Aplica la función de grabado de imagen en lasca a las costillas primera y última de los ejes del Puzzle 3D
+function applyEngravingToPuzzleEndRibs(options = {}) {
+  if (!state.slices || state.slices.length === 0) return [];
+  const targetAxes = options.targetAxes || state.puzzleEngraveEndRibsAxes || 'both';
+  const endCaps = getPuzzleEndCapSlices(targetAxes);
+  if (endCaps.length === 0) return [];
+
+  const activeSlice = state.slices[state.activeSliceIndex];
+  const activeCfg = activeSlice ? getSliceImageEngravingConfig(activeSlice) : null;
+  const hasActiveImg = Boolean(
+    activeCfg &&
+    activeCfg.enabled &&
+    (activeCfg.sourceCanvas || (Array.isArray(activeCfg.customNormalizedLoops) && activeCfg.customNormalizedLoops.length > 0))
+  );
+
+  const presetName = options.presetName || (hasActiveImg ? activeCfg.presetName : (state.puzzleEngraveEndRibsPreset || 'drawing')) || 'drawing';
+  const namesMap = {
+    drawing: 'Ilustracion_Buho',
+    crest: 'Escudo_Canarias',
+    medallion: 'Mandala_Solar',
+    badge: 'Insignia_Layer3D'
+  };
+
+  const baseSourceCanvas = (!options.presetName && hasActiveImg && activeCfg.sourceCanvas)
+    ? activeCfg.sourceCanvas
+    : createDemoBitmapCanvas(presetName);
+
+  const baseCustomLoops = (!options.presetName && hasActiveImg && Array.isArray(activeCfg.customNormalizedLoops))
+    ? activeCfg.customNormalizedLoops
+    : null;
+
+  const scalePct = typeof options.scalePct === 'number'
+    ? Math.max(10, Math.min(250, options.scalePct))
+    : (hasActiveImg ? (Number(activeCfg.scalePct) || 75) : (Number(state.puzzleEngraveEndRibsScalePct) || 75));
+  const offsetXMM = typeof options.offsetXMM === 'number'
+    ? options.offsetXMM
+    : (hasActiveImg ? (Number(activeCfg.offsetXMM) || 0) : 0);
+  const offsetYMM = typeof options.offsetYMM === 'number'
+    ? options.offsetYMM
+    : (hasActiveImg ? (Number(activeCfg.offsetYMM) || 0) : 0);
+  const rotationDeg = typeof options.rotationDeg === 'number'
+    ? options.rotationDeg
+    : (hasActiveImg ? (Number(activeCfg.rotationDeg) || 0) : 0);
+  const detectMode = options.detectMode || (hasActiveImg ? activeCfg.detectMode : 'smart_drawing') || 'smart_drawing';
+  const engraveStyle = options.engraveStyle || (hasActiveImg ? activeCfg.engraveStyle : 'vector_fill') || 'vector_fill';
+  const threshold = typeof options.threshold === 'number'
+    ? options.threshold
+    : (hasActiveImg ? (Number(activeCfg.threshold) || 145) : 145);
+  const invert = typeof options.invert === 'boolean'
+    ? options.invert
+    : (hasActiveImg ? Boolean(activeCfg.invert) : false);
+  const clipToSlice = options.clipToSlice !== undefined
+    ? Boolean(options.clipToSlice)
+    : true;
+  const baseFlipX = typeof options.flipX === 'boolean'
+    ? options.flipX
+    : (hasActiveImg ? Boolean(activeCfg.flipX) : false);
+  const mirrorLastRib = options.mirrorLastRib !== undefined
+    ? Boolean(options.mirrorLastRib)
+    : (state.puzzleEngraveEndRibsMirrorLast !== false);
+
+  state.puzzleEngraveEndRibs = true;
+  state.puzzleEngraveEndRibsAxes = targetAxes;
+  state.puzzleEngraveEndRibsPreset = presetName;
+  state.puzzleEngraveEndRibsScalePct = scalePct;
+  state.puzzleEngraveEndRibsMirrorLast = mirrorLastRib;
+
+  const engravedCodes = [];
+  endCaps.forEach(({ slice, isLastInSeries }) => {
+    const cfg = ensureSliceImageEngravingConfig(slice);
+    if (!cfg) return;
+    cfg.enabled = true;
+    cfg.presetName = presetName;
+    cfg.imageName = (!options.presetName && hasActiveImg && activeCfg.imageName)
+      ? activeCfg.imageName
+      : (namesMap[presetName] || 'Ilustracion_Fachada');
+    cfg.sourceCanvas = baseSourceCanvas;
+    cfg.aspectRatio = (baseSourceCanvas.width || 480) / Math.max(1, baseSourceCanvas.height || 480);
+    cfg.customNormalizedLoops = baseCustomLoops ? JSON.parse(JSON.stringify(baseCustomLoops)) : null;
+    cfg.scalePct = scalePct;
+    cfg.offsetXMM = offsetXMM;
+    cfg.offsetYMM = offsetYMM;
+    cfg.rotationDeg = rotationDeg;
+    cfg.flipX = (isLastInSeries && mirrorLastRib) ? !baseFlipX : baseFlipX;
+    cfg.flipY = hasActiveImg ? Boolean(activeCfg.flipY) : false;
+    cfg.detectMode = detectMode;
+    cfg.engraveStyle = engraveStyle;
+    cfg.threshold = threshold;
+    cfg.invert = invert;
+    cfg.clipToSlice = clipToSlice;
+
+    recomputeSliceImageEngraving(slice);
+    engravedCodes.push(slice.puzzleCode || ('#' + (slice.index + 1)));
+  });
+
+  state.sliceEngravePanelOpen = true;
+  if (options.triggerRender !== false) {
+    if (typeof build3DSlicesMesh === 'function') build3DSlicesMesh();
+    if (state.nestingEnabled && typeof recomputeBoardNesting === 'function') {
+      recomputeBoardNesting();
+    }
+    if (typeof renderSliceStripUI === 'function') renderSliceStripUI();
+    if (typeof update2DInspectorHeader === 'function') update2DInspectorHeader();
+    if (typeof render2DSlice === 'function') render2DSlice();
+    syncSliceImageEngraveUI();
+  }
+  return engravedCodes;
+}
+
+function clearPuzzleEndRibsEngraving(targetAxes = 'both') {
+  state.puzzleEngraveEndRibs = false;
+  const endCaps = getPuzzleEndCapSlices(targetAxes);
+  endCaps.forEach(({ slice }) => {
+    const key = getSliceEngravingKey(slice);
+    if (key && state.sliceImageEngravings) {
+      delete state.sliceImageEngravings[key];
+    }
+    slice.engraveLoops = (slice.baseEngraveLoops || []).slice();
+    slice.fineEdgeLoops = [];
+    slice.hatchPolylines = [];
+    slice.hasCustomImageEngraving = false;
+  });
+  if (typeof build3DSlicesMesh === 'function') build3DSlicesMesh();
+  if (state.nestingEnabled && typeof recomputeBoardNesting === 'function') {
+    recomputeBoardNesting();
+  }
+  if (typeof renderSliceStripUI === 'function') renderSliceStripUI();
+  if (typeof update2DInspectorHeader === 'function') update2DInspectorHeader();
+  if (typeof render2DSlice === 'function') render2DSlice();
+  syncSliceImageEngraveUI();
+}
+
+// Alias programáticos compatibles con OKF para modificar parámetros de grabado de la lámina activa
+function setSliceImageEngravingParams(key, val) {
+  const slice = state.slices && state.slices[state.activeSliceIndex];
+  if (!slice) return;
+  const cfg = ensureSliceImageEngravingConfig(slice);
+  if (!cfg) return;
+  if (!cfg.enabled) {
+    applyDemoImageEngravingToSelectedSlice(cfg.presetName || 'drawing');
+  }
+  if (key === 'scalePct') cfg.scalePct = Math.max(10, Math.min(250, Number(val) || 75));
+  else if (key === 'offsetXMM') cfg.offsetXMM = Number(val) || 0;
+  else if (key === 'offsetYMM') cfg.offsetYMM = Number(val) || 0;
+  else if (key === 'rotationDeg') cfg.rotationDeg = Number(val) || 0;
+  else if (key === 'threshold') { cfg.threshold = Math.max(15, Math.min(245, Number(val) || 145)); cfg.customNormalizedLoops = null; }
+  else if (key === 'detectMode' || key === 'mode') { cfg.detectMode = String(val || 'smart_drawing'); cfg.customNormalizedLoops = null; }
+  else if (key === 'engraveStyle') cfg.engraveStyle = String(val || 'vector_fill');
+  else if (key === 'invert') { cfg.invert = Boolean(val); cfg.customNormalizedLoops = null; }
+  else if (key === 'flipX') cfg.flipX = Boolean(val);
+  else if (key === 'clipToSlice') cfg.clipToSlice = Boolean(val);
+  refreshActiveSliceEngravingAndRender();
+}
+
+function clearSliceImageEngraving(sliceIndex) {
+  if (typeof sliceIndex === 'number' && state.slices && state.slices[sliceIndex]) {
+    state.activeSliceIndex = sliceIndex;
+  }
+  clearSelectedSliceImageEngraving();
+}
+
 if (typeof window !== 'undefined') {
   window.openImageVectorizerModal = openImageVectorizerModal;
   window.closeImageVectorizerModal = closeImageVectorizerModal;
@@ -4664,6 +4868,11 @@ if (typeof window !== 'undefined') {
   window.clearSelectedSliceImageEngraving = clearSelectedSliceImageEngraving;
   window.openVectorizerForSelectedSlice = openVectorizerForSelectedSlice;
   window.applyVectorizedImageToSelectedSlice = applyVectorizedImageToSelectedSlice;
+  window.getPuzzleEndCapSlices = getPuzzleEndCapSlices;
+  window.applyEngravingToPuzzleEndRibs = applyEngravingToPuzzleEndRibs;
+  window.clearPuzzleEndRibsEngraving = clearPuzzleEndRibsEngraving;
+  window.setSliceImageEngravingParams = setSliceImageEngravingParams;
+  window.clearSliceImageEngraving = clearSliceImageEngraving;
 
   window.addEventListener('DOMContentLoaded', () => {
     const fileInputImg = document.getElementById('fileInputImage2D');

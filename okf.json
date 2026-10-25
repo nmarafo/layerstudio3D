@@ -324,24 +324,39 @@
     ],
     "perSliceImageEngravingAndVectorizer": [
       {
-        "function": "openSliceImageEngravingPicker(sliceIndex)",
-        "arguments": "sliceIndex?: number (por defecto state.activeSliceIndex)",
-        "description": "Abre el selector de archivos PNG/BMP/JPG/WEBP para grabar una imagen en la lámina o costilla indicada."
+        "function": "applyEngravingToPuzzleEndRibs(options)",
+        "arguments": "options?: { targetAxes?: 'both' | 'A' | 'B', presetName?: 'drawing' | 'crest' | 'medallion' | 'badge', scalePct?: number, mirrorLastRib?: boolean, clipToSlice?: boolean }",
+        "description": "En un Puzzle 3D, aplica automáticamente la función existente de grabado de imagen en lasca a la primera y última costilla de los ejes (las fachadas exteriores de la Serie A y/o Serie B), recortando el grabado al contorno y a las ranuras a 90° e invirtiendo en espejo (flipX) la última costilla para mantener simetría exterior."
       },
       {
-        "function": "openSliceImageInVectorizerModal(sliceIndex)",
-        "arguments": "sliceIndex?: number (por defecto state.activeSliceIndex)",
-        "description": "Abre el estudio Vectorizador 2D en modo 'Apuntando a Lámina Seleccionada' para ajustar umbral, relleno o estilo antes de estampar el grabado en la lámina."
+        "function": "applyDemoImageEngravingToSelectedSlice(presetName)",
+        "arguments": "presetName?: 'drawing' | 'crest' | 'medallion' | 'badge'",
+        "description": "Estampa inmediatamente una imagen vectorizada integrada sobre la lámina o costilla activa, recortándola automáticamente al interior sólido de la pieza y fuera de huecos y ranuras."
+      },
+      {
+        "function": "openVectorizerForSelectedSlice()",
+        "arguments": "none (apunta a state.activeSliceIndex)",
+        "description": "Abre el estudio Vectorizador 2D (#imageVectorizerModal) apuntando a la lámina o costilla seleccionada para cargar un PNG/BMP/JPG, editarlo y estamparlo con applyVectorizedImageToSelectedSlice()."
+      },
+      {
+        "function": "applyVectorizedImageToSelectedSlice()",
+        "arguments": "none",
+        "description": "Transfiere los vectores de grabado actuales del estudio Vectorizador 2D directamente a la lámina o costilla seleccionada con recorte automático al contorno y ranuras."
       },
       {
         "function": "setSliceImageEngravingParams(key, val)",
-        "arguments": "key: 'mode' | 'scalePct' | 'offsetXMM' | 'offsetYMM' | 'rotationDeg' | 'threshold' | 'hatchSpacingMM' | 'invert' | 'flipX', val: any",
-        "description": "Modifica en tiempo real los parámetros del grabado de imagen de la lámina activa, recortándolo automáticamente al contorno real y ranuras de la pieza."
+        "arguments": "key: 'detectMode' | 'scalePct' | 'offsetXMM' | 'offsetYMM' | 'rotationDeg' | 'threshold' | 'engraveStyle' | 'invert' | 'flipX' | 'clipToSlice', val: any",
+        "description": "Modifica en tiempo real los parámetros del grabado de imagen de la lámina o costilla activa, recortándolo automáticamente al contorno real y ranuras de la pieza."
       },
       {
-        "function": "clearSliceImageEngraving(sliceIndex)",
-        "arguments": "sliceIndex?: number",
-        "description": "Elimina el grabado de imagen personalizado de la lámina indicada."
+        "function": "clearSelectedSliceImageEngraving()",
+        "arguments": "none",
+        "description": "Elimina el grabado de imagen personalizado de la lámina o costilla seleccionada."
+      },
+      {
+        "function": "clearPuzzleEndRibsEngraving(targetAxes)",
+        "arguments": "targetAxes?: 'both' | 'A' | 'B'",
+        "description": "Elimina el grabado de imagen de la primera y última costilla de los ejes indicados en el Puzzle 3D."
       }
     ],
     "geometryCleanupAndModularSplit": [
@@ -460,8 +475,9 @@
     ],
     "agentExecutionTips": [
       "Si el agente opera mediante JavaScript en la consola del navegador o Playwright page.evaluate(), prefiera invocar window.applyOkfProjectConfig(configObj) o las funciones globales documentadas en programmaticApiCatalog en lugar de simular decenas de eventos de ratón.",
-      "Si el agente opera mediante clics DOM puros, cambie primero a la pestaña adecuada con switchSidebarTab('cut' | 'clean' | 'finish' | 'boards' | 'all') o haciendo clic en #sidebarTab_cut, #sidebarTab_clean, #sidebarTab_finish, #sidebarTab_boards o #sidebarTab_all.",
-      "En modo Puzzle 3D ('puzzle3d'), recuerde que el grosor del tablero (puzzleMaterialThicknessMM) y la holgura de encaje (puzzleSlotClearanceMM) determinan el ancho exacto de las ranuras a 90°: slotWidth = Math.max(0.2, puzzleMaterialThicknessMM + puzzleSlotClearanceMM)."
+      "Si el agente opera mediante clics DOM puros, cambie primero a la pestaña adecuada con setSidebarTab('cut' | 'clean' | 'finish' | 'boards' | 'all') o haciendo clic en #sidebarTab_cut, #sidebarTab_clean, #sidebarTab_finish, #sidebarTab_boards o #sidebarTab_all.",
+      "En modo Puzzle 3D ('puzzle3d'), recuerde que el grosor del tablero (puzzleMaterialThicknessMM) y la holgura de encaje (puzzleSlotClearanceMM) determinan el ancho exacto de las ranuras a 90°: slotWidth = Math.max(0.2, puzzleMaterialThicknessMM + puzzleSlotClearanceMM).",
+      "En modo Puzzle 3D ('puzzle3d'), tenga siempre en cuenta que lo habitual es grabar las costillas primera y última de los ejes (las fachadas exteriores: ej. X1 y XN en la Serie A, y/o Y1/Z1 y YM/ZM en la Serie B), mientras las costillas intermedias actúan como esqueleto estructural interno. Para ello es especialmente útil la función ya existente de grabar imagen en lasca (activando puzzleEngraveEndRibs: true en applyOkfProjectConfig, llamando a applyEngravingToPuzzleEndRibs() o seleccionando la primera y última costilla de cada eje y aplicando applyDemoImageEngravingToSelectedSlice / handleSliceImageEngraveFile), ya que recorta automáticamente el grabado (#008800 / capa C00) al contorno exterior y evita las ranuras de encaje a 90°."
     ]
   }
 }

@@ -40,6 +40,11 @@ const state = {
   puzzleHiddenRibs: { A: {}, B: {} }, // Costillas individuales ocultas en la vista { A: { [seriesIndex]: true }, B: { [seriesIndex]: true } }
   sliceImageEngravings: {},    // Grabado de imagen personalizado por lámina / costilla { [sliceKey]: config }
   sliceEngravePanelOpen: false,// true = muestra el panel de grabado de imagen sobre la lámina seleccionada en el Inspector 2D
+  puzzleEngraveEndRibs: false, // true = graba automáticamente la primera y última costilla de los ejes en modo Puzzle 3D
+  puzzleEngraveEndRibsAxes: 'both',      // 'both' (Ejes A y B) | 'A' (Solo Serie A) | 'B' (Solo Serie B)
+  puzzleEngraveEndRibsPreset: 'drawing', // 'drawing' | 'crest' | 'medallion' | 'badge'
+  puzzleEngraveEndRibsScalePct: 75,      // Escala porcentual del grabado en las costillas extremas (primera y última)
+  puzzleEngraveEndRibsMirrorLast: true,  // true = invierte horizontalmente (flipX) el grabado en la última costilla del eje para simetría exterior
   activeSidebarTab: 'cut',     // 'cut' (1-2: Pieza y Corte) | 'clean' (4: Islas y Huecos) | 'finish' (3: Vista 3D y Acabado) | 'boards' (5-6: Tableros) | 'all' (Todo)
   collapsedSidebarCards: {},   // Tarjetas plegadas individualmente en la barra lateral { [cardNum]: boolean }
   legend2DCollapsed: false,    // true = oculta el desglose de colores de la leyenda flotante del visor 2D

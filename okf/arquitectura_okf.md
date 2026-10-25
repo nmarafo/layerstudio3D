@@ -119,17 +119,20 @@ Desde la versión `3.0.6`, el panel lateral izquierdo (`<aside>`) organiza sus *
   * Rellenar huecos internos: `#fillHolesCheck` → `setFillInternalHoles(bool)`
   * Modo de relleno: `#fillHolesModeSelect` (`'all'` Todos los huecos — Pieza maciza, `'max_size'` Solo huecos menores al umbral `#fillHolesMaxSizeInput`)
 
-### 4.4. Tarjeta 5 (`3. Acabado`): Grabado de Imagen por Lámina, Guías, Varillas, Marco y Pestañas
-* **Grabado de Imagen en la Lámina Seleccionada (`slice.imageEngraving`)**:
-  * Botón en Inspector 2D: `#btnSliceImgUpload` (`🖼️ Grabar Imagen`) y `#btnSliceImgEditVec` (`🎛️ Vectorizador`)
-  * Botón en Panel Lateral: `#btnSidebarSliceImgUpload` y `#btnSidebarSliceImgVec`
-  * Modo de grabado: `#sliceImgModeSelect` (`'contour'` Contornos Vectoriales, `'hatch'` Relleno Rayado Láser, `'both'` Contorno + Relleno, `' relief'` Niveles tonales)
-  * Escala (%): `#sliceImgScaleSlider`, `#sliceImgScaleInput` → `setSliceImageEngravingParams('scalePct', val)`
-  * Posición X / Y (mm): `#sliceImgOffsetXInput`, `#sliceImgOffsetYInput` → `setSliceImageEngravingParams('offsetXMM' | 'offsetYMM', val)`
-  * Rotación (°): `#sliceImgRotInput` → `setSliceImageEngravingParams('rotationDeg', val)`
-  * Umbral B/N (`5..250`): `#sliceImgThresholdInput` → `setSliceImageEngravingParams('threshold', val)`
-  * Paso de rayado láser (`0.3..8 mm`): `#sliceImgHatchInput` → `setSliceImageEngravingParams('hatchSpacingMM', val)`
-  * Invertir B/N y Espejo X: `#sliceImgInvertCheck`, `#sliceImgFlipXCheck`
+### 4.4. Tarjeta 4 y 5 (`2. Limpieza` / `3. Acabado`): Grabado de Imagen en Lasca, Costillas Extremas de Puzzle 3D, Guías, Varillas, Marco y Pestañas
+* **Grabado de Imagen en Lasca / Costilla Seleccionada (`state.sliceImageEngravings` y `slice.engraveLoops`)**:
+  * **Regla de Diseño en Puzzle 3D (`puzzle3d`)**: En un Puzzle 3D entrelazado, las costillas intermedias conforman el armazón estructural interior, mientras que **las costillas primera y última de cada eje** (ej. `X1` y `XN` en la Serie A, y/o `Y1`/`Z1` y `YM`/`ZM` en la Serie B) actúan como **fachadas exteriores visibles**. Por ello, **lo habitual al diseñar un Puzzle 3D es grabar las costillas primera y última de los ejes** empleando la función existente de grabar imagen en lasca, la cual recorta automáticamente todos los trazos del grabado (`#008800` / capa DXF `C00`) al contorno real de la costilla y evita invadir las ranuras de encaje a 90° (`slice.slots`).
+  * Botón en Inspector 2D: `#btnInspectorEngraveSliceImg` (`🖼️ Grabar Imagen`) → despliega `#sliceImageEngravePanel`
+  * Botón directo para estampar en 1.ª y última costilla de los ejes: `#btnEngravePuzzleEndRibs` (`🧩 1.ª y Última Costilla (Ejes)`) → `applyEngravingToPuzzleEndRibs()`
+  * Carga de imagen personalizada (`.png`, `.bmp`, `.jpg`, `.webp`): `#fileInputSliceEngraveImg` → `handleSliceImageEngraveFile(file)`
+  * Presets integrados de prueba: `applyDemoImageEngravingToSelectedSlice('drawing' | 'crest' | 'medallion' | 'badge')`
+  * Abrir estudio Vectorizador 2D apuntando a la lasca activa: `openVectorizerForSelectedSlice()` y transferir con `applyVectorizedImageToSelectedSlice()`
+  * Modo de detección: `#sliceEngraveModeSelect` (`'smart_drawing'` Trazos + Relleno, `'line_art'` Solo Líneas, `'global_threshold'` Silueta / Sombra)
+  * Escala (%): `#sliceEngraveScaleInput` → `stepSelectedSliceEngraveScale(delta)` / `setSliceImageEngravingParams('scalePct', val)`
+  * Posición X / Y (mm): `#sliceEngraveOffsetXInput`, `#sliceEngraveOffsetYInput` → `setSliceImageEngravingParams('offsetXMM' | 'offsetYMM', val)`
+  * Rotación 90° y Espejo Horizontal (`flipX`): `rotateSelectedSliceEngraving(90)`, `#btnSliceEngraveFlipX` → `toggleSelectedSliceEngravingFlipX()`
+  * Umbral B/N (`15..245`): `#sliceEngraveThresholdSlider` → `setSliceImageEngravingParams('threshold', val)`
+  * Recorte automático al contorno y ranuras: `#sliceEngraveClipCheck` (`clipToSlice: true` por defecto)
 * **Numeración, Guías, Varillas, Marco 2D y Pestañas (Holding Tabs)**:
   * Grabar numeración: `#labelCheck` → `setIncludeLabels(bool)`
   * Guía capa superior ($N+1$): `#nextGuideCheck` → `setIncludeNextGuide(bool)`
@@ -167,6 +170,11 @@ window.applyOkfProjectConfig({
   puzzleSimplifyMode: 'smooth',      // 'rdp' | 'smooth' | 'bridge' | 'convex'
   puzzleSimplifyToleranceMM: 1.5,
   puzzleSimplifySmoothPasses: 2,
+  puzzleEngraveEndRibs: true,        // Grabar automáticamente la 1.ª y última costilla de los ejes
+  puzzleEngraveEndRibsAxes: 'both',  // 'both' (Serie A y Serie B) | 'A' | 'B'
+  puzzleEngraveEndRibsPreset: 'drawing', // 'drawing' | 'crest' | 'medallion' | 'badge'
+  puzzleEngraveEndRibsScalePct: 75,
+  puzzleEngraveEndRibsMirrorLast: true,  // Espejo horizontal (flipX) en la última costilla de cada eje
   filterSmallIslands: true,
   fillInternalHoles: true,
   nestingEnabled: true,
@@ -195,20 +203,29 @@ window.applyOkfProjectConfig({
    showAllPuzzleRibs();                // Restaura todas las costillas
    ```
 
-### Playbook C: Grabar una Imagen Vectorizada en la Lámina Seleccionada
-Para estampar programáticamente o desde el Vectorizador 2D un grabado láser dentro de la lámina activa (recortando automáticamente cualquier trazo que caiga fuera de la lámina o dentro de una ranura de encaje Puzzle 3D):
+### Playbook C: Grabar Imagen en Lasca (Costillas Primera y Última en Puzzle 3D o Lámina Individual)
+En un **Puzzle 3D (`puzzle3d`)**, lo normal es grabar las **costillas primera y última de los ejes** (`X1` y `XN` en la Serie A; `Y1`/`Z1` y `YM`/`ZM` en la Serie B), ya que constituyen las fachadas exteriores visibles del modelo. Para ello se utiliza la función ya existente de grabar imagen en lasca, que recorta automáticamente cualquier trazo que salga del contorno o caiga sobre una ranura de encaje a 90°:
 
-1. Seleccionar la lámina destino:
+1. **Vía automática sobre la 1.ª y última costilla de los ejes**:
    ```javascript
-   selectActiveSlice(0);
+   // Estampa el grabado (reutilizando la imagen de la lasca activa o el preset indicado) en la 1.ª y última costilla de ambos ejes:
+   applyEngravingToPuzzleEndRibs({
+     targetAxes: 'both',      // 'both' | 'A' | 'B'
+     presetName: 'drawing',   // 'drawing' | 'crest' | 'medallion' | 'badge'
+     scalePct: 75,
+     mirrorLastRib: true,     // Invierte horizontalmente (flipX) la última costilla del eje para simetría exterior
+     clipToSlice: true        // Recorta al contorno y evita las ranuras a 90°
+   });
    ```
-2. Si el usuario carga una imagen mediante `#sliceImageEngraveInput` o desde el estudio Vectorizador (`openSliceImageInVectorizerModal()`), ajustar parámetros en tiempo real:
+2. **Vía manual o individual lasca a lasca** (para personalizar una costilla extrema o cualquier lámina apilada):
    ```javascript
-   setSliceImageEngravingParams('mode', 'both');        // 'contour' | 'hatch' | 'both' | 'relief'
-   setSliceImageEngravingParams('scalePct', 75);        // 75% del tamaño de la lámina
-   setSliceImageEngravingParams('hatchSpacingMM', 1.2); // Rayado cada 1.2 mm
+   // Seleccionar la primera costilla del eje A (índice 0) o cualquier lasca:
+   state.activeSliceIndex = 0;
+   applyDemoImageEngravingToSelectedSlice('crest'); // O cargar archivo con handleSliceImageEngraveFile(file)
+   setSliceImageEngravingParams('scalePct', 80);
+   setSliceImageEngravingParams('detectMode', 'smart_drawing'); // 'smart_drawing' | 'line_art' | 'global_threshold'
    ```
-3. Los trazos resultantes se almacenan en `state.slices[state.activeSliceIndex].imageEngraving.clippedPaths` y se exportan automáticamente en la capa magenta `#d946ef` (`GRABADO_TEXTO`) tanto en `.SVG` como en `.DXF`.
+3. Los vectores de grabado resultantes se almacenan en `slice.engraveLoops` y se exportan automáticamente en color verde `#008800` (grupo SVG `GRABADO_VECTORIAL_IMAGEN` y capa DXF `C00` de prioridad 1).
 
 ### Playbook D: Exportar Archivos de Producción
 * **Exportar `.SVG` de todos los tableros o láminas**: `exportAllSVGLayout()`
