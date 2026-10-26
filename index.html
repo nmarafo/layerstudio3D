@@ -38,17 +38,17 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
 
   <!-- Hoja de estilos principal -->
-  <link rel="stylesheet" href="css/styles.css?v=3.0.18" />
+  <link rel="stylesheet" href="css/styles.css?v=3.0.19" />
 
   <!-- Módulos de la aplicación (cargados en orden de dependencia con defer y cache-busting) -->
-  <script src="js/state.js?v=3.0.18" defer></script>
-  <script src="js/viewer3d.js?v=3.0.18" defer></script>
-  <script src="js/slicer.js?v=3.0.18" defer></script>
-  <script src="js/nesting.js?v=3.0.18" defer></script>
-  <script src="js/modals-guide.js?v=3.0.18" defer></script>
-  <script src="js/viewer2d.js?v=3.0.18" defer></script>
-  <script src="js/exporters.js?v=3.0.18" defer></script>
-  <script src="js/vectorizer2d.js?v=3.0.18" defer></script>
+  <script src="js/state.js?v=3.0.19" defer></script>
+  <script src="js/viewer3d.js?v=3.0.19" defer></script>
+  <script src="js/slicer.js?v=3.0.19" defer></script>
+  <script src="js/nesting.js?v=3.0.19" defer></script>
+  <script src="js/modals-guide.js?v=3.0.19" defer></script>
+  <script src="js/viewer2d.js?v=3.0.19" defer></script>
+  <script src="js/exporters.js?v=3.0.19" defer></script>
+  <script src="js/vectorizer2d.js?v=3.0.19" defer></script>
 </head>
 <body class="h-screen w-screen flex flex-col">
 
@@ -607,13 +607,31 @@
                   ⚓ Costilla apoyada en el suelo
                 </button>
               </div>
-              <div class="pt-1 border-t border-slate-800/80 flex items-center gap-1">
-                <button type="button" onclick="toggleSliceImageEngravePanel(true)" class="flex-1 py-1 px-2 rounded border border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25 text-[9px] font-bold text-emerald-300 transition truncate" title="Abrir el panel para grabar una imagen (PNG/BMP/JPG) en esta costilla respetando sus ranuras">
-                  🖼️ Grabar Imagen en esta Costilla
-                </button>
-                <button type="button" onclick="document.getElementById('fileInputSliceEngraveImg').click()" class="py-1 px-2 rounded border border-slate-700 bg-slate-900 hover:bg-slate-800 text-[9px] font-semibold text-slate-200 transition shrink-0" title="Seleccionar archivo de imagen desde su equipo para grabar en esta costilla">
-                  📂 Cargar
-                </button>
+              <div class="pt-1 border-t border-slate-800/80 space-y-1.5">
+                <div class="flex items-center gap-1">
+                  <button type="button" id="btnPuzzleSidebarEngraveRib" onclick="engraveImageOnSelectedSlice()" class="flex-1 py-1 px-2 rounded border border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25 text-[9px] font-bold text-emerald-300 transition truncate" title="Graba una imagen (o abre las opciones de grabado) en la costilla seleccionada respetando sus ranuras">
+                    🖼️ Grabar Imagen en esta Costilla
+                  </button>
+                  <button type="button" onclick="document.getElementById('fileInputSliceEngraveImg').click()" class="py-1 px-2 rounded border border-slate-700 bg-slate-900 hover:bg-slate-800 text-[9px] font-semibold text-slate-200 transition shrink-0" title="Seleccionar archivo de imagen (PNG, BMP, JPG, WEBP) desde su equipo para grabar en esta costilla">
+                    📂 Cargar
+                  </button>
+                </div>
+                <div id="puzzleSidebarEngraveQuickBox" class="hidden bg-slate-900/95 border border-emerald-500/35 rounded-lg p-1.5 space-y-1.5">
+                  <div class="flex items-center justify-between gap-1 text-[9px]">
+                    <span id="puzzleSidebarEngraveStatus" class="text-emerald-300 font-semibold truncate">Sin imagen en esta costilla</span>
+                    <button type="button" onclick="clearSelectedSliceImageEngraving()" class="px-1.5 py-0.5 rounded bg-rose-500/20 hover:bg-rose-500/35 border border-rose-500/40 text-rose-300 font-bold text-[8px] shrink-0" title="Quitar grabado de esta costilla">🗑️ Quitar</button>
+                  </div>
+                  <div class="grid grid-cols-4 gap-1">
+                    <button type="button" onclick="applyDemoImageEngravingToSelectedSlice('drawing')" class="py-0.5 px-1 rounded bg-slate-950 hover:bg-slate-800 border border-slate-700 text-[8px] text-slate-200 font-semibold truncate">🦉 Dibujo</button>
+                    <button type="button" onclick="applyDemoImageEngravingToSelectedSlice('crest')" class="py-0.5 px-1 rounded bg-slate-950 hover:bg-slate-800 border border-slate-700 text-[8px] text-slate-200 font-semibold truncate">🛡️ Escudo</button>
+                    <button type="button" onclick="applyDemoImageEngravingToSelectedSlice('medallion')" class="py-0.5 px-1 rounded bg-slate-950 hover:bg-slate-800 border border-slate-700 text-[8px] text-slate-200 font-semibold truncate">☀️ Mandala</button>
+                    <button type="button" onclick="applyDemoImageEngravingToSelectedSlice('badge')" class="py-0.5 px-1 rounded bg-slate-950 hover:bg-slate-800 border border-slate-700 text-[8px] text-slate-200 font-semibold truncate">⭐ Insignia</button>
+                  </div>
+                  <div class="grid grid-cols-2 gap-1">
+                    <button type="button" onclick="applyEngravingToPuzzleEndRibs()" class="py-0.5 px-1.5 rounded bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-[8px] font-bold text-amber-300 truncate" title="Estampar en la 1.ª y última costilla de cada eje">🧩 1.ª y Últ. Costilla</button>
+                    <button type="button" onclick="openVectorizerForSelectedSlice()" class="py-0.5 px-1.5 rounded bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/40 text-[8px] font-semibold text-indigo-300 truncate" title="Abrir editor vectorial completo">🛠️ Editor Vectorial</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -945,13 +963,31 @@
         </div>
 
         <!-- Opción para grabar una imagen en la lámina activa -->
-        <div class="pt-1.5 border-t border-slate-700/60 flex items-center gap-1.5">
-          <button type="button" onclick="toggleSliceImageEngravePanel(true)" class="flex-1 py-1.5 px-2 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-[10px] font-bold text-emerald-300 transition truncate" title="Abrir opciones de grabado láser de imagen en la lámina o costilla seleccionada">
-            🖼️ Grabar Imagen en Lámina (<span id="sidebarSliceEngraveTargetBadge">#1</span>)
-          </button>
-          <button type="button" onclick="document.getElementById('fileInputSliceEngraveImg').click()" class="py-1.5 px-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[10px] font-semibold text-slate-200 transition shrink-0" title="Subir imagen PNG/BMP/JPG para grabar en la lámina seleccionada">
-            📂 Subir
-          </button>
+        <div class="pt-1.5 border-t border-slate-700/60 space-y-1.5">
+          <div class="flex items-center gap-1.5">
+            <button type="button" id="btnSidebar4EngraveSlice" onclick="engraveImageOnSelectedSlice()" class="flex-1 py-1.5 px-2 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/40 text-[10px] font-bold text-emerald-300 transition truncate" title="Graba una imagen (o abre las opciones de grabado) en la lámina o costilla seleccionada">
+              🖼️ Grabar Imagen en Lámina (<span id="sidebarSliceEngraveTargetBadge">#1</span>)
+            </button>
+            <button type="button" onclick="document.getElementById('fileInputSliceEngraveImg').click()" class="py-1.5 px-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[10px] font-semibold text-slate-200 transition shrink-0" title="Subir imagen PNG/BMP/JPG para grabar en la lámina seleccionada">
+              📂 Subir
+            </button>
+          </div>
+          <div id="sidebar4EngraveQuickBox" class="hidden bg-slate-900/95 border border-emerald-500/35 rounded-lg p-2 space-y-1.5">
+            <div class="flex items-center justify-between gap-1 text-[9px]">
+              <span id="sidebar4EngraveStatus" class="text-emerald-300 font-semibold truncate">Sin imagen en esta lámina</span>
+              <button type="button" onclick="clearSelectedSliceImageEngraving()" class="px-1.5 py-0.5 rounded bg-rose-500/20 hover:bg-rose-500/35 border border-rose-500/40 text-rose-300 font-bold text-[8px] shrink-0">🗑️ Quitar</button>
+            </div>
+            <div class="grid grid-cols-4 gap-1">
+              <button type="button" onclick="applyDemoImageEngravingToSelectedSlice('drawing')" class="py-0.5 px-1 rounded bg-slate-950 hover:bg-slate-800 border border-slate-700 text-[8px] text-slate-200 font-semibold truncate">🦉 Dibujo</button>
+              <button type="button" onclick="applyDemoImageEngravingToSelectedSlice('crest')" class="py-0.5 px-1 rounded bg-slate-950 hover:bg-slate-800 border border-slate-700 text-[8px] text-slate-200 font-semibold truncate">🛡️ Escudo</button>
+              <button type="button" onclick="applyDemoImageEngravingToSelectedSlice('medallion')" class="py-0.5 px-1 rounded bg-slate-950 hover:bg-slate-800 border border-slate-700 text-[8px] text-slate-200 font-semibold truncate">☀️ Mandala</button>
+              <button type="button" onclick="applyDemoImageEngravingToSelectedSlice('badge')" class="py-0.5 px-1 rounded bg-slate-950 hover:bg-slate-800 border border-slate-700 text-[8px] text-slate-200 font-semibold truncate">⭐ Insignia</button>
+            </div>
+            <div class="grid grid-cols-2 gap-1">
+              <button type="button" onclick="applyEngravingToPuzzleEndRibs()" class="py-0.5 px-1.5 rounded bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-[8px] font-bold text-amber-300 truncate">🧩 1.ª y Últ. Costilla</button>
+              <button type="button" onclick="openVectorizerForSelectedSlice()" class="py-0.5 px-1.5 rounded bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/40 text-[8px] font-semibold text-indigo-300 truncate">🛠️ Editor Vectorial</button>
+            </div>
+          </div>
         </div>
 
         <!-- Filtro único para descartar islas inferiores a un tamaño mínimo -->

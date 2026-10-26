@@ -4220,7 +4220,7 @@ function build3DSlicesMesh() {
     if (m.material) m.material.dispose();
   }
 
-  const attachSliceEngraveLines3D = (targetMesh, slice, ax, extrudeDepth) => {
+  const attachSliceEngraveLines3D = (targetMesh, slice, ax, extrudeDepth, sectorOuters = null) => {
     if (
       !targetMesh ||
       !slice ||
@@ -4237,6 +4237,12 @@ function build3DSlicesMesh() {
     slice.engraveLoops.forEach((el) => {
       const pts = el.points;
       if (!pts || pts.length < 2) return;
+      if (Array.isArray(sectorOuters) && sectorOuters.length > 0) {
+        const insideSector = sectorOuters.some((outer) =>
+          outer.points && isPointInPolygon(pts[0], outer.points)
+        );
+        if (!insideSector) return;
+      }
       for (let i = 0, n = pts.length; i < n; i++) {
         const p1 = pts[i];
         const p2 = pts[(i + 1) % n];
@@ -4369,6 +4375,7 @@ function build3DSlicesMesh() {
           partW: slice.splitGrid.partW,
           partH: slice.splitGrid.partH
         };
+        attachSliceEngraveLines3D(mesh, slice, ax, extrudeDepth, secGroup.outers);
         sliceGroup3D.add(mesh);
       });
       return;
