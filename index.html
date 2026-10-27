@@ -2552,22 +2552,29 @@
             </div>
           </div>
 
-          <!-- 3. Parámetros de Pestañas de Pegamento Escolar y Tijeras -->
+          <!-- 3. Parámetros de Medidas (= 1. Dimensiones), Pestañas de Pegamento Escolar y Tijeras -->
           <div class="bg-slate-800/55 border border-emerald-500/35 rounded-xl p-2.5 space-y-2">
-            <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-400 block">3. Medidas, Pestañas de Pegamento y Tijeras</span>
+            <div class="flex flex-wrap items-center justify-between gap-1">
+              <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-400">3. Medidas (= 1. Dimensiones), Pestañas y Tijeras</span>
+              <span id="pcDimensionsSyncBadge" class="px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/35 text-[9px] font-semibold text-emerald-300">🔗 = 1. Dimensiones (120 × 120 × 120 mm)</span>
+            </div>
 
-            <div class="grid grid-cols-3 gap-1.5 text-[10px]">
-              <div class="bg-slate-950 border border-slate-800 rounded px-2 py-1">
-                <span class="text-slate-400 block">Ancho (mm)</span>
-                <input type="number" id="pcWidthMMInput" value="130" min="40" max="350" step="5" onchange="onPapercraftParamsChange()" class="w-full bg-transparent text-white font-bold text-right outline-none" />
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[10px]">
+              <div class="bg-slate-950 border border-slate-800 rounded px-2 py-1" title="Ancho total del conjunto recortable (sincronizado con 1. Dimensiones)">
+                <span id="pcWidthAxisLabel" class="text-slate-400 block">Ancho X (mm)</span>
+                <input type="number" id="pcWidthMMInput" value="120" min="10" max="2000" step="1" onchange="onPapercraftParamsChange('pcWidthMMInput')" class="w-full bg-transparent text-white font-bold text-right outline-none" />
               </div>
-              <div class="bg-slate-950 border border-slate-800 rounded px-2 py-1">
-                <span class="text-slate-400 block">Fondo/Alto (mm)</span>
-                <input type="number" id="pcHeightMMInput" value="130" min="40" max="350" step="5" onchange="onPapercraftParamsChange()" class="w-full bg-transparent text-white font-bold text-right outline-none" />
+              <div class="bg-slate-950 border border-slate-800 rounded px-2 py-1" title="Fondo / largo total del conjunto recortable (sincronizado con 1. Dimensiones)">
+                <span id="pcHeightAxisLabel" class="text-slate-400 block">Fondo Y (mm)</span>
+                <input type="number" id="pcHeightMMInput" value="120" min="10" max="2000" step="1" onchange="onPapercraftParamsChange('pcHeightMMInput')" class="w-full bg-transparent text-white font-bold text-right outline-none" />
               </div>
-              <div class="bg-slate-950 border border-slate-800 rounded px-2 py-1" title="Altura de la pared lateral de cada plataforma o del escalón entre capas superpuestas (0 = pestaña plana sin escalón)">
-                <span class="text-amber-300 block">Altura Pared (mm)</span>
-                <input type="number" id="pcWallHeightInput" value="14" min="0" max="45" step="1" onchange="onPapercraftParamsChange()" class="w-full bg-transparent text-amber-300 font-bold text-right outline-none" />
+              <div class="bg-slate-950 border border-slate-800 rounded px-2 py-1" title="Altura total del conjunto apilado en el eje de laminado (= Nº Capas × Altura Capa, sincronizado con 1. Dimensiones)">
+                <span id="pcTotalHeightAxisLabel" class="text-emerald-300 block">Alto Total Z (mm)</span>
+                <input type="number" id="pcTotalHeightMMInput" value="120" min="4" max="2000" step="1" onchange="onPapercraftParamsChange('pcTotalHeightMMInput')" class="w-full bg-transparent text-emerald-300 font-bold text-right outline-none" />
+              </div>
+              <div class="bg-slate-950 border border-slate-800 rounded px-2 py-1" title="Altura de cada capa / plataforma individual (= Alto Total ÷ Nº Capas)">
+                <span class="text-amber-300 block">Altura/Capa (mm)</span>
+                <input type="number" id="pcWallHeightInput" value="5" min="0" max="200" step="0.5" onchange="onPapercraftParamsChange('pcWallHeightInput')" class="w-full bg-transparent text-amber-300 font-bold text-right outline-none" />
               </div>
             </div>
 

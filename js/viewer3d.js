@@ -291,6 +291,9 @@ function syncDimensionInputsUI() {
   document.getElementById('quickSizeInput').value = (maxMM / f).toFixed(decimals) + state.unit;
   document.getElementById('modelTotalDimsBadge').textContent =
     'Pieza: ' + state.dimsMM.x.toFixed(1) + ' × ' + state.dimsMM.y.toFixed(1) + ' × ' + state.dimsMM.z.toFixed(1) + ' mm';
+  if (typeof syncPapercraftDimensionsFromMainStudio === 'function' && !window._syncingDimsFromPapercraft) {
+    syncPapercraftDimensionsFromMainStudio(false);
+  }
 }
 
 function applyQuickSizeInput() {

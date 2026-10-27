@@ -30,9 +30,10 @@ const papercraftState = {
   standeeFoldMode: 'double_fold',   // 'double_fold' (Doble cara plegable en T invertida) | 'single_tab' (1 cara con pestaña a 90°)
   sliceAxis: typeof state !== 'undefined' && state.axis ? state.axis : 'z', // 'z' | 'y' | 'x' (sincronizado con 2. Sistema Constructivo)
   layersCount: typeof state !== 'undefined' && state.sliceCount ? state.sliceCount : 24, // Nº de capas estipulado en 2. Sistema Constructivo (2..300)
-  widthMM: 130,                     // Ancho base del recortable en mm
-  heightMM: 130,                    // Alto / Fondo base del recortable en mm
-  wallHeightMM: 14,                 // Altura de cada plataforma / escalón 3D / separador en mm (0..40)
+  widthMM: typeof state !== 'undefined' && state.dimsMM ? state.dimsMM.x : 120,      // Ancho del conjunto recortable en mm (= 1. Dimensiones)
+  heightMM: typeof state !== 'undefined' && state.dimsMM ? state.dimsMM.y : 120,     // Fondo/Largo del conjunto recortable en mm (= 1. Dimensiones)
+  totalHeightMM: typeof state !== 'undefined' && state.dimsMM ? state.dimsMM.z : 120,// Altura total del conjunto en el eje de corte (= 1. Dimensiones)
+  wallHeightMM: 5,                  // Altura de cada plataforma / capa individual en mm (= totalHeightMM / layersCount)
   tabDepthMM: 10,                   // Anchura / profundidad de las pestañas de pegamento escolar en mm (5..25)
   tabBevelDeg: 42,                  // Ángulo de bisel de las pestañas trapezoidales (25..65)
   tabsPerLayer: 4,                  // Número de pestañas en modo capas superpuestas (2..8)
@@ -967,11 +968,90 @@ function getConstructiveSystemLayerCount(axisOverride) {
   return Math.max(2, Math.min(300, parseInt(state.sliceCount, 10) || (state.slices && state.slices.length) || 24));
 }
 
+function getPapercraftAxesMapping(sliceAxisOverride) {
+  const ax = (sliceAxisOverride || papercraftState.sliceAxis || getConstructiveSystemAxis() || 'z').toLowerCase();
+  if (ax === 'x') {
+    return { uAxis: 'y', vAxis: 'z', wAxis: 'x', uLabel: 'Y', vLabel: 'Z', wLabel: 'X' };
+  }
+  if (ax === 'y') {
+    return { uAxis: 'x', vAxis: 'z', wAxis: 'y', uLabel: 'X', vLabel: 'Z', wLabel: 'Y' };
+  }
+  return { uAxis: 'x', vAxis: 'y', wAxis: 'z', uLabel: 'X', vLabel: 'Y', wLabel: 'Z' };
+}
+
+function syncPapercraftDimensionsFromMainStudio(rerenderIfOpen = false) {
+  const map = getPapercraftAxesMapping(papercraftState.sliceAxis);
+  const dims = (typeof state !== 'undefined' && state.dimsMM) ? state.dimsMM : { x: 120, y: 120, z: 120 };
+  const nLayers = Math.max(2, parseInt(papercraftState.layersCount, 10) || getConstructiveSystemLayerCount());
+
+  papercraftState.widthMM = Number(Math.max(4, Number(dims[map.uAxis]) || 120).toFixed(1));
+  papercraftState.heightMM = Number(Math.max(4, Number(dims[map.vAxis]) || 120).toFixed(1));
+  papercraftState.totalHeightMM = Number(Math.max(4, Number(dims[map.wAxis]) || 120).toFixed(1));
+  papercraftState.wallHeightMM = Number((papercraftState.totalHeightMM / nLayers).toFixed(2));
+
+  const wEl = document.getElementById('pcWidthMMInput');
+  const hEl = document.getElementById('pcHeightMMInput');
+  const tEl = document.getElementById('pcTotalHeightMMInput');
+  const wallEl = document.getElementById('pcWallHeightInput');
+  const wLbl = document.getElementById('pcWidthAxisLabel');
+  const hLbl = document.getElementById('pcHeightAxisLabel');
+  const tLbl = document.getElementById('pcTotalHeightAxisLabel');
+  const dimBadge = document.getElementById('pcDimensionsSyncBadge');
+
+  if (wEl) wEl.value = String(papercraftState.widthMM);
+  if (hEl) hEl.value = String(papercraftState.heightMM);
+  if (tEl) tEl.value = String(papercraftState.totalHeightMM);
+  if (wallEl) wallEl.value = String(papercraftState.wallHeightMM);
+  if (wLbl) wLbl.textContent = 'Ancho ' + map.uLabel + ' (mm)';
+  if (hLbl) hLbl.textContent = 'Fondo ' + map.vLabel + ' (mm)';
+  if (tLbl) tLbl.textContent = 'Alto Total ' + map.wLabel + ' (mm)';
+  if (dimBadge) {
+    dimBadge.textContent =
+      '🔗 = 1. Dimensiones (' +
+      Number(dims.x || 120).toFixed(1).replace(/\.0$/, '') + ' × ' +
+      Number(dims.y || 120).toFixed(1).replace(/\.0$/, '') + ' × ' +
+      Number(dims.z || 120).toFixed(1).replace(/\.0$/, '') + ' mm)';
+  }
+
+  if (rerenderIfOpen && papercraftState.isOpen) {
+    runPapercraftGeneration();
+  }
+}
+
+function syncMainStudioDimensionsFromPapercraft(sourceControlId) {
+  const map = getPapercraftAxesMapping(papercraftState.sliceAxis);
+  const nLayers = Math.max(2, parseInt(papercraftState.layersCount, 10) || 24);
+
+  if (sourceControlId === 'pcWallHeightInput') {
+    papercraftState.totalHeightMM = Number(Math.max(4, papercraftState.wallHeightMM * nLayers).toFixed(1));
+  } else {
+    papercraftState.wallHeightMM = Number((papercraftState.totalHeightMM / nLayers).toFixed(2));
+  }
+
+  if (typeof state !== 'undefined' && state.dimsMM) {
+    state.dimsMM[map.uAxis] = Number(papercraftState.widthMM.toFixed(1));
+    state.dimsMM[map.vAxis] = Number(papercraftState.heightMM.toFixed(1));
+    state.dimsMM[map.wAxis] = Number(papercraftState.totalHeightMM.toFixed(1));
+    state._puzzleAxesEvaluatedForCurrentMesh = false;
+    state.puzzleAxesAutoScores = null;
+
+    if (typeof window !== 'undefined') window._syncingDimsFromPapercraft = true;
+    try {
+      if (typeof syncDimensionInputsUI === 'function') syncDimensionInputsUI();
+      if (typeof rebuildGhostAndSlices === 'function' && typeof THREE !== 'undefined') rebuildGhostAndSlices();
+    } finally {
+      if (typeof window !== 'undefined') window._syncingDimsFromPapercraft = false;
+    }
+  }
+}
+
 function syncPapercraftWithConstructiveSystem(rerenderIfOpen = true) {
   const sysAxis = getConstructiveSystemAxis();
   const sysCount = getConstructiveSystemLayerCount(sysAxis);
   papercraftState.sliceAxis = sysAxis;
   papercraftState.layersCount = sysCount;
+
+  syncPapercraftDimensionsFromMainStudio(false);
 
   const sliderEl = document.getElementById('pcLayersCountInput');
   const numEl = document.getElementById('pcLayersCountNumberInput');
@@ -1056,6 +1136,9 @@ function syncConstructiveSystemFromPapercraft(newCount, newAxis) {
 
     if (typeof rebuildGhostAndSlices === 'function' && typeof THREE !== 'undefined') rebuildGhostAndSlices();
   }
+
+  // Actualizar las dimensiones por capa para que N capas × wallHeightMM coincida exactamente con 1. Dimensiones
+  syncPapercraftDimensionsFromMainStudio(false);
 }
 
 function stepPapercraftLayersCount(delta) {
@@ -1434,10 +1517,47 @@ function createLayerArtworkCanvas(srcCanvas, loopPoints, wMM, hMM, layerColorObj
 // El número de capas coincide siempre con el estipulado en 2. Sistema Constructivo
 // y preserva todos los huecos interiores (holePolygons) de cada capa 3D o imagen
 // ============================================================================
+function normalizePapercraftLayersToExactFootprint(layers, targetWidthMM, targetHeightMM) {
+  if (!Array.isArray(layers) || layers.length === 0) return layers;
+  let gMinX = Infinity, gMaxX = -Infinity, gMinY = Infinity, gMaxY = -Infinity;
+  layers.forEach((l) => {
+    (l.contourPoints || []).forEach((p) => {
+      if (p.x < gMinX) gMinX = p.x;
+      if (p.x > gMaxX) gMaxX = p.x;
+      if (p.y < gMinY) gMinY = p.y;
+      if (p.y > gMaxY) gMaxY = p.y;
+    });
+  });
+  const rawSpanX = gMaxX - gMinX;
+  const rawSpanY = gMaxY - gMinY;
+  if (!Number.isFinite(rawSpanX) || !Number.isFinite(rawSpanY) || rawSpanX < 1e-4 || rawSpanY < 1e-4) {
+    return layers;
+  }
+  const gCx = (gMinX + gMaxX) * 0.5;
+  const gCy = (gMinY + gMaxY) * 0.5;
+  const sx = targetWidthMM / rawSpanX;
+  const sy = targetHeightMM / rawSpanY;
+
+  layers.forEach((l) => {
+    l.contourPoints = (l.contourPoints || []).map((p) => ({
+      x: (p.x - gCx) * sx,
+      y: (p.y - gCy) * sy
+    }));
+    l.holePolygons = (l.holePolygons || []).map((hp) =>
+      hp.map((p) => ({
+        x: (p.x - gCx) * sx,
+        y: (p.y - gCy) * sy
+      }))
+    );
+    l.bounds = computePolygonBounds2D(l.contourPoints);
+  });
+  return layers;
+}
+
 function extractPapercraftSourceLayers() {
   const srcMode = papercraftState.sourceMode;
-  const wMM = Math.max(30, Number(papercraftState.widthMM) || 130);
-  const hMM = Math.max(30, Number(papercraftState.heightMM) || 130);
+  const wMM = Math.max(20, Number(papercraftState.widthMM) || 130);
+  const hMM = Math.max(20, Number(papercraftState.heightMM) || 130);
   const simplifyMM = Math.max(0.8, Number(papercraftState.scissorsSimplifyMM) || 3.5);
   const marginMM = Math.max(0, Number(papercraftState.cutMarginMM) || 2.5);
   const nLayers = Math.max(2, Math.min(300, parseInt(papercraftState.layersCount, 10) || getConstructiveSystemLayerCount()));
@@ -1447,13 +1567,14 @@ function extractPapercraftSourceLayers() {
   if (srcMode === 'model3d') {
     const axis = papercraftState.sliceAxis || getConstructiveSystemAxis();
     const tris = typeof getScaledTriangles === 'function' ? getScaledTriangles() : null;
-    const modelSpan = (typeof state !== 'undefined' && state.dimsMM) ? (state.dimsMM[axis] || 120) : 120;
+    const modelSpan = (typeof state !== 'undefined' && state.dimsMM)
+      ? (state.dimsMM[axis] || Number(papercraftState.totalHeightMM) || 120)
+      : (Number(papercraftState.totalHeightMM) || 120);
     const otherAxes = axis === 'x' ? ['y', 'z'] : (axis === 'y' ? ['x', 'z'] : ['x', 'y']);
-    const spanU = Math.max(1, (typeof state !== 'undefined' && state.dimsMM) ? state.dimsMM[otherAxes[0]] : 120);
-    const spanV = Math.max(1, (typeof state !== 'undefined' && state.dimsMM) ? state.dimsMM[otherAxes[1]] : 120);
-    const scaleU = (wMM * 0.86) / spanU;
-    const scaleV = (hMM * 0.86) / spanV;
-    const scale2D = Math.min(scaleU, scaleV);
+    const spanU = Math.max(1, (typeof state !== 'undefined' && state.dimsMM) ? state.dimsMM[otherAxes[0]] : wMM);
+    const spanV = Math.max(1, (typeof state !== 'undefined' && state.dimsMM) ? state.dimsMM[otherAxes[1]] : hMM);
+    const scaleU = wMM / spanU;
+    const scaleV = hMM / spanV;
 
     const canReuseStackedSlices = Boolean(
       typeof state !== 'undefined' &&
@@ -1481,7 +1602,7 @@ function extractPapercraftSourceLayers() {
         rawLoops = (state.slices[sIdx] && state.slices[sIdx].loops) ? state.slices[sIdx].loops : [];
       }
 
-      // 1. Contorno exterior principal de la capa 3D
+      // 1. Contorno exterior principal de la capa 3D (escalado exactamente a las dimensiones establecidas en 1. Dimensiones)
       const outerLoops = rawLoops
         .filter((l) => !l.isHole && l.points && l.points.length >= 3)
         .slice()
@@ -1489,24 +1610,25 @@ function extractPapercraftSourceLayers() {
 
       let chosenPts = [];
       if (outerLoops.length === 1) {
-        chosenPts = outerLoops[0].points.map((p) => ({ x: p.x * scale2D, y: p.y * scale2D }));
+        chosenPts = outerLoops[0].points.map((p) => ({ x: p.x * scaleU, y: p.y * scaleV }));
       } else if (outerLoops.length > 1) {
         const area0 = Math.abs(computeSignedPolygonArea(outerLoops[0].points));
         const totalOuterArea = outerLoops.reduce((acc, l) => acc + Math.abs(computeSignedPolygonArea(l.points)), 0);
         if (area0 >= totalOuterArea * 0.65) {
-          chosenPts = outerLoops[0].points.map((p) => ({ x: p.x * scale2D, y: p.y * scale2D }));
+          chosenPts = outerLoops[0].points.map((p) => ({ x: p.x * scaleU, y: p.y * scaleV }));
         } else {
           const allPts = [];
           outerLoops.forEach((l) => {
-            l.points.forEach((p) => allPts.push({ x: p.x * scale2D, y: p.y * scale2D }));
+            l.points.forEach((p) => allPts.push({ x: p.x * scaleU, y: p.y * scaleV }));
           });
           chosenPts = computeConvexHullLoop(allPts);
         }
       } else {
-        const r = Math.max(14, (wMM * 0.42) * (1 - (k / Math.max(1, nLayers)) * 0.55));
+        const rx = Math.max(10, (wMM * 0.5) * (1 - (k / Math.max(1, nLayers)) * 0.55));
+        const ry = Math.max(10, (hMM * 0.5) * (1 - (k / Math.max(1, nLayers)) * 0.55));
         for (let a = 0; a < 8; a++) {
           const ang = (a / 8) * Math.PI * 2;
-          chosenPts.push({ x: Math.cos(ang) * r, y: Math.sin(ang) * r });
+          chosenPts.push({ x: Math.cos(ang) * rx, y: Math.sin(ang) * ry });
         }
       }
 
@@ -1522,7 +1644,7 @@ function extractPapercraftSourceLayers() {
         if (typeof state !== 'undefined' && state.fillInternalHoles && typeof shouldFillInternalHole === 'function' && shouldFillInternalHole(hl)) {
           return;
         }
-        const scaledHole = hl.points.map((p) => ({ x: p.x * scale2D, y: p.y * scale2D }));
+        const scaledHole = hl.points.map((p) => ({ x: p.x * scaleU, y: p.y * scaleV }));
         const cleanHole = simplifyClosedLoopForScissors(scaledHole, Math.max(0.7, simplifyMM * 0.65), 4, 24);
         const hb = computePolygonBounds2D(cleanHole);
         if (cleanHole.length >= 3 && hb.width >= 2.2 && hb.height >= 2.2) {
@@ -1543,7 +1665,7 @@ function extractPapercraftSourceLayers() {
         sourceCanvas: null
       });
     }
-    return layers;
+    return normalizePapercraftLayersToExactFootprint(layers, wMM, hMM);
   }
 
   if (srcMode === 'single_image') {
@@ -1600,7 +1722,7 @@ function extractPapercraftSourceLayers() {
         sourceCanvas: layerCanvas
       });
     }
-    return layers;
+    return normalizePapercraftLayersToExactFootprint(layers, wMM, hMM);
   }
 
   // Modo 'multi_images': Genera exactamente nLayers capas (coincidiendo con 2. Sistema Constructivo)
@@ -1650,7 +1772,7 @@ function extractPapercraftSourceLayers() {
     });
   }
 
-  return layers;
+  return normalizePapercraftLayersToExactFootprint(layers, wMM, hMM);
 }
 
 // ============================================================================
@@ -1661,7 +1783,9 @@ function buildPapercraftPieces() {
   papercraftState.baseLayers = baseLayers;
   const type = papercraftState.cutoutType;
   const tabDepth = Math.max(4, Number(papercraftState.tabDepthMM) || 10);
-  const wallH = Math.max(0, Number(papercraftState.wallHeightMM) || 14);
+  const totalSpanMM = Math.max(4, Number(papercraftState.totalHeightMM) || (baseLayers.length * (Number(papercraftState.wallHeightMM) || 14)));
+  const exactLayerStepMM = Number((totalSpanMM / Math.max(1, baseLayers.length)).toFixed(2));
+  const wallH = Math.max(0, Number.isFinite(Number(papercraftState.wallHeightMM)) ? Number(papercraftState.wallHeightMM) : exactLayerStepMM);
   const bevelDeg = Math.max(25, Math.min(65, Number(papercraftState.tabBevelDeg) || 42));
   const pieces = [];
 
@@ -1669,7 +1793,7 @@ function buildPapercraftPieces() {
   // TIPO 1: PLATAFORMAS 3D PARA APILAR (CON FALDÓN PLEGABLE O BANDA DENTADA)
   // --------------------------------------------------------------------------
   if (type === 'stacked_platforms') {
-    const effWallH = Math.max(6, wallH);
+    const effWallH = Math.max(1, exactLayerStepMM);
     const unfoldMode = papercraftState.platformUnfoldMode || 'attached_flaps';
 
     baseLayers.forEach((layer, idx) => {
@@ -1920,7 +2044,7 @@ function buildPapercraftPieces() {
   // --------------------------------------------------------------------------
   if (type === 'layered_tabs') {
     const numTabs = Math.max(2, Math.min(8, parseInt(papercraftState.tabsPerLayer, 10) || 4));
-    const stepH = Math.max(0, wallH);
+    const stepH = wallH > 0 ? Math.max(0.5, exactLayerStepMM) : 0;
 
     // Primero generamos las pestañas de las capas 1..N-1 para conocer dónde aterrizan en la capa inferior
     const layerTabResults = baseLayers.map((layer, idx) => {
@@ -1997,7 +2121,7 @@ function buildPapercraftPieces() {
   // TIPO 3: CAPAS SUPERPUESTAS CON SEPARADORES / MUELLES PLEGABLES EN Z
   // --------------------------------------------------------------------------
   if (type === 'accordion_spacers') {
-    const spacerH = Math.max(6, wallH);
+    const spacerH = Math.max(2, exactLayerStepMM);
     const spacerW = Math.max(12, tabDepth * 1.4);
 
     baseLayers.forEach((layer, idx) => {
@@ -2132,9 +2256,9 @@ function buildPapercraftPieces() {
   // --------------------------------------------------------------------------
   if (type === 'standee_peana') {
     const isDoubleFold = papercraftState.standeeFoldMode !== 'single_tab';
-    const peanaW = Math.max(95, Number(papercraftState.widthMM) || 130);
-    const peanaD = Math.max(65, Math.min(130, baseLayers.length * (tabDepth + 16) + 24));
-    const peanaSkirtH = Math.max(8, Math.min(18, wallH));
+    const peanaW = Math.max(20, Number(papercraftState.widthMM) || 130);
+    const peanaD = Math.max(20, Number(papercraftState.heightMM) || 130);
+    const peanaSkirtH = Math.max(4, Math.min(24, exactLayerStepMM));
 
     // 1. Generar la Peana Escénica Recortable (con faldones laterales y zonas marcadas para pegar cada figura)
     const hw = peanaW * 0.5;
@@ -2318,16 +2442,16 @@ function buildPapercraftPieces() {
   // --------------------------------------------------------------------------
   // TIPO 5: RED POLIÉDRICA 3D DESPLEGABLE (BLOQUES / PRISMAS DE 1 PIEZA)
   // --------------------------------------------------------------------------
-  const prismH = Math.max(10, wallH);
+  const prismH = Math.max(2, exactLayerStepMM);
   baseLayers.forEach((layer, idx) => {
     const nextLayer = idx + 1 < baseLayers.length ? baseLayers[idx + 1] : null;
-    // Ajustar las dimensiones de la cruz desplegada para que quepa holgadamente en una hoja A4
-    const rawW = Math.max(26, Math.min(76, layer.bounds.width * 0.58));
-    const rawD = Math.max(26, Math.min(64, layer.bounds.height * 0.52));
+    // Las dimensiones del bloque plegado coinciden 100% con la capa del modelo (1. Dimensiones)
+    const rawW = Math.max(10, layer.bounds.width);
+    const rawD = Math.max(10, layer.bounds.height);
     const hw = rawW * 0.5;
     const hd = rawD * 0.5;
-    const h = Math.min(28, prismH);
-    const td = Math.min(tabDepth, h * 0.45, rawW * 0.28);
+    const h = prismH;
+    const td = Math.min(tabDepth, Math.max(4, h * 0.45), rawW * 0.28);
 
     // Mapear proporcionalmente los huecos interiores de la capa a la cara superior [-hw..hw, -hd..hd]
     const sxHole = rawW / Math.max(10, layer.bounds.width);
@@ -2406,8 +2530,8 @@ function buildPapercraftPieces() {
 
     const glueTargetZones = [];
     if (nextLayer) {
-      const nw = Math.max(16, Math.min(rawW * 0.85, nextLayer.bounds.width * 0.52));
-      const nd = Math.max(16, Math.min(rawD * 0.85, nextLayer.bounds.height * 0.48));
+      const nw = Math.max(8, Math.min(rawW * 0.96, nextLayer.bounds.width));
+      const nd = Math.max(8, Math.min(rawD * 0.96, nextLayer.bounds.height));
       glueTargetZones.push({
         polygon: [
           { x: -nw * 0.5, y: -nd * 0.5 },
@@ -2694,8 +2818,9 @@ function computeSheetModelProgressLayout(sheet) {
     ? ('#' + (minActive + 1))
     : ('#' + (minActive + 1) + '..#' + (maxActive + 1));
   const progressPct = Math.round(((maxActive + 1) / totalLayers) * 100);
-  const layerT = Math.max(2, Number(papercraftState.wallHeightMM) || 14);
-  const accumHeightMM = ((maxActive + 1) * layerT).toFixed(0);
+  const layerT = Math.max(1, Number(papercraftState.wallHeightMM) || 14);
+  const totalSpanMM = Math.max(4, Number(papercraftState.totalHeightMM) || (totalLayers * layerT));
+  const accumHeightMM = Number(((maxActive + 1) / totalLayers) * totalSpanMM).toFixed(1).replace(/\.0$/, '');
   const axisLabel = (papercraftState.sliceAxis || 'z').toUpperCase();
 
   const sw = sheet.widthMM;
@@ -3467,14 +3592,15 @@ function renderPapercraft3DPreviewOnCanvas(canvas) {
   const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
   const cosP = Math.cos(pitch), sinP = Math.sin(pitch);
 
-  const wMM = Math.max(40, Number(papercraftState.widthMM) || 130);
-  const hMM = Math.max(40, Number(papercraftState.heightMM) || 130);
-  const wallH = Math.max(6, Number(papercraftState.wallHeightMM) || 14);
+  const wMM = Math.max(20, Number(papercraftState.widthMM) || 130);
+  const hMM = Math.max(20, Number(papercraftState.heightMM) || 130);
+  const totalSpanMM = Math.max(4, Number(papercraftState.totalHeightMM) || (baseLayers.length * (Number(papercraftState.wallHeightMM) || 14)));
+  const wallH = Math.max(1, totalSpanMM / Math.max(1, baseLayers.length));
   const tabDepth = Math.max(5, Number(papercraftState.tabDepthMM) || 10);
   const foldFrac = Math.max(0, Math.min(1, (Number(papercraftState.foldProgressPct) || 85) / 100));
   const explodeFrac = Math.max(0, Math.min(1, (Number(papercraftState.explodeLayersPct) || 25) / 100));
 
-  const maxSpan = Math.max(wMM, hMM, baseLayers.length * wallH * 1.6) * 1.45;
+  const maxSpan = Math.max(wMM, hMM, totalSpanMM * 1.4) * 1.45;
   const baseScale = (Math.min(canvas.width, canvas.height) / maxSpan) * papercraftState.view3D.zoom;
   const cx = canvas.width * 0.5 + (papercraftState.view3D.panX || 0);
   const cy = canvas.height * 0.56 + (papercraftState.view3D.panY || 0);
@@ -3520,7 +3646,7 @@ function renderPapercraft3DPreviewOnCanvas(canvas) {
   if (type === 'standee_peana') {
     // Dibujar Peana Base en Z = 0..peanaH y las Figuras levantándose hasta 90° según foldFrac
     const peanaW = wMM;
-    const peanaD = Math.max(70, baseLayers.length * 22 + 24);
+    const peanaD = hMM;
     const hw = peanaW * 0.5;
     const hd = peanaD * 0.5;
     const peanaZ = 10 * Math.sin(foldAngle);
@@ -3746,7 +3872,7 @@ function renderPapercraft3DPreviewOnCanvas(canvas) {
   ctx.font = 'bold 11px sans-serif';
   ctx.textAlign = 'left';
   ctx.fillText(
-    '🧊 Simulación 3D del Recortable Montado · Plegado: ' + Math.round(foldFrac * 100) + '% · Separación capas: ' + Math.round(explodeFrac * 100) + '% (Arrastrar: rotar · Shift + Arrastrar: desplazar)',
+    '🧊 Simulación 3D (' + wMM.toFixed(1).replace(/\.0$/, '') + ' × ' + hMM.toFixed(1).replace(/\.0$/, '') + ' × ' + totalSpanMM.toFixed(1).replace(/\.0$/, '') + ' mm) · Plegado: ' + Math.round(foldFrac * 100) + '% · Separación: ' + Math.round(explodeFrac * 100) + '% (Arrastrar: rotar · Shift + Arrastrar: desplazar)',
     14,
     22
   );
@@ -4164,17 +4290,13 @@ function applyPapercraftToMainStudio() {
   const mainLayerPieces = pieces.filter((p) => !p.isSpacerPiece && !p.isPeanaBase && !p.isCollarStrip);
   const studioPieces = mainLayerPieces.length > 0 ? mainLayerPieces : pieces;
 
-  const wallH = Math.max(4, Number(papercraftState.wallHeightMM) || 14);
-  const totalZ = studioPieces.length * wallH;
-
-  let maxSpanX = 120;
-  let maxSpanY = 120;
-  studioPieces.forEach((p) => {
-    if (p.bounds.width > maxSpanX) maxSpanX = p.bounds.width;
-    if (p.bounds.height > maxSpanY) maxSpanY = p.bounds.height;
-  });
-
   const targetAxis = papercraftState.sliceAxis || state.axis || 'z';
+  const map = getPapercraftAxesMapping(targetAxis);
+  const totalZ = Math.max(4, Number(papercraftState.totalHeightMM) || (studioPieces.length * Math.max(2, Number(papercraftState.wallHeightMM) || 14)));
+  const wallH = Number((totalZ / Math.max(1, studioPieces.length)).toFixed(2));
+  papercraftState.totalHeightMM = Number(totalZ.toFixed(1));
+  papercraftState.wallHeightMM = wallH;
+
   state.constructionMode = 'stacked';
   state.axis = targetAxis;
   state.mode = 'count';
@@ -4191,11 +4313,10 @@ function applyPapercraftToMainStudio() {
   if (sSlider) sSlider.value = String(studioPieces.length);
   if (sLabel) sLabel.textContent = String(studioPieces.length);
 
-  state.dimsMM = {
-    x: Number((maxSpanX + 12).toFixed(1)),
-    y: Number((maxSpanY + 12).toFixed(1)),
-    z: Number(totalZ.toFixed(1))
-  };
+  if (!state.dimsMM) state.dimsMM = { x: 130, y: 130, z: 112 };
+  state.dimsMM[map.uAxis] = Number((Number(papercraftState.widthMM) || 130).toFixed(1));
+  state.dimsMM[map.vAxis] = Number((Number(papercraftState.heightMM) || 130).toFixed(1));
+  state.dimsMM[map.wAxis] = Number(totalZ.toFixed(1));
 
   state.slices = studioPieces.map((piece, idx) => {
     const zCoord = -totalZ * 0.5 + (idx + 0.5) * wallH;
@@ -4560,13 +4681,17 @@ function updatePapercraftStatsAndSheetNavUI() {
   const sheets = papercraftState.packedSheets || [];
   const totalTabs = pieces.reduce((acc, p) => acc + ((p.glueTabs && p.glueTabs.length) || 0), 0);
   const totalFolds = pieces.reduce((acc, p) => acc + ((p.foldLines && p.foldLines.length) || 0), 0);
+  const map = getPapercraftAxesMapping(papercraftState.sliceAxis);
+  const fmtDim = (v) => Number(v || 0).toFixed(1).replace(/\.0$/, '');
 
   const badge = document.getElementById('papercraftSummaryBadge');
   if (badge) {
     badge.innerHTML =
-      '✂️ <strong>' + pieces.length + ' piezas recortables</strong> · ' +
-      '🧴 <strong>' + totalTabs + ' pestañas de pegamento escolar</strong> · ' +
-      '📐 <strong>' + totalFolds + ' líneas de pliegue</strong> · ' +
+      '📏 <strong>Conjunto (' + map.uAxis.toUpperCase() + '×' + map.vAxis.toUpperCase() + '×' + map.wAxis.toUpperCase() + '): ' +
+      fmtDim(papercraftState.widthMM) + ' × ' + fmtDim(papercraftState.heightMM) + ' × ' + fmtDim(papercraftState.totalHeightMM) + ' mm</strong> · ' +
+      '✂️ <strong>' + pieces.length + ' piezas</strong> · ' +
+      '🧴 <strong>' + totalTabs + ' pestañas</strong> · ' +
+      '📐 <strong>' + totalFolds + ' pliegues</strong> · ' +
       '📄 <strong>' + sheets.length + ' hoja(s) ' + (papercraftState.sheetFormat.replace('_', ' ')) + '</strong>';
   }
 
@@ -4642,9 +4767,22 @@ function onPapercraftParamsChange(sourceControlId) {
 
   papercraftState.platformUnfoldMode = getVal('pcPlatformUnfoldSelect', papercraftState.platformUnfoldMode);
   papercraftState.standeeFoldMode = getVal('pcStandeeFoldSelect', papercraftState.standeeFoldMode);
-  papercraftState.widthMM = Math.max(30, Math.min(400, getNum('pcWidthMMInput', papercraftState.widthMM)));
-  papercraftState.heightMM = Math.max(30, Math.min(400, getNum('pcHeightMMInput', papercraftState.heightMM)));
-  papercraftState.wallHeightMM = Math.max(0, Math.min(60, getNum('pcWallHeightInput', papercraftState.wallHeightMM)));
+  papercraftState.widthMM = Math.max(10, Math.min(2000, getNum('pcWidthMMInput', papercraftState.widthMM)));
+  papercraftState.heightMM = Math.max(10, Math.min(2000, getNum('pcHeightMMInput', papercraftState.heightMM)));
+  papercraftState.totalHeightMM = Math.max(4, Math.min(2000, getNum('pcTotalHeightMMInput', papercraftState.totalHeightMM)));
+  papercraftState.wallHeightMM = Math.max(0, Math.min(500, getNum('pcWallHeightInput', papercraftState.wallHeightMM)));
+
+  if (
+    sourceControlId === 'pcWidthMMInput' ||
+    sourceControlId === 'pcHeightMMInput' ||
+    sourceControlId === 'pcTotalHeightMMInput' ||
+    sourceControlId === 'pcWallHeightInput'
+  ) {
+    syncMainStudioDimensionsFromPapercraft(sourceControlId);
+  } else {
+    syncPapercraftDimensionsFromMainStudio(false);
+  }
+
   papercraftState.tabDepthMM = Math.max(4, Math.min(30, getNum('pcTabDepthInput', papercraftState.tabDepthMM)));
   papercraftState.tabBevelDeg = Math.max(25, Math.min(65, getNum('pcTabBevelInput', papercraftState.tabBevelDeg)));
   papercraftState.tabsPerLayer = Math.max(2, Math.min(8, Math.round(getNum('pcTabsPerLayerInput', papercraftState.tabsPerLayer))));
@@ -4733,6 +4871,23 @@ function syncPapercraftControlsUI() {
     syncBadge.textContent = '🔗 = 2. Sistema Constructivo (' + modeName + ': ' + papercraftState.layersCount + ' capas)';
   }
 
+  const map = getPapercraftAxesMapping(papercraftState.sliceAxis);
+  const fmtDim = (v) => Number(v || 0).toFixed(1).replace(/\.0$/, '');
+  const dimSyncBadge = document.getElementById('pcDimensionsSyncBadge');
+  if (dimSyncBadge) {
+    dimSyncBadge.textContent =
+      '🔗 = 1. Dimensiones (' +
+      map.uAxis.toUpperCase() + ': ' + fmtDim(papercraftState.widthMM) + ' × ' +
+      map.vAxis.toUpperCase() + ': ' + fmtDim(papercraftState.heightMM) + ' × ' +
+      map.wAxis.toUpperCase() + ': ' + fmtDim(papercraftState.totalHeightMM) + ' mm)';
+  }
+  const wAxisLbl = document.getElementById('pcWidthAxisLabel');
+  if (wAxisLbl) wAxisLbl.textContent = '(' + map.uAxis.toUpperCase() + ')';
+  const hAxisLbl = document.getElementById('pcHeightAxisLabel');
+  if (hAxisLbl) hAxisLbl.textContent = '(' + map.vAxis.toUpperCase() + ')';
+  const tAxisLbl = document.getElementById('pcTotalHeightAxisLabel');
+  if (tAxisLbl) tAxisLbl.textContent = '(' + map.wAxis.toUpperCase() + ')';
+
   const lblFold = document.getElementById('pcFoldValLabel');
   if (lblFold) lblFold.textContent = Math.round(papercraftState.foldProgressPct) + '%';
 
@@ -4745,6 +4900,10 @@ function syncPapercraftControlsUI() {
       el.value = String(val == null ? '' : val);
     }
   };
+  setInputValIfDiff('pcWidthMMInput', Number(papercraftState.widthMM || 130).toFixed(1).replace(/\.0$/, ''));
+  setInputValIfDiff('pcHeightMMInput', Number(papercraftState.heightMM || 130).toFixed(1).replace(/\.0$/, ''));
+  setInputValIfDiff('pcTotalHeightMMInput', Number(papercraftState.totalHeightMM || 112).toFixed(1).replace(/\.0$/, ''));
+  setInputValIfDiff('pcWallHeightInput', Number(papercraftState.wallHeightMM || 14).toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1'));
   setInputValIfDiff('pcCustomTitleInput', papercraftState.customTitle || '');
   setInputValIfDiff('pcCustomAuthorInput', papercraftState.customAuthor || '');
   setInputValIfDiff('pcCustomCourseInput', papercraftState.customCourseCenter || '');
@@ -4794,8 +4953,11 @@ function openPapercraftFromVectorizer() {
     papercraftState._isCustomSingleImage = true;
     papercraftState.singleImageName = vec2dState.imageName || 'Imagen_Vectorizada';
     papercraftState.singleImageCanvas = vec2dState.sourceCanvas;
-    papercraftState.widthMM = Math.max(50, Number(vec2dState.widthMM) || 130);
-    papercraftState.heightMM = Math.max(50, Number(vec2dState.heightMM) || 130);
+    if (vec2dState.widthMM && vec2dState.heightMM) {
+      papercraftState.widthMM = Math.max(20, Number(vec2dState.widthMM) || 130);
+      papercraftState.heightMM = Math.max(20, Number(vec2dState.heightMM) || 130);
+      syncMainStudioDimensionsFromPapercraft('pcWidthMMInput');
+    }
   }
   if (typeof closeImageVectorizerModal === 'function') {
     closeImageVectorizerModal();
@@ -4900,6 +5062,10 @@ if (typeof window !== 'undefined') {
   window.papercraftState = papercraftState;
   window.getConstructiveSystemAxis = getConstructiveSystemAxis;
   window.getConstructiveSystemLayerCount = getConstructiveSystemLayerCount;
+  window.getPapercraftAxesMapping = getPapercraftAxesMapping;
+  window.syncPapercraftDimensionsFromMainStudio = syncPapercraftDimensionsFromMainStudio;
+  window.syncMainStudioDimensionsFromPapercraft = syncMainStudioDimensionsFromPapercraft;
+  window.normalizePapercraftLayersToExactFootprint = normalizePapercraftLayersToExactFootprint;
   window.syncPapercraftWithConstructiveSystem = syncPapercraftWithConstructiveSystem;
   window.syncConstructiveSystemFromPapercraft = syncConstructiveSystemFromPapercraft;
   window.stepPapercraftLayersCount = stepPapercraftLayersCount;
