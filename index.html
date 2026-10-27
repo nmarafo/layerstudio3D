@@ -38,17 +38,18 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
 
   <!-- Hoja de estilos principal -->
-  <link rel="stylesheet" href="css/styles.css?v=3.0.19" />
+  <link rel="stylesheet" href="css/styles.css?v=3.0.20" />
 
   <!-- Módulos de la aplicación (cargados en orden de dependencia con defer y cache-busting) -->
-  <script src="js/state.js?v=3.0.19" defer></script>
-  <script src="js/viewer3d.js?v=3.0.19" defer></script>
-  <script src="js/slicer.js?v=3.0.19" defer></script>
-  <script src="js/nesting.js?v=3.0.19" defer></script>
-  <script src="js/modals-guide.js?v=3.0.19" defer></script>
-  <script src="js/viewer2d.js?v=3.0.19" defer></script>
-  <script src="js/exporters.js?v=3.0.19" defer></script>
-  <script src="js/vectorizer2d.js?v=3.0.19" defer></script>
+  <script src="js/state.js?v=3.0.20" defer></script>
+  <script src="js/viewer3d.js?v=3.0.20" defer></script>
+  <script src="js/slicer.js?v=3.0.20" defer></script>
+  <script src="js/nesting.js?v=3.0.20" defer></script>
+  <script src="js/modals-guide.js?v=3.0.20" defer></script>
+  <script src="js/viewer2d.js?v=3.0.20" defer></script>
+  <script src="js/exporters.js?v=3.0.20" defer></script>
+  <script src="js/vectorizer2d.js?v=3.0.20" defer></script>
+  <script src="js/papercraft.js?v=3.0.20" defer></script>
 </head>
 <body class="h-screen w-screen flex flex-col">
 
@@ -85,6 +86,11 @@
       <input type="file" id="fileInputImage2D" accept=".png,.bmp,.jpg,.jpeg,.webp" class="hidden" />
       <button onclick="openImageVectorizerModal()" class="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-xs font-semibold text-emerald-300 transition flex items-center gap-1.5" title="Convertir automáticamente una imagen .PNG o .BMP en un archivo .SVG / .DXF de Corte y Grabado Láser o Relieve 3D">
         <span>🖼️ PNG/BMP → SVG</span>
+      </button>
+
+      <!-- Generador de Recortables Escolares (Tijeras y Pestañas para Pegamento Escolar) -->
+      <button onclick="openPapercraftModal()" class="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/45 text-xs font-semibold text-amber-300 transition flex items-center gap-1.5" title="Generar recortables escolares para cortar con tijeras y pegar con pegamento escolar (plataformas apilables, capas superpuestas, figuras con peana y redes 3D) a partir del modelo 3D o de una o varias imágenes">
+        <span>✂️ Recortables</span>
       </button>
 
       <!-- Grupo Proyecto (.lasca) -->
@@ -340,6 +346,12 @@
             <span>🧩 Puzzle 3D (Sin cola)</span>
           </button>
         </div>
+
+        <!-- Acceso directo al Generador de Recortables Escolares (Tijeras + Pestañas de Pegamento Escolar) -->
+        <button type="button" onclick="openPapercraftModal('model3d')" class="w-full py-1.5 px-2.5 rounded-lg border border-amber-500/45 bg-amber-500/15 hover:bg-amber-500/25 text-[11px] font-bold text-amber-200 transition flex items-center justify-between gap-1.5" title="Generar recortables escolares para cortar con tijeras y pegar con pegamento escolar (plataformas apilables, capas superpuestas, figuras con peana o redes 3D) desde el modelo 3D o desde una o varias imágenes">
+          <span>✂️ Recortable Escolar (Tijeras + Pestañas)</span>
+          <span class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/30 text-amber-100">Abrir ▸</span>
+        </button>
 
         <!-- CONTROLES DE MODO APILADO (1 EJE) -->
         <div id="stackedControlsBox" class="space-y-2.5 pt-1">
@@ -2267,6 +2279,9 @@
             <input type="number" id="vecReliefLayersInput" value="4" min="2" max="10" step="1" onchange="onVectorizerParamsChange()" class="w-10 bg-slate-950 border border-slate-700 rounded px-1 py-0.5 text-[11px] text-center text-fuchsia-300 font-bold" title="Número de capas de relieve 3D" />
             <span class="text-[10px] text-slate-400">capas</span>
           </div>
+          <button type="button" onclick="openPapercraftFromVectorizer()" class="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/35 border border-amber-500/45 text-amber-300 text-xs font-bold transition flex items-center gap-1.5" title="Convertir esta imagen en un recortable escolar con líneas de tijeras y pestañas para pegamento escolar">
+            <span>✂️ Recortable con Pestañas</span>
+          </button>
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
@@ -2355,6 +2370,338 @@
               ⚡ Aplicar Receta JSON Ahora
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL ESTUDIO DE RECORTABLES ESCOLARES (TIJERAS ✂️ + PESTAÑAS PARA PEGAMENTO ESCOLAR 🧴) -->
+  <div id="papercraftModal" onclick="if(event.target===this) closePapercraftModal()" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden items-center justify-center p-3">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-7xl w-full max-h-[94vh] flex flex-col shadow-2xl overflow-hidden">
+      <!-- Cabecera del Estudio de Recortables -->
+      <div class="px-4 py-3 bg-slate-950 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-lg bg-amber-500/20 border border-amber-500/45 flex items-center justify-center text-amber-300 font-bold text-base">
+            ✂️
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-white">Generador de Recortables Escolares (Tijeras ✂️ + Pestañas para Pegamento Escolar 🧴)</h3>
+            <p class="text-[11px] text-slate-400">Crea plataformas 3D para apilar, recortables en capas superpuestas, figuras con peana y redes 3D desde el Modelo 3D o desde 1 o varias imágenes</p>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-1.5">
+          <input type="file" id="fileInputPapercraftSingle" accept=".png,.bmp,.jpg,.jpeg,.webp" class="hidden" />
+          <input type="file" id="fileInputPapercraftMulti" accept=".png,.bmp,.jpg,.jpeg,.webp" multiple class="hidden" />
+          <button type="button" onclick="document.getElementById('fileInputPapercraftSingle').click()" class="px-2.5 py-1.5 rounded-lg bg-emerald-600/25 hover:bg-emerald-600/40 border border-emerald-500/40 text-emerald-300 text-xs font-bold transition flex items-center gap-1">
+            <span>🖼️ Subir 1 Imagen</span>
+          </button>
+          <button type="button" onclick="clearAndUploadPapercraftMultiImages()" class="px-2.5 py-1.5 rounded-lg bg-sky-600/25 hover:bg-sky-600/40 border border-sky-500/40 text-sky-300 text-xs font-bold transition flex items-center gap-1">
+            <span>📚 Subir Varias Imágenes</span>
+          </button>
+          <button type="button" onclick="closePapercraftModal()" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs flex items-center justify-center">✕</button>
+        </div>
+      </div>
+
+      <!-- Cuerpo principal dividido: Panel de Configuración (Izquierda) + Lienzo de Hojas A4 / Simulación 3D (Derecha) -->
+      <div class="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
+
+        <!-- COLUMNA IZQUIERDA: CONTROLES DEL RECORTABLE (5/12) -->
+        <div class="lg:col-span-5 bg-slate-900/95 border-r border-slate-800 p-3.5 overflow-y-auto space-y-3 text-xs">
+
+          <!-- 1. Fuente del Recortable: Modelo 3D vs 1 Imagen vs Varias Imágenes -->
+          <div class="bg-slate-800/55 border border-slate-700/80 rounded-xl p-2.5 space-y-2.5">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-amber-400 block">1. Origen del Recortable</span>
+            <div class="grid grid-cols-3 gap-1.5">
+              <button type="button" id="pcSourceBtn_model3d" onclick="setPapercraftSourceMode('model3d')" class="py-1.5 px-2 rounded-lg bg-amber-500/25 border border-amber-400 text-amber-200 text-[11px] font-bold transition flex items-center justify-center gap-1">
+                <span>🧊 Modelo 3D</span>
+              </button>
+              <button type="button" id="pcSourceBtn_single_image" onclick="setPapercraftSourceMode('single_image')" class="py-1.5 px-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-medium transition flex items-center justify-center gap-1">
+                <span>🖼️ 1 Imagen</span>
+              </button>
+              <button type="button" id="pcSourceBtn_multi_images" onclick="setPapercraftSourceMode('multi_images')" class="py-1.5 px-2 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-medium transition flex items-center justify-center gap-1">
+                <span>📚 Varias Imág.</span>
+              </button>
+            </div>
+
+            <!-- Opciones cuando la fuente es el Modelo 3D -->
+            <div id="pcSourceBox_model3d" class="space-y-2 pt-1 border-t border-slate-700/60">
+              <div class="flex items-center justify-between text-[11px]">
+                <span class="text-slate-300">Eje de seccionado del modelo 3D:</span>
+                <select id="pcSliceAxisSelect" onchange="onPapercraftParamsChange()" class="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-[11px] text-sky-300 font-semibold outline-none">
+                  <option value="z" selected>Eje Z (Plantas Horizontales)</option>
+                  <option value="y">Eje Y (Planos Frontales)</option>
+                  <option value="x">Eje X (Perfiles Laterales)</option>
+                </select>
+              </div>
+              <div class="flex items-center justify-between text-[11px]">
+                <span class="text-slate-400">Cambiar modelo 3D base:</span>
+                <div class="flex items-center gap-1">
+                  <button type="button" onclick="loadPresetModel('torus'); runPapercraftGeneration();" class="px-1.5 py-0.5 rounded bg-slate-950 hover:bg-slate-800 border border-slate-700 text-[10px] text-slate-200">Nudo</button>
+                  <button type="button" onclick="loadPresetModel('vase'); runPapercraftGeneration();" class="px-1.5 py-0.5 rounded bg-slate-950 hover:bg-slate-800 border border-slate-700 text-[10px] text-slate-200">Jarrón</button>
+                  <button type="button" onclick="loadPresetModel('gear'); runPapercraftGeneration();" class="px-1.5 py-0.5 rounded bg-slate-950 hover:bg-slate-800 border border-slate-700 text-[10px] text-slate-200">Engranaje</button>
+                  <button type="button" onclick="loadPresetModel('crystal'); runPapercraftGeneration();" class="px-1.5 py-0.5 rounded bg-slate-950 hover:bg-slate-800 border border-slate-700 text-[10px] text-slate-200">Cristal</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Opciones cuando la fuente es 1 sola imagen -->
+            <div id="pcSourceBox_single_image" class="hidden space-y-2 pt-1 border-t border-slate-700/60">
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-[11px] text-slate-300">Ilustración base:</span>
+                <button type="button" onclick="document.getElementById('fileInputPapercraftSingle').click()" class="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold">
+                  📂 Cargar PNG / BMP / JPG
+                </button>
+              </div>
+              <div class="grid grid-cols-3 gap-1">
+                <button type="button" onclick="loadPapercraftSingleDemo('owl')" class="py-1 px-1.5 rounded bg-slate-950 hover:bg-slate-800 border border-slate-700 text-[10px] text-amber-300 font-semibold">🦉 Búho</button>
+                <button type="button" onclick="loadPapercraftSingleDemo('volcano')" class="py-1 px-1.5 rounded bg-slate-950 hover:bg-slate-800 border border-slate-700 text-[10px] text-rose-300 font-semibold">🌋 Volcán</button>
+                <button type="button" onclick="loadPapercraftSingleDemo('castle')" class="py-1 px-1.5 rounded bg-slate-950 hover:bg-slate-800 border border-slate-700 text-[10px] text-sky-300 font-semibold">🏰 Castillo</button>
+                <button type="button" onclick="loadPapercraftSingleDemo('rocket')" class="py-1 px-1.5 rounded bg-slate-950 hover:bg-slate-800 border border-slate-700 text-[10px] text-indigo-300 font-semibold">🚀 Cohete</button>
+                <button type="button" onclick="loadPapercraftSingleDemo('butterfly')" class="py-1 px-1.5 rounded bg-slate-950 hover:bg-slate-800 border border-slate-700 text-[10px] text-pink-300 font-semibold">🦋 Mariposa</button>
+                <button type="button" onclick="loadPapercraftSingleDemo('crest')" class="py-1 px-1.5 rounded bg-slate-950 hover:bg-slate-800 border border-slate-700 text-[10px] text-emerald-300 font-semibold">🛡️ Escudo</button>
+              </div>
+            </div>
+
+            <!-- Opciones cuando la fuente son Varias Imágenes (1 imagen por capa / pieza) -->
+            <div id="pcSourceBox_multi_images" class="hidden space-y-2 pt-1 border-t border-slate-700/60">
+              <div class="flex items-center justify-between gap-1.5">
+                <button type="button" onclick="clearAndUploadPapercraftMultiImages()" class="flex-1 py-1 px-2 rounded bg-sky-600 hover:bg-sky-500 text-white text-[10px] font-bold">
+                  📂 Subir Varias Imágenes
+                </button>
+                <button type="button" onclick="document.getElementById('fileInputPapercraftMulti').click()" class="py-1 px-2 rounded bg-slate-950 hover:bg-slate-800 border border-slate-700 text-sky-300 text-[10px] font-semibold" title="Añadir más imágenes a la lista actual">
+                  ➕ Añadir Capas
+                </button>
+              </div>
+              <div class="grid grid-cols-3 gap-1">
+                <button type="button" onclick="loadPapercraftMultiImagePack('volcano_pack')" class="py-1 px-1 rounded bg-slate-950 hover:bg-slate-800 border border-slate-700 text-[9px] text-rose-300 font-semibold truncate">🌋 Pack Volcán (4)</button>
+                <button type="button" onclick="loadPapercraftMultiImagePack('space_pack')" class="py-1 px-1 rounded bg-slate-950 hover:bg-slate-800 border border-slate-700 text-[9px] text-sky-300 font-semibold truncate">🚀 Pack Espacio (4)</button>
+                <button type="button" onclick="loadPapercraftMultiImagePack('forest_pack')" class="py-1 px-1 rounded bg-slate-950 hover:bg-slate-800 border border-slate-700 text-[9px] text-emerald-300 font-semibold truncate">🌲 Pack Bosque (4)</button>
+              </div>
+              <div id="papercraftMultiImagesContainer" class="max-h-36 overflow-y-auto space-y-1 pr-0.5"></div>
+            </div>
+
+            <!-- Control de número de capas / plataformas (para Modelo 3D y 1 Imagen) -->
+            <div class="pt-1 border-t border-slate-700/60">
+              <div class="flex justify-between text-[11px] mb-0.5">
+                <span class="text-slate-300">Número de capas / niveles del recortable:</span>
+                <span id="pcLayersCountLabel" class="font-bold text-amber-300">5</span>
+              </div>
+              <input type="range" id="pcLayersCountInput" min="2" max="10" step="1" value="5" oninput="onPapercraftParamsChange()" class="w-full accent-amber-500" />
+            </div>
+          </div>
+
+          <!-- 2. Tipo de Recortable Escolar (5 Modalidades con Pestañas de Pegamento) -->
+          <div class="bg-slate-800/55 border border-sky-500/35 rounded-xl p-2.5 space-y-2">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-sky-400 block">2. Tipo de Recortable (Con Pestañas de Pegamento)</span>
+            <div class="grid grid-cols-1 gap-1.5">
+              <button type="button" id="pcTypeBtn_stacked_platforms" onclick="setPapercraftCutoutType('stacked_platforms')" class="p-2 rounded-lg bg-sky-500/25 border border-sky-400 text-sky-200 text-left transition">
+                <div class="text-[11px] font-bold">🏛️ 1. Plataformas 3D para Apilar (Con Faldón y Pestañas)</div>
+                <div class="text-[10px] text-slate-300">Cada capa despliega sus paredes laterales y pestañas de pegamento escolar para apilar plataformas volumétricas huecas.</div>
+              </button>
+
+              <button type="button" id="pcTypeBtn_layered_tabs" onclick="setPapercraftCutoutType('layered_tabs')" class="p-2 rounded-lg bg-slate-950/80 hover:bg-slate-800 border border-slate-800 text-slate-300 text-left transition">
+                <div class="text-[11px] font-bold">🗂️ 2. Recortables en Capas para Poner Uno sobre Otro</div>
+                <div class="text-[10px] text-slate-400">Capas superpuestas con pestañas trapezoidales en el borde (con escalón 3D o planas) y zonas guía donde pegar la capa siguiente.</div>
+              </button>
+
+              <button type="button" id="pcTypeBtn_accordion_spacers" onclick="setPapercraftCutoutType('accordion_spacers')" class="p-2 rounded-lg bg-slate-950/80 hover:bg-slate-800 border border-slate-800 text-slate-300 text-left transition">
+                <div class="text-[11px] font-bold">🪗 3. Capas Superpuestas con Separadores Plegables en Z</div>
+                <div class="text-[10px] text-slate-400">Recortables limpios por capas + muelles/separadores plegables en acordeón con pestañas de pegamento escolar (Efecto Pop-Up).</div>
+              </button>
+
+              <button type="button" id="pcTypeBtn_standee_peana" onclick="setPapercraftCutoutType('standee_peana')" class="p-2 rounded-lg bg-slate-950/80 hover:bg-slate-800 border border-slate-800 text-slate-300 text-left transition">
+                <div class="text-[11px] font-bold">🧍 4. Figuras Troqueladas con Peana Escénica a 90°</div>
+                <div class="text-[10px] text-slate-400">Figuras verticales con pestaña inferior a 90° + Peana 3D recortable con las franjas exactas donde pegar cada figura.</div>
+              </button>
+
+              <button type="button" id="pcTypeBtn_prism_net" onclick="setPapercraftCutoutType('prism_net')" class="p-2 rounded-lg bg-slate-950/80 hover:bg-slate-800 border border-slate-800 text-slate-300 text-left transition">
+                <div class="text-[11px] font-bold">📦 5. Red Poliédrica 3D Desplegable (Bloques en Cruz)</div>
+                <div class="text-[10px] text-slate-400">Despliegue completo de cada bloque en una sola pieza (tapa + 4 paredes + base + 7 pestañas trapezoidales biseladas).</div>
+              </button>
+            </div>
+
+            <!-- Sub-opciones según el tipo de recortable elegido -->
+            <div id="pcPlatformUnfoldRow" class="pt-1.5 border-t border-slate-700/60 flex items-center justify-between gap-2 text-[11px]">
+              <span class="text-slate-300 shrink-0">Despliegue plataforma:</span>
+              <select id="pcPlatformUnfoldSelect" onchange="onPapercraftParamsChange()" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-[10px] text-amber-300 font-semibold outline-none">
+                <option value="attached_flaps" selected>📐 Faldones Plegables Directos en cada Lado (1 pieza/capa)</option>
+                <option value="collar_strip">🎗️ Tapa Curva + Banda Perimetral Dentada con Pestañas</option>
+              </select>
+            </div>
+
+            <div id="pcStandeeFoldRow" class="hidden pt-1.5 border-t border-slate-700/60 flex items-center justify-between gap-2 text-[11px]">
+              <span class="text-slate-300 shrink-0">Tipo de figura:</span>
+              <select id="pcStandeeFoldSelect" onchange="onPapercraftParamsChange()" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-[10px] text-amber-300 font-semibold outline-none">
+                <option value="double_fold" selected>🔄 Con Solapa Superior de Refuerzo + Pestaña Base 90°</option>
+                <option value="single_tab">📐 Simple con Pestaña Inferior Trapezoidal a 90°</option>
+              </select>
+            </div>
+
+            <div id="pcTabsPerLayerRow" class="hidden pt-1.5 border-t border-slate-700/60 flex items-center justify-between text-[11px]">
+              <span class="text-slate-300">Nº de pestañas por capa superpuesta:</span>
+              <input type="number" id="pcTabsPerLayerInput" value="4" min="2" max="8" step="1" onchange="onPapercraftParamsChange()" class="w-16 bg-slate-950 border border-slate-700 rounded px-2 py-0.5 text-right text-amber-300 font-bold" />
+            </div>
+          </div>
+
+          <!-- 3. Parámetros de Pestañas de Pegamento Escolar y Tijeras -->
+          <div class="bg-slate-800/55 border border-emerald-500/35 rounded-xl p-2.5 space-y-2">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-400 block">3. Medidas, Pestañas de Pegamento y Tijeras</span>
+
+            <div class="grid grid-cols-3 gap-1.5 text-[10px]">
+              <div class="bg-slate-950 border border-slate-800 rounded px-2 py-1">
+                <span class="text-slate-400 block">Ancho (mm)</span>
+                <input type="number" id="pcWidthMMInput" value="130" min="40" max="350" step="5" onchange="onPapercraftParamsChange()" class="w-full bg-transparent text-white font-bold text-right outline-none" />
+              </div>
+              <div class="bg-slate-950 border border-slate-800 rounded px-2 py-1">
+                <span class="text-slate-400 block">Fondo/Alto (mm)</span>
+                <input type="number" id="pcHeightMMInput" value="130" min="40" max="350" step="5" onchange="onPapercraftParamsChange()" class="w-full bg-transparent text-white font-bold text-right outline-none" />
+              </div>
+              <div class="bg-slate-950 border border-slate-800 rounded px-2 py-1" title="Altura de la pared lateral de cada plataforma o del escalón entre capas superpuestas (0 = pestaña plana sin escalón)">
+                <span class="text-amber-300 block">Altura Pared (mm)</span>
+                <input type="number" id="pcWallHeightInput" value="14" min="0" max="45" step="1" onchange="onPapercraftParamsChange()" class="w-full bg-transparent text-amber-300 font-bold text-right outline-none" />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-1.5 text-[10px]">
+              <div class="flex items-center justify-between bg-slate-950 border border-slate-800 rounded px-2 py-1" title="Anchura de la solapa donde se aplica el pegamento de barra escolar (recomendado: 8 a 14 mm)">
+                <span class="text-emerald-300 font-semibold">🧴 Ancho Pestaña (mm):</span>
+                <input type="number" id="pcTabDepthInput" value="10" min="5" max="24" step="1" onchange="onPapercraftParamsChange()" class="w-12 bg-transparent text-emerald-300 font-bold text-right outline-none" />
+              </div>
+              <div class="flex items-center justify-between bg-slate-950 border border-slate-800 rounded px-2 py-1" title="Ángulo de inclinación de las esquinas de la pestaña trapezoidal">
+                <span class="text-slate-300">Bisel Pestaña (°):</span>
+                <input type="number" id="pcTabBevelInput" value="42" min="25" max="65" step="2" onchange="onPapercraftParamsChange()" class="w-12 bg-transparent text-sky-300 font-bold text-right outline-none" />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-1.5 text-[10px]">
+              <div class="flex items-center justify-between bg-slate-950 border border-slate-800 rounded px-2 py-1" title="Suaviza y simplifica el contorno para que sea muy cómodo de recortar con tijeras escolares">
+                <span class="text-slate-300">✂️ Suavizado Tijera (mm):</span>
+                <input type="number" id="pcScissorsSimplifyInput" value="3.5" min="0.8" max="12" step="0.5" onchange="onPapercraftParamsChange()" class="w-12 bg-transparent text-rose-300 font-bold text-right outline-none" />
+              </div>
+              <div class="flex items-center justify-between bg-slate-950 border border-slate-800 rounded px-2 py-1" title="Margen alrededor del dibujo antes de la línea de corte con tijeras">
+                <span class="text-slate-300">Margen Borde (mm):</span>
+                <input type="number" id="pcCutMarginInput" value="2.5" min="0" max="12" step="0.5" onchange="onPapercraftParamsChange()" class="w-12 bg-transparent text-slate-200 font-bold text-right outline-none" />
+              </div>
+            </div>
+
+            <div class="space-y-1 pt-1 border-t border-slate-700/60 text-[11px]">
+              <label class="flex items-center justify-between text-slate-200 cursor-pointer">
+                <span>🧴 Imprimir textos <strong>«PEGAR»</strong> y zonas guía en cada capa</span>
+                <input type="checkbox" id="pcShowGlueLabelsCheck" checked onchange="onPapercraftParamsChange()" class="accent-emerald-500" />
+              </label>
+              <label class="flex items-center justify-between text-slate-200 cursor-pointer">
+                <span>✂️ Mostrar iconos de tijeras (<strong>✂</strong>) en líneas de corte</span>
+                <input type="checkbox" id="pcShowScissorsCheck" checked onchange="onPapercraftParamsChange()" class="accent-rose-500" />
+              </label>
+              <label class="flex items-center justify-between text-slate-200 cursor-pointer">
+                <span>📐 Mostrar líneas discontinuas de pliegue (Montaña / Valle)</span>
+                <input type="checkbox" id="pcShowFoldsCheck" checked onchange="onPapercraftParamsChange()" class="accent-sky-500" />
+              </label>
+            </div>
+          </div>
+
+          <!-- 4. Estilo de Impresión Escolar y Formato de Hoja DIN A4 / A3 -->
+          <div class="bg-slate-800/55 border border-slate-700/80 rounded-xl p-2.5 space-y-2">
+            <span class="text-[11px] font-bold uppercase tracking-wider text-fuchsia-300 block">4. Formato de Hoja e Impresión de Aula</span>
+            <div class="flex items-center justify-between gap-2 text-[11px]">
+              <span class="text-slate-300 shrink-0">Acabado visual:</span>
+              <select id="pcPrintStyleSelect" onchange="onPapercraftParamsChange()" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-[11px] text-emerald-300 font-semibold outline-none">
+                <option value="color" selected>🎨 A Todo Color (Listo para Recortar y Pegar)</option>
+                <option value="coloring">🖍️ Para Colorear en el Aula (Línea B/N sobre Blanco)</option>
+                <option value="blueprint">📐 Técnico Limpio (Solo Corte, Pliegues y Pestañas)</option>
+              </select>
+            </div>
+            <div class="flex items-center justify-between gap-2 text-[11px]">
+              <span class="text-slate-300 shrink-0">Tamaño de papel:</span>
+              <select id="pcSheetFormatSelect" onchange="onPapercraftParamsChange()" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-[11px] text-sky-300 font-semibold outline-none">
+                <option value="A4_portrait" selected>📄 DIN A4 Vertical (210 × 297 mm)</option>
+                <option value="A4_landscape">📄 DIN A4 Horizontal (297 × 210 mm)</option>
+                <option value="A3_landscape">📐 DIN A3 Horizontal (420 × 297 mm)</option>
+              </select>
+            </div>
+            <label class="flex items-center justify-between text-[11px] text-slate-300 cursor-pointer">
+              <span>📝 Incluir cajetín escolar (Nombre, Curso y Leyenda)</span>
+              <input type="checkbox" id="pcSchoolHeaderCheck" checked onchange="onPapercraftParamsChange()" class="accent-fuchsia-500" />
+            </label>
+          </div>
+
+        </div>
+
+        <!-- COLUMNA DERECHA: PREVISUALIZACIÓN DE HOJAS A4 Y SIMULACIÓN 3D DEL RECORTABLE (7/12) -->
+        <div class="lg:col-span-7 bg-slate-950 flex flex-col overflow-hidden">
+          <!-- Barra superior del lienzo: Selector 2D Hojas A4 vs 3D Recortable Montado + Navegador de Hojas -->
+          <div class="p-2.5 bg-slate-900/95 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-1.5">
+              <button type="button" id="pcPrevModeBtn_sheets2d" onclick="setPapercraftPreviewMode('sheets2d')" class="px-3 py-1 rounded-lg bg-amber-500/25 border border-amber-400 text-amber-200 text-xs font-bold transition">
+                📄 Hojas A4 para Tijeras (2D)
+              </button>
+              <button type="button" id="pcPrevModeBtn_assembled3d" onclick="setPapercraftPreviewMode('assembled3d')" class="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-medium transition">
+                🧊 Recortable Montado y Plegado (3D)
+              </button>
+            </div>
+
+            <div class="flex items-center gap-1.5">
+              <button type="button" onclick="stepPapercraftSheetPage(-1)" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-[11px] font-bold">◀</button>
+              <span id="papercraftSheetPageLabel" class="px-2.5 py-1 rounded bg-slate-950 border border-slate-800 text-amber-300 font-mono text-[11px] font-bold">Hoja 1 / 1</span>
+              <button type="button" onclick="stepPapercraftSheetPage(1)" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-[11px] font-bold">▶</button>
+              <div class="h-4 w-px bg-slate-800 mx-0.5"></div>
+              <button type="button" onclick="zoomPapercraftViewport(0.85)" class="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold">−</button>
+              <button type="button" onclick="resetPapercraftViewport()" class="px-2 h-6 rounded bg-slate-800 hover:bg-slate-700 text-sky-300 text-[10px] font-semibold">100%</button>
+              <button type="button" onclick="zoomPapercraftViewport(1.18)" class="w-6 h-6 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold">+</button>
+            </div>
+          </div>
+
+          <!-- Barra interactiva de plegado y explosión 3D (visible en modo 3D) -->
+          <div id="pc3DControlsBar" class="hidden px-3.5 py-2 bg-slate-900/85 border-b border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px]">
+            <div class="flex items-center gap-2">
+              <span class="text-amber-300 font-semibold shrink-0">📐 Plegar Pestañas y Paredes:</span>
+              <input type="range" id="pcFoldSlider" min="0" max="100" value="85" oninput="onPapercraftParamsChange()" class="flex-1 accent-amber-400" />
+              <span id="pcFoldValLabel" class="text-amber-200 font-mono font-bold w-9 text-right">85%</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-sky-300 font-semibold shrink-0">💥 Separar Capas / Plataformas:</span>
+              <input type="range" id="pcExplodeSlider" min="0" max="100" value="25" oninput="onPapercraftParamsChange()" class="flex-1 accent-sky-400" />
+              <span id="pcExplodeValLabel" class="text-sky-200 font-mono font-bold w-9 text-right">25%</span>
+            </div>
+          </div>
+
+          <!-- Lienzo interactivo (soporta arrastrar y soltar 1 o varias imágenes directamente) -->
+          <div
+            class="flex-1 relative flex items-center justify-center overflow-hidden p-2"
+            ondragover="event.preventDefault()"
+            ondrop="event.preventDefault(); if(event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files.length > 1) { handlePapercraftMultiImageFiles(event.dataTransfer.files, false); } else if(event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files[0]) { handlePapercraftSingleImageFile(event.dataTransfer.files[0]); }"
+          >
+            <canvas id="papercraftPreviewCanvas" class="w-full h-full cursor-grab active:cursor-grabbing"></canvas>
+          </div>
+
+          <!-- Resumen estadístico de piezas, pestañas y hojas -->
+          <div id="papercraftSummaryBadge" class="px-3.5 py-2 bg-slate-900/95 border-t border-slate-800 text-[11px] text-slate-200 text-center">
+            Listo para imprimir en DIN A4 y recortar con tijeras escolares
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Pie del modal con acciones de Impresión DIN A4, Descarga SVG/HTML y Envío al Visor Principal -->
+      <div class="p-3 bg-slate-950 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="button" onclick="applyPapercraftToMainStudio()" class="px-3.5 py-1.5 rounded-lg bg-indigo-500/25 hover:bg-indigo-500/40 border border-indigo-400/50 text-indigo-200 text-xs font-bold transition flex items-center gap-1.5" title="Envía todas las piezas desplegadas con sus pestañas de pegamento y líneas de doblez al Visor 3D y 2D principal de LayerStudio 3D">
+            <span>🧱 Enviar al Visor 3D/2D Principal</span>
+          </button>
+          <span class="text-[10px] text-slate-400 hidden sm:inline">💡 También puedes arrastrar una o varias imágenes directamente sobre el lienzo.</span>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="button" onclick="downloadPapercraftSheetsSVG()" class="px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-500/40 text-emerald-300 text-xs font-bold transition flex items-center gap-1.5">
+            <span>⬇ Descargar Hoja .SVG</span>
+          </button>
+          <button type="button" onclick="downloadPapercraftBookletHTML()" class="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/35 border border-amber-500/40 text-amber-300 text-xs font-bold transition flex items-center gap-1.5">
+            <span>⬇ Cuaderno Recortable (.HTML)</span>
+          </button>
+          <button type="button" onclick="printPapercraftSheetsA4()" class="px-4 py-1.5 rounded-lg bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white text-xs font-bold shadow-lg shadow-amber-500/20 transition flex items-center gap-1.5">
+            <span>🖨️ Imprimir / PDF DIN A4 (Tijeras + Pegamento)</span>
+          </button>
         </div>
       </div>
     </div>

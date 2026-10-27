@@ -437,6 +437,44 @@ function generateSliceSVG(slice, idx) {
     lines.push('  </g>');
   }
 
+  // Capas SVG de Recortable Escolar (Pestañas de pegamento escolar 🧴, Líneas de doblez y Zonas guía)
+  if (slice.papercraftMeta) {
+    const pm = slice.papercraftMeta;
+    if (pm.glueTabs && pm.glueTabs.length > 0) {
+      lines.push('  <g id="PESTANAS_PEGAMENTO_ESCOLAR">');
+      pm.glueTabs.forEach((gt, gIdx) => {
+        if (!gt.polygon || gt.polygon.length < 3) return;
+        const dTab = 'M ' + gt.polygon.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z';
+        lines.push('    <path id="pestana_pegamento_' + (gIdx + 1) + '" d="' + dTab + '" fill="#fef3c7" fill-opacity="0.55" stroke="#d97706" stroke-width="' + strokeMm + '" />');
+        if (gt.label && gt.center) {
+          const cx = toX(gt.center.x);
+          const cy = toY(gt.center.y);
+          lines.push('    <text x="' + cx + '" y="' + cy + '" font-family="sans-serif" font-size="2.2" font-weight="bold" fill="#92400e" text-anchor="middle" dominant-baseline="central">🧴 ' + escapeXmlAttr(gt.label) + '</text>');
+        }
+      });
+      lines.push('  </g>');
+    }
+    if (pm.glueTargetZones && pm.glueTargetZones.length > 0) {
+      lines.push('  <g id="ZONAS_PEGADO_RECORTABLE">');
+      pm.glueTargetZones.forEach((gz, zIdx) => {
+        if (!gz.polygon || gz.polygon.length < 3) return;
+        const dZ = 'M ' + gz.polygon.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z';
+        lines.push('    <path id="zona_pegado_' + (zIdx + 1) + '" d="' + dZ + '" fill="#d1fae5" fill-opacity="0.35" stroke="#059669" stroke-width="' + strokeMm + '" stroke-dasharray="1.8,1.4" />');
+      });
+      lines.push('  </g>');
+    }
+    if (pm.foldLines && pm.foldLines.length > 0) {
+      lines.push('  <g id="LINEAS_DOBLEZ_PLIEGUE" fill="none">');
+      pm.foldLines.forEach((fl, fIdx) => {
+        if (!fl.points || fl.points.length < 2) return;
+        const isVal = fl.type === 'valley';
+        const dFold = 'M ' + fl.points.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ');
+        lines.push('    <path id="pliegue_' + (fIdx + 1) + '" d="' + dFold + '" stroke="' + (isVal ? '#7c3aed' : '#0284c7') + '" stroke-width="' + strokeMm + '" stroke-dasharray="' + (isVal ? '2.4,1.0,0.6,1.0' : '2.4,1.6') + '" />');
+      });
+      lines.push('  </g>');
+    }
+  }
+
   // Capa SVG opcional 1: Guía de pegado de la lámina INFERIOR (#N-1) en color violeta (#9900ff) y motivo punteado/raya-punto
   if (lowerGuidePath.trim().length > 0 && lowerSlice) {
     const lowerDashAttr = getSvgDashAttr(state.lowerGuideStyle);

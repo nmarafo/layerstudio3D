@@ -154,6 +154,14 @@ const state = {
   assemblyGuideTab: 'all',     // 'all' | 'cutting' | 'assembly'
   guideShowIllustrations: true,// true = muestra diagramas vectoriales automáticos en la guía de montaje
   assembledSlicesDone: {},     // Registro de pasos marcados como montados { [sliceIndex]: boolean }
+  // Configuración de Recortables Escolares (Tijeras + Pestañas para Pegamento Escolar)
+  papercraftActiveInStudio: false, // true = las lascas actuales en el visor principal son piezas de recortable con pestañas
+  papercraftSourceMode: 'model3d', // 'model3d' | 'single_image' | 'multi_images'
+  papercraftCutoutType: 'stacked_platforms', // 'stacked_platforms' | 'layered_tabs' | 'accordion_spacers' | 'standee_peana' | 'prism_net'
+  papercraftTabDepthMM: 10.0,      // Profundidad de la pestaña de pegamento escolar en mm
+  papercraftWallHeightMM: 14.0,    // Altura de plataforma / escalón / separador entre capas en mm
+  papercraftShowGlueLabels: true,  // Mostrar etiquetas 'PEGAR' y códigos en pestañas y zonas guía
+  papercraftShowScissors: true,    // Mostrar iconos de tijeras en el borde exterior
   view2D: {
     zoom: 1,
     panX: 0,

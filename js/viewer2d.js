@@ -1286,6 +1286,100 @@ function render2DSlice() {
     ctx.restore();
   }
 
+  // Elementos de Recortable Escolar (Pestañas de pegamento 🧴, Ilustración, Zonas guía y Líneas de doblez)
+  if (slice.papercraftMeta) {
+    const pm = slice.papercraftMeta;
+    // 1. Pestañas trapezoidales de pegamento escolar
+    (pm.glueTabs || []).forEach((gt) => {
+      if (!gt.polygon || gt.polygon.length < 3) return;
+      ctx.save();
+      ctx.beginPath();
+      gt.polygon.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+        else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+      });
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(251, 191, 36, 0.24)';
+      ctx.fill();
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 1.1;
+      ctx.stroke();
+
+      if (gt.label && gt.center) {
+        const cx = toScreenX(gt.center.x);
+        const cy = toScreenY(gt.center.y);
+        let ang = -(gt.angleRad || 0);
+        if (ang > Math.PI * 0.5) ang -= Math.PI;
+        if (ang < -Math.PI * 0.5) ang += Math.PI;
+        ctx.translate(cx, cy);
+        ctx.rotate(ang);
+        ctx.fillStyle = '#fde047';
+        ctx.font = 'bold ' + Math.max(8, Math.min(11, 2.2 * scale)).toFixed(1) + 'px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🧴 ' + gt.label, 0, 0);
+      }
+      ctx.restore();
+    });
+
+    // 2. Ilustración interior de la pieza recortable
+    if (pm.artworkCanvas && pm.bodyPolygon && pm.bodyPolygon.length >= 3) {
+      ctx.save();
+      ctx.beginPath();
+      pm.bodyPolygon.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+        else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+      });
+      ctx.closePath();
+      ctx.clip();
+      const ab = pm.artworkBounds || getSliceBounds2D(slice);
+      ctx.globalAlpha = 0.72;
+      ctx.drawImage(
+        pm.artworkCanvas,
+        toScreenX(ab.minX),
+        toScreenY(ab.maxY),
+        ab.width * scale,
+        ab.height * scale
+      );
+      ctx.restore();
+    }
+
+    // 3. Zonas guía de recepción de pegamento
+    (pm.glueTargetZones || []).forEach((gz) => {
+      if (!gz.polygon || gz.polygon.length < 3) return;
+      ctx.save();
+      ctx.beginPath();
+      gz.polygon.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+        else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+      });
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(16, 185, 129, 0.18)';
+      ctx.fill();
+      ctx.strokeStyle = '#34d399';
+      ctx.setLineDash([5, 4]);
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+      ctx.restore();
+    });
+
+    // 4. Líneas de pliegue / doblez (Montaña / Valle)
+    (pm.foldLines || []).forEach((fl) => {
+      if (!fl.points || fl.points.length < 2) return;
+      ctx.save();
+      ctx.strokeStyle = fl.type === 'valley' ? '#c084fc' : '#38bdf8';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash(fl.type === 'valley' ? [7, 3, 2, 3] : [6, 4]);
+      ctx.beginPath();
+      fl.points.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+        else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+      });
+      ctx.stroke();
+      ctx.restore();
+    });
+  }
+
   // Contornos exteriores (rojo) e interiores (azul) de la lasca actual con soporte de micro-uniones (salvo en marco configurable)
   slice.loops.forEach((loop) => {
     drawContourWithTabsOnCanvas(
