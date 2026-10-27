@@ -24239,87 +24239,100 @@ function packPapercraftPiecesIntoSheets(pieces) {
   const sheetSpec = getPapercraftSheetDimensionsMM();
   const sheetW = sheetSpec.widthMM;
   const sheetH = sheetSpec.heightMM;
-  const margin = 10;
-  // Reservamos 38 mm superiores en cada A4 para el cajetín escolar + el dibujo del modelo con el progreso (estilo Guía Ilustrada)
-  const headerH = 38;
-  const usableW = sheetW - margin * 2;
-  const usableH = sheetH - margin * 2 - headerH;
-  const gapMM = 7;
+  const margin = 8;
+  // Reservamos 36 mm superiores en cada A4 para el cajetín escolar + el dibujo del modelo con el progreso (estilo Guía Ilustrada)
+  const headerH = 36;
+  const usableW = Math.max(20, sheetW - margin * 2);
+  const usableH = Math.max(20, sheetH - margin * 2 - headerH);
+  const gapMM = 4.5;
+  const titleHMM = 6.5;
 
   const sheets = [];
-  let currentSheet = {
-    sheetIndex: 0,
-    widthMM: sheetW,
-    heightMM: sheetH,
-    formatLabel: sheetSpec.label,
-    marginMM: margin,
-    headerHMM: headerH,
-    placements: []
+  const createNewSheet = () => {
+    const sh = {
+      sheetIndex: sheets.length,
+      widthMM: sheetW,
+      heightMM: sheetH,
+      formatLabel: sheetSpec.label,
+      marginMM: margin,
+      headerHMM: headerH,
+      freeRects: [{ x: margin, y: margin + headerH, w: usableW, h: usableH }],
+      placements: []
+    };
+    sheets.push(sh);
+    return sh;
   };
-  sheets.push(currentSheet);
 
-  let cursorX = margin;
-  let cursorY = margin + headerH;
-  let rowMaxH = 0;
-
-  pieces.forEach((piece) => {
-    const b = piece.bounds;
-    let pw = b.width;
-    let ph = b.height;
+  (pieces || []).forEach((piece) => {
+    const b = piece.bounds || computePolygonBounds2D(piece.outerCutPoints || []);
+    let pw = Math.max(1, b.width);
+    let ph = Math.max(1, b.height);
     let scaleFit = 1.0;
 
     // Si una pieza desplegada con sus faldones supera el área útil de la hoja A4, auto-escalar con aviso limpio
-    if (pw > usableW - 4 || ph > usableH - 10) {
-      scaleFit = Math.min((usableW - 6) / Math.max(1, pw), (usableH - 12) / Math.max(1, ph));
+    if (pw > usableW - 2 || ph > usableH - titleHMM - 2) {
+      scaleFit = Math.min((usableW - 4) / Math.max(1, pw), (usableH - titleHMM - 4) / Math.max(1, ph));
       pw *= scaleFit;
       ph *= scaleFit;
     }
 
-    const slotW = pw + gapMM;
-    const slotH = ph + 9; // +9 mm para el título de la pieza encima
+    const slotW = pw;
+    const slotH = ph + titleHMM;
 
-    if (cursorX + pw > sheetW - margin && currentSheet.placements.length > 0) {
-      // Saltar a la siguiente fila dentro de la misma hoja
-      cursorX = margin;
-      cursorY += rowMaxH + gapMM;
-      rowMaxH = 0;
+    // Buscar mediante MaxRects 2D el primer hueco libre disponible en cualquiera de las hojas A4 abiertas
+    let bestSheet = null;
+    let bestX = margin;
+    let bestY = margin + headerH;
+    let bestScore = Infinity;
+
+    for (let sIdx = 0; sIdx < sheets.length; sIdx++) {
+      const sh = sheets[sIdx];
+      for (let rIdx = 0; rIdx < sh.freeRects.length; rIdx++) {
+        const fr = sh.freeRects[rIdx];
+        if (slotW <= fr.w + 1e-4 && slotH <= fr.h + 1e-4) {
+          const score = fr.y * 1000 + fr.x;
+          if (score < bestScore) {
+            bestSheet = sh;
+            bestX = fr.x;
+            bestY = fr.y;
+            bestScore = score;
+          }
+        }
+      }
+      if (bestSheet) break;
     }
 
-    if (cursorY + slotH > sheetH - margin && currentSheet.placements.length > 0) {
-      // Crear nueva hoja DIN A4
-      currentSheet = {
-        sheetIndex: sheets.length,
-        widthMM: sheetW,
-        heightMM: sheetH,
-        formatLabel: sheetSpec.label,
-        marginMM: margin,
-        headerHMM: headerH,
-        placements: []
-      };
-      sheets.push(currentSheet);
-      cursorX = margin;
-      cursorY = margin + headerH;
-      rowMaxH = 0;
+    if (!bestSheet) {
+      bestSheet = createNewSheet();
+      bestX = margin;
+      bestY = margin + headerH;
     }
 
-    const centerSheetX = cursorX + pw * 0.5;
-    const centerSheetY = cursorY + 7 + ph * 0.5;
+    bestSheet.freeRects = splitPapercraftFreeRects(
+      bestSheet.freeRects,
+      { x: bestX, y: bestY, w: slotW + gapMM, h: slotH + gapMM },
+      gapMM
+    );
 
-    currentSheet.placements.push({
+    const centerSheetX = bestX + pw * 0.5;
+    const centerSheetY = bestY + titleHMM + ph * 0.5;
+
+    bestSheet.placements.push({
       piece,
       scaleFit,
-      boxX: cursorX,
-      boxY: cursorY,
+      boxX: bestX,
+      boxY: bestY,
       boxW: pw,
       boxH: ph,
       // Transforma una coordenada local (x, y con Y hacia arriba) a coordenada de hoja A4 (x hacia la derecha, y hacia abajo desde el borde superior)
       toSheetX: (lx) => centerSheetX + (lx - b.cx) * scaleFit,
       toSheetY: (ly) => centerSheetY - (ly - b.cy) * scaleFit
     });
-
-    cursorX += slotW;
-    if (slotH > rowMaxH) rowMaxH = slotH;
   });
+
+  if (sheets.length === 0) {
+    createNewSheet();
+  }
 
   return sheets;
 }
@@ -28506,6 +28519,7 @@ function updatePapercraftStatsAndSheetNavUI() {
   }
 
   const laserBoardBadge = document.getElementById('pcLaserBoardsStatsBadge');
+  const totalBoardPlaced = boards.reduce((acc, b) => acc + ((b.placements && b.placements.length) || 0), 0);
   if (laserBoardBadge) {
     const avgEff = boards.length > 0
       ? (boards.reduce((s, b) => s + (b.efficiency || 0), 0) / boards.length).toFixed(1)
@@ -28517,14 +28531,14 @@ function updatePapercraftStatsAndSheetNavUI() {
     if (papercraftState.unfitLaserPiecesCount > 0) {
       extraNote += ' · ⚠️ ' + papercraftState.unfitLaserPiecesCount + ' no cabe(n)';
     }
-    laserBoardBadge.textContent = boards.length + ' tablero(s) · Uso medio: ' + avgEff + '%' + extraNote;
+    laserBoardBadge.textContent = boards.length + ' tab. (' + totalBoardPlaced + '/' + pieces.length + ' pzs · Uso: ' + avgEff + '%)' + extraNote;
   }
 
   const carrierBadge = document.getElementById('pcLaserCarrierStatsBadge');
   if (carrierBadge) {
     if (carriers.length > 0) {
       const avgCEff = (carriers.reduce((s, c) => s + (c.efficiency || 0), 0) / carriers.length).toFixed(1);
-      carrierBadge.textContent = carriers.length + ' soporte(s) · ' + boards.length + ' tab. · Uso: ' + avgCEff + '%';
+      carrierBadge.textContent = carriers.length + ' soporte(s) · ' + boards.length + ' tab. (' + totalBoardPlaced + ' pzs) · Uso: ' + avgCEff + '%';
     } else {
       carrierBadge.textContent = '0 soportes (tablero mayor que soporte)';
     }
@@ -28533,11 +28547,17 @@ function updatePapercraftStatsAndSheetNavUI() {
   const sheetIndicator = document.getElementById('papercraftSheetPageLabel');
   if (sheetIndicator) {
     if (papercraftState.previewMode === 'laser_boards2d') {
-      sheetIndicator.textContent = 'Tablero ' + ((papercraftState.activeLaserBoardIndex || 0) + 1) + ' / ' + Math.max(1, boards.length);
+      const activeBIdx = Math.max(0, Math.min(boards.length - 1, papercraftState.activeLaserBoardIndex || 0));
+      const pOnBoard = boards[activeBIdx] && boards[activeBIdx].placements ? boards[activeBIdx].placements.length : 0;
+      sheetIndicator.textContent = 'Tablero ' + (activeBIdx + 1) + ' / ' + Math.max(1, boards.length) + ' (' + pOnBoard + ' pzs)';
     } else if (papercraftState.previewMode === 'laser_carrier2d') {
-      sheetIndicator.textContent = 'Soporte ' + ((papercraftState.activeLaserCarrierIndex || 0) + 1) + ' / ' + Math.max(1, carriers.length);
+      const activeCIdx = Math.max(0, Math.min(carriers.length - 1, papercraftState.activeLaserCarrierIndex || 0));
+      const bOnCarrier = carriers[activeCIdx] && carriers[activeCIdx].boardPlacements ? carriers[activeCIdx].boardPlacements.length : 0;
+      sheetIndicator.textContent = 'Soporte ' + (activeCIdx + 1) + ' / ' + Math.max(1, carriers.length) + ' (' + bOnCarrier + ' tab.)';
     } else {
-      sheetIndicator.textContent = 'Hoja ' + ((papercraftState.activeSheetIndex || 0) + 1) + ' / ' + Math.max(1, sheets.length);
+      const activeSIdx = Math.max(0, Math.min(sheets.length - 1, papercraftState.activeSheetIndex || 0));
+      const pOnSheet = sheets[activeSIdx] && sheets[activeSIdx].placements ? sheets[activeSIdx].placements.length : 0;
+      sheetIndicator.textContent = 'Hoja ' + (activeSIdx + 1) + ' / ' + Math.max(1, sheets.length) + ' (' + pOnSheet + ' pzs)';
     }
   }
 }
