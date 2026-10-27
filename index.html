@@ -2629,9 +2629,64 @@
               </select>
             </div>
             <label class="flex items-center justify-between text-[11px] text-slate-300 cursor-pointer">
-              <span>📝 Incluir cajetín escolar (Nombre, Curso y Leyenda)</span>
+              <span>📝 Incluir cajetín de autoría, curso y fecha en cada hoja</span>
               <input type="checkbox" id="pcSchoolHeaderCheck" checked onchange="onPapercraftParamsChange()" class="accent-fuchsia-500" />
             </label>
+          </div>
+
+          <!-- 5. Textos Editables del Recortable (Título, Autoría, Curso/Centro, Notas y Piezas) -->
+          <div class="bg-slate-800/55 border border-amber-500/35 rounded-xl p-2.5 space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-[11px] font-bold uppercase tracking-wider text-amber-300">5. Textos Editables (Título, Autoría y Piezas)</span>
+              <button type="button" onclick="resetPapercraftCustomTexts()" class="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-700 border border-slate-700 text-[10px] text-slate-300 font-semibold transition" title="Restablecer todos los textos editables a sus valores automáticos">↺ Restablecer</button>
+            </div>
+
+            <div class="space-y-1.5 text-[10px]">
+              <div>
+                <label for="pcCustomTitleInput" class="text-slate-300 font-semibold block mb-0.5">🏷️ Título del recortable (cabecera A4 y cuaderno):</label>
+                <input type="text" id="pcCustomTitleInput" placeholder="Automático según tipo de recortable (o escribe tu título)" oninput="onPapercraftTextChange()" class="w-full bg-slate-950 border border-slate-700 focus:border-amber-400 rounded px-2 py-1 text-[11px] text-white outline-none" />
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                <div>
+                  <label for="pcCustomAuthorInput" class="text-slate-300 font-semibold block mb-0.5">✍️ Autoría / Docente / Alumno/a:</label>
+                  <input type="text" id="pcCustomAuthorInput" placeholder="Vacío = línea para rellenar" oninput="onPapercraftTextChange()" class="w-full bg-slate-950 border border-slate-700 focus:border-amber-400 rounded px-2 py-1 text-[11px] text-amber-200 outline-none" />
+                </div>
+                <div>
+                  <label for="pcCustomCourseInput" class="text-slate-300 font-semibold block mb-0.5">🏫 Curso / Centro / Materia:</label>
+                  <input type="text" id="pcCustomCourseInput" placeholder="Ej: CEP Las Palmas · 2.º ESO" oninput="onPapercraftTextChange()" class="w-full bg-slate-950 border border-slate-700 focus:border-amber-400 rounded px-2 py-1 text-[11px] text-sky-200 outline-none" />
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                <div>
+                  <label for="pcCustomDateInput" class="text-slate-300 font-semibold block mb-0.5">📅 Fecha:</label>
+                  <input type="text" id="pcCustomDateInput" placeholder="Vacío = Fecha: ________" oninput="onPapercraftTextChange()" class="w-full bg-slate-950 border border-slate-700 focus:border-amber-400 rounded px-2 py-1 text-[11px] text-slate-200 outline-none" />
+                </div>
+                <div>
+                  <label for="pcCustomNoteInput" class="text-slate-300 font-semibold block mb-0.5">💬 Subtítulo / Nota didáctica:</label>
+                  <input type="text" id="pcCustomNoteInput" placeholder="Ej: Pegar de abajo hacia arriba" oninput="onPapercraftTextChange()" class="w-full bg-slate-950 border border-slate-700 focus:border-amber-400 rounded px-2 py-1 text-[11px] text-emerald-200 outline-none" />
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-1.5 pt-1 border-t border-slate-700/60">
+                <div>
+                  <label for="pcCustomPiecePrefixInput" class="text-slate-300 font-semibold block mb-0.5">🧩 Prefijo en piezas:</label>
+                  <input type="text" id="pcCustomPiecePrefixInput" placeholder="Ej: Plataforma / Nivel" oninput="onPapercraftTextChange()" class="w-full bg-slate-950 border border-slate-700 focus:border-amber-400 rounded px-2 py-1 text-[11px] text-indigo-200 outline-none" />
+                </div>
+                <div>
+                  <label for="pcCustomGlueWordInput" class="text-slate-300 font-semibold block mb-0.5">🧴 Texto en pestañas:</label>
+                  <input type="text" id="pcCustomGlueWordInput" placeholder="PEGAR" oninput="onPapercraftTextChange()" class="w-full bg-slate-950 border border-slate-700 focus:border-amber-400 rounded px-2 py-1 text-[11px] text-emerald-300 font-bold outline-none" />
+                </div>
+              </div>
+
+              <details id="pcPieceTitlesDetails" class="pt-1 border-t border-slate-700/60">
+                <summary class="cursor-pointer text-[10px] font-bold text-amber-300 hover:text-amber-200 select-none">
+                  ✏️ Editar títulos individuales de cada pieza recortable
+                </summary>
+                <div id="pcPieceTitlesListContainer" class="mt-1.5 max-h-36 overflow-y-auto space-y-1 pr-1"></div>
+              </details>
+            </div>
           </div>
 
         </div>

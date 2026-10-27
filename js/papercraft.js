@@ -44,6 +44,15 @@ const papercraftState = {
   printStyle: 'color',              // 'color' (A todo color) | 'coloring' (Blanco y negro para colorear) | 'blueprint' (Técnico limpio)
   sheetFormat: 'A4_portrait',       // 'A4_portrait' (210x297) | 'A4_landscape' (297x210) | 'A3_landscape' (420x297)
   includeSchoolHeader: true,        // Incluir cajetín escolar superior con Nombre, Curso y Leyenda de Tijeras/Pegamento
+  // Textos editables del recortable (título, autoría, curso/centro, fecha, subtítulo/nota, prefijo de piezas y pestañas)
+  customTitle: '',
+  customAuthor: '',
+  customCourseCenter: '',
+  customDate: '',
+  customSubtitleNote: '',
+  customPiecePrefix: '',
+  customGlueWord: 'PEGAR',
+  customPieceTitles: {},            // { [shortCode]: 'Título personalizado de la pieza' }
   previewMode: 'sheets2d',          // 'sheets2d' (Hojas DIN A4 imprimibles) | 'assembled3d' (Vista 3D montada interactiva)
   activeSheetIndex: 0,
   foldProgressPct: 85,              // 0% (plano) .. 100% (doblado a 90° en vista 3D)
@@ -2436,6 +2445,126 @@ function buildPapercraftPieces() {
 }
 
 // ============================================================================
+// APLICACIÓN DE TEXTOS PERSONALIZABLES (TÍTULO, AUTORÍA, CENTRO Y PIEZAS)
+// ============================================================================
+function applyCustomTextsToPapercraftPieces(pieces) {
+  if (!Array.isArray(pieces)) return pieces;
+  const customPrefix = (papercraftState.customPiecePrefix || '').trim();
+  const customGlue = (papercraftState.customGlueWord || '').trim() || 'PEGAR';
+  const pieceTitlesMap = papercraftState.customPieceTitles || {};
+
+  pieces.forEach((p) => {
+    if (!p) return;
+    if (typeof p.defaultTitle !== 'string') p.defaultTitle = p.title || '';
+    if (typeof p.defaultSubtitle !== 'string') p.defaultSubtitle = p.subtitle || '';
+
+    const customIndividual = (pieceTitlesMap[p.shortCode] || '').trim();
+    if (customIndividual) {
+      p.title = customIndividual;
+    } else if (customPrefix && !p.isSpacerPiece && !p.isPeanaBase && !p.isCollarStrip) {
+      p.title = p.defaultTitle.replace(
+        /^(Plataforma Apilable|Plataforma|Capa Superpuesta|Capa|Figura Recortable|Red Desplegable 3D\s*—\s*Bloque)/i,
+        customPrefix
+      );
+    } else {
+      p.title = p.defaultTitle;
+    }
+
+    (p.glueTabs || []).forEach((gt) => {
+      if (!gt) return;
+      if (typeof gt.defaultLabel !== 'string') gt.defaultLabel = gt.label || '';
+      if (!gt.defaultLabel) {
+        gt.label = '';
+      } else if (customGlue.toUpperCase() !== 'PEGAR') {
+        gt.label = gt.defaultLabel.replace(/PEGAR/gi, customGlue);
+      } else {
+        gt.label = gt.defaultLabel;
+      }
+    });
+
+    (p.glueTargetZones || []).forEach((gz) => {
+      if (!gz) return;
+      if (typeof gz.defaultLabel !== 'string') gz.defaultLabel = gz.label || '';
+      if (!gz.defaultLabel) {
+        gz.label = '';
+      } else if (customGlue.toUpperCase() !== 'PEGAR') {
+        gz.label = gz.defaultLabel.replace(/PEGAR/gi, customGlue);
+      } else {
+        gz.label = gz.defaultLabel;
+      }
+    });
+  });
+
+  return pieces;
+}
+
+function getPapercraftHeaderTextConfig(sheet, prog) {
+  const typeNames = {
+    stacked_platforms: 'Plataformas 3D para Apilar',
+    layered_tabs: 'Recortable en Capas Superpuestas',
+    accordion_spacers: 'Recortable en Capas con Separadores Z',
+    standee_peana: 'Figuras Troqueladas con Peana 3D',
+    prism_net: 'Red Poliédrica 3D Desplegable'
+  };
+  const typeLabel = typeNames[papercraftState.cutoutType] || 'Recortable Escolar';
+  const totalSheets = Math.max(1, (papercraftState.packedSheets && papercraftState.packedSheets.length) || 1);
+  const sheetIdx = sheet ? (sheet.sheetIndex + 1) : 1;
+
+  const customTitle = (papercraftState.customTitle || '').trim();
+  const customAuthor = (papercraftState.customAuthor || '').trim();
+  const customCourse = (papercraftState.customCourseCenter || '').trim();
+  const customDate = (papercraftState.customDate || '').trim();
+  const customNote = (papercraftState.customSubtitleNote || '').trim();
+  const customGlue = (papercraftState.customGlueWord || '').trim() || 'PEGAR';
+
+  const headerTitleText = customTitle ? customTitle : typeLabel.toUpperCase();
+  const mainHeaderLine = '✂️ HOJA ' + sheetIdx + '/' + totalSheets + ' — ' + headerTitleText;
+
+  const baseProgress = prog
+    ? ('Progreso: Capas ' + prog.rangeLabel + ' de ' + prog.totalLayers + ' (' + prog.progressPct + '% · Eje ' + prog.axisLabel + ')')
+    : 'Recortable Escolar 3D';
+  const subProgressLine = customNote
+    ? (baseProgress + ' · ' + customNote)
+    : baseProgress;
+
+  const authorSeg = customAuthor ? ('Autoría: ' + customAuthor) : 'Alumno/a: ______________________';
+  const courseSeg = customCourse ? ('Curso/Centro: ' + customCourse) : 'Curso: ________';
+  const dateSeg = customDate ? ('Fecha: ' + customDate) : 'Fecha: ________';
+  const schoolMetaLine = authorSeg + '   ' + courseSeg + '   ' + dateSeg;
+
+  const legendLine = '━━✂━━ Cortar tijeras   — — — Doblar (Montaña)   — · — Doblar (Valle)   🧴 ' + customGlue;
+
+  const bookletTitle = customTitle
+    ? (customTitle + ' — Cuaderno de Recortables (LayerStudio 3D)')
+    : 'Cuaderno de Recortables Escolares (Tijeras y Pegamento) — LayerStudio 3D';
+
+  const metaParts = [];
+  if (customAuthor) metaParts.push('Autoría: ' + customAuthor);
+  if (customCourse) metaParts.push(customCourse);
+  if (customDate) metaParts.push('Fecha: ' + customDate);
+  if (customNote) metaParts.push(customNote);
+  const bookletMetaSummary = metaParts.length > 0
+    ? metaParts.join(' · ')
+    : 'Imprime a escala 100% (Tamaño real) y recorta por las líneas con tijeras';
+
+  const rawSlugSource = customTitle || (typeof state !== 'undefined' && state.modelName) || 'Recortable_Escolar';
+  const safeFileSlug = String(rawSlugSource).trim().replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'Recortable_Escolar';
+
+  return {
+    typeLabel,
+    totalSheets,
+    headerTitleText,
+    mainHeaderLine,
+    subProgressLine,
+    schoolMetaLine,
+    legendLine,
+    bookletTitle,
+    bookletMetaSummary,
+    safeFileSlug
+  };
+}
+
+// ============================================================================
 // MAQUETADOR AUTOMÁTICO EN HOJAS DIN A4 / DIN A3 PARA IMPRIMIR Y RECORTAR
 // ============================================================================
 function getPapercraftSheetDimensionsMM() {
@@ -2777,6 +2906,7 @@ function drawPapercraftSheetToContext(ctx, sheet, pxPerMM, offsetX = 0, offsetY 
 
   // Cabecera escolar + Dibujo del modelo con el progreso (estilo Guía Ilustrada) en cada A4
   const prog = computeSheetModelProgressLayout(sheet);
+  const txtCfg = getPapercraftHeaderTextConfig(sheet, prog);
   {
     const hBoxH = prog.hBoxH * pxPerMM;
     ctx.save();
@@ -2790,22 +2920,12 @@ function drawPapercraftSheetToContext(ctx, sheet, pxPerMM, offsetX = 0, offsetY 
     const subFont = Math.max(6.8, 2.25 * pxPerMM);
     const tinyFont = Math.max(6.0, 2.0 * pxPerMM);
 
-    const typeNames = {
-      stacked_platforms: 'Plataformas 3D para Apilar',
-      layered_tabs: 'Recortable en Capas Superpuestas',
-      accordion_spacers: 'Recortable en Capas con Separadores Z',
-      standee_peana: 'Figuras Troqueladas con Peana 3D',
-      prism_net: 'Red Poliédrica 3D Desplegable'
-    };
-    const typeLabel = typeNames[papercraftState.cutoutType] || 'Recortable Escolar';
-    const totalSheets = Math.max(1, (papercraftState.packedSheets && papercraftState.packedSheets.length) || 1);
-
     ctx.fillStyle = '#0f172a';
     ctx.font = 'bold ' + titleFont.toFixed(1) + 'px sans-serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     ctx.fillText(
-      '✂️ HOJA ' + (sheet.sheetIndex + 1) + '/' + totalSheets + ' — ' + typeLabel.toUpperCase(),
+      txtCfg.mainHeaderLine,
       m + 2.5 * pxPerMM,
       m + 2.0 * pxPerMM
     );
@@ -2813,7 +2933,7 @@ function drawPapercraftSheetToContext(ctx, sheet, pxPerMM, offsetX = 0, offsetY 
     ctx.fillStyle = '#0369a1';
     ctx.font = 'bold ' + subFont.toFixed(1) + 'px sans-serif';
     ctx.fillText(
-      'Progreso en esta hoja: Capas ' + prog.rangeLabel + ' de ' + prog.totalLayers + ' (' + prog.progressPct + '% completado · Eje ' + prog.axisLabel + ')',
+      txtCfg.subProgressLine,
       m + 2.5 * pxPerMM,
       m + 7.2 * pxPerMM
     );
@@ -2822,7 +2942,7 @@ function drawPapercraftSheetToContext(ctx, sheet, pxPerMM, offsetX = 0, offsetY 
       ctx.fillStyle = '#334155';
       ctx.font = subFont.toFixed(1) + 'px sans-serif';
       ctx.fillText(
-        'Alumno/a: __________________________  Curso: ________  Fecha: ________',
+        txtCfg.schoolMetaLine,
         m + 2.5 * pxPerMM,
         m + 12.6 * pxPerMM
       );
@@ -2831,7 +2951,7 @@ function drawPapercraftSheetToContext(ctx, sheet, pxPerMM, offsetX = 0, offsetY 
     ctx.fillStyle = '#0f172a';
     ctx.font = 'bold ' + tinyFont.toFixed(1) + 'px sans-serif';
     ctx.fillText(
-      '━━✂━━ Cortar tijeras   — — — Doblar (Montaña)   — · — Doblar (Valle)   🧴 Pegamento',
+      txtCfg.legendLine,
       m + 2.5 * pxPerMM,
       m + 18.2 * pxPerMM
     );
@@ -3700,26 +3820,18 @@ function generatePapercraftSheetSVG(sheet) {
 
   // Cabecera escolar + Dibujo del modelo con el progreso (estilo Guía Ilustrada) en cada A4
   const prog = computeSheetModelProgressLayout(sheet);
+  const txtCfg = getPapercraftHeaderTextConfig(sheet, prog);
   {
     const hBoxH = prog.hBoxH;
-    const totalSheets = Math.max(1, (papercraftState.packedSheets && papercraftState.packedSheets.length) || 1);
-    const typeNames = {
-      stacked_platforms: 'Plataformas 3D para Apilar',
-      layered_tabs: 'Recortable en Capas Superpuestas',
-      accordion_spacers: 'Recortable en Capas con Separadores Z',
-      standee_peana: 'Figuras Troqueladas con Peana 3D',
-      prism_net: 'Red Poliédrica 3D Desplegable'
-    };
-    const typeLabel = typeNames[papercraftState.cutoutType] || 'Recortable Escolar';
 
     lines.push('  <g id="CAJETIN_Y_PROGRESO_MODELO">');
     lines.push('    <rect x="' + m.toFixed(2) + '" y="' + m.toFixed(2) + '" width="' + (sw - m * 2).toFixed(2) + '" height="' + hBoxH.toFixed(2) + '" fill="#f8fafc" stroke="#334155" stroke-width="0.35" />');
-    lines.push('    <text x="' + (m + 2.5).toFixed(2) + '" y="' + (m + 4.8).toFixed(2) + '" font-family="sans-serif" font-size="3.1" font-weight="bold" fill="#0f172a">' + escapeXml('✂️ HOJA ' + (sheet.sheetIndex + 1) + '/' + totalSheets + ' — ' + typeLabel.toUpperCase()) + '</text>');
-    lines.push('    <text x="' + (m + 2.5).toFixed(2) + '" y="' + (m + 9.6).toFixed(2) + '" font-family="sans-serif" font-size="2.3" font-weight="bold" fill="#0369a1">' + escapeXml('Progreso en esta hoja: Capas ' + prog.rangeLabel + ' de ' + prog.totalLayers + ' (' + prog.progressPct + '% completado · Eje ' + prog.axisLabel + ')') + '</text>');
+    lines.push('    <text x="' + (m + 2.5).toFixed(2) + '" y="' + (m + 4.8).toFixed(2) + '" font-family="sans-serif" font-size="3.1" font-weight="bold" fill="#0f172a">' + escapeXml(txtCfg.mainHeaderLine) + '</text>');
+    lines.push('    <text x="' + (m + 2.5).toFixed(2) + '" y="' + (m + 9.6).toFixed(2) + '" font-family="sans-serif" font-size="2.3" font-weight="bold" fill="#0369a1">' + escapeXml(txtCfg.subProgressLine) + '</text>');
     if (papercraftState.includeSchoolHeader) {
-      lines.push('    <text x="' + (m + 2.5).toFixed(2) + '" y="' + (m + 14.8).toFixed(2) + '" font-family="sans-serif" font-size="2.2" fill="#334155">Alumno/a: __________________________  Curso: ________  Fecha: ________</text>');
+      lines.push('    <text x="' + (m + 2.5).toFixed(2) + '" y="' + (m + 14.8).toFixed(2) + '" font-family="sans-serif" font-size="2.2" fill="#334155">' + escapeXml(txtCfg.schoolMetaLine) + '</text>');
     }
-    lines.push('    <text x="' + (m + 2.5).toFixed(2) + '" y="' + (m + 20.2).toFixed(2) + '" font-family="sans-serif" font-size="2.0" font-weight="bold" fill="#0f172a">━━✂━━ Cortar tijeras   — — — Doblar (Montaña)   — · — Doblar (Valle)   🧴 Pegamento</text>');
+    lines.push('    <text x="' + (m + 2.5).toFixed(2) + '" y="' + (m + 20.2).toFixed(2) + '" font-family="sans-serif" font-size="2.0" font-weight="bold" fill="#0f172a">' + escapeXml(txtCfg.legendLine) + '</text>');
 
     // Barra visual de progreso
     const barX = m + 2.5;
@@ -3948,6 +4060,11 @@ function buildPapercraftPrintableHTMLDocument() {
     ? 'A3 landscape'
     : (isLandscape ? 'A4 landscape' : 'A4 portrait');
 
+  const escapeHtml = typeof escapeXmlAttr === 'function'
+    ? escapeXmlAttr
+    : (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const txtCfg = getPapercraftHeaderTextConfig(papercraftState.packedSheets[0], null);
+
   const svgsHtml = papercraftState.packedSheets.map((sh) => {
     const svgRaw = generatePapercraftSheetSVG(sh).replace(/<\?xml[^>]*\?>\s*/i, '');
     return '<div class="sheet-page">' + svgRaw + '</div>';
@@ -3958,7 +4075,7 @@ function buildPapercraftPrintableHTMLDocument() {
     '<html lang="es">',
     '<head>',
     '  <meta charset="UTF-8" />',
-    '  <title>Cuaderno de Recortables Escolares (Tijeras y Pegamento) — LayerStudio 3D</title>',
+    '  <title>' + escapeHtml(txtCfg.bookletTitle) + '</title>',
     '  <style>',
     '    @page { size: ' + pageSizeCss + '; margin: 0mm; }',
     '    * { box-sizing: border-box; margin: 0; padding: 0; }',
@@ -3976,7 +4093,7 @@ function buildPapercraftPrintableHTMLDocument() {
     '</head>',
     '<body>',
     '  <div class="toolbar">',
-    '    <div><strong>✂️ Cuaderno de Recortables Escolares — LayerStudio 3D</strong> · Imprime a escala 100% (Tamaño real) y recorta por las líneas con tijeras</div>',
+    '    <div><strong>✂️ ' + escapeHtml(txtCfg.bookletTitle) + '</strong> · ' + escapeHtml(txtCfg.bookletMetaSummary) + '</div>',
     '    <button onclick="window.print()">🖨️ Imprimir / Guardar como PDF</button>',
     '  </div>',
     svgsHtml,
@@ -4003,7 +4120,8 @@ function printPapercraftSheetsA4() {
 function downloadPapercraftBookletHTML() {
   const htmlDoc = buildPapercraftPrintableHTMLDocument();
   const blob = new Blob([htmlDoc], { type: 'text/html;charset=utf-8' });
-  const filename = (state.modelName || 'Recortable_Escolar') + '_CUADERNO_RECORTABLE_A4.html';
+  const txtCfg = getPapercraftHeaderTextConfig(null, null);
+  const filename = txtCfg.safeFileSlug + '_CUADERNO_RECORTABLE_A4.html';
   if (typeof triggerVectorizerFileDownload === 'function') {
     triggerVectorizerFileDownload(blob, filename);
   } else {
@@ -4025,7 +4143,8 @@ function downloadPapercraftSheetsSVG() {
   if (!sheet) return;
   const svg = generatePapercraftSheetSVG(sheet);
   const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
-  const filename = (state.modelName || 'Recortable_Escolar') + '_HOJA_' + (activeIdx + 1) + '_TIJERAS_Y_PESTANAS.svg';
+  const txtCfg = getPapercraftHeaderTextConfig(sheet, null);
+  const filename = txtCfg.safeFileSlug + '_HOJA_' + (activeIdx + 1) + '_TIJERAS_Y_PESTANAS.svg';
   if (typeof triggerVectorizerFileDownload === 'function') {
     triggerVectorizerFileDownload(blob, filename);
   }
@@ -4351,12 +4470,88 @@ function renderPapercraftMultiImagesListUI() {
 // CONTROLADORES DE FLUJO PRINCIPAL DEL ESTUDIO DE RECORTABLES
 // ============================================================================
 function runPapercraftGeneration() {
-  papercraftState.generatedPieces = buildPapercraftPieces();
+  const rawPieces = buildPapercraftPieces();
+  papercraftState.generatedPieces = applyCustomTextsToPapercraftPieces(rawPieces);
   papercraftState.packedSheets = packPapercraftPiecesIntoSheets(papercraftState.generatedPieces);
   if (papercraftState.activeSheetIndex >= papercraftState.packedSheets.length) {
     papercraftState.activeSheetIndex = 0;
   }
+  renderPapercraftPieceTitlesEditorUI();
   updatePapercraftStatsAndSheetNavUI();
+  renderPapercraftPreviewCanvas();
+}
+
+function renderPapercraftPieceTitlesEditorUI() {
+  const container = document.getElementById('pcPieceTitlesListContainer');
+  if (!container) return;
+  const pieces = papercraftState.generatedPieces || [];
+  if (pieces.length === 0) {
+    container.innerHTML = '<div class="text-[10px] text-slate-400 py-1">No hay piezas generadas todavía.</div>';
+    return;
+  }
+  const escapeAttr = typeof escapeXmlAttr === 'function'
+    ? escapeXmlAttr
+    : (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  container.innerHTML = pieces.map((p) => {
+    const code = p.shortCode || 'P';
+    const currVal = (papercraftState.customPieceTitles && papercraftState.customPieceTitles[code]) || '';
+    const placeholderText = p.defaultTitle || p.title || '';
+    return (
+      '<div class="flex items-center gap-1.5 bg-slate-950/90 border border-slate-800 rounded px-1.5 py-1">' +
+        '<span class="font-mono font-bold text-[10px] text-amber-300 shrink-0 min-w-[44px]">[' + escapeAttr(code) + ']</span>' +
+        '<input type="text" data-piece-code="' + escapeAttr(code) + '" value="' + escapeAttr(currVal) + '" placeholder="' + escapeAttr(placeholderText) + '" oninput="onPapercraftIndividualPieceTitleInput(this.dataset.pieceCode, this.value)" class="w-full bg-slate-900 border border-slate-700 focus:border-amber-400 rounded px-1.5 py-0.5 text-[10px] text-slate-100 outline-none" />' +
+      '</div>'
+    );
+  }).join('');
+}
+
+function onPapercraftIndividualPieceTitleInput(shortCode, value) {
+  if (!shortCode) return;
+  if (!papercraftState.customPieceTitles) {
+    papercraftState.customPieceTitles = {};
+  }
+  const trimmed = String(value == null ? '' : value);
+  if (trimmed.trim()) {
+    papercraftState.customPieceTitles[shortCode] = trimmed;
+  } else {
+    delete papercraftState.customPieceTitles[shortCode];
+  }
+  applyCustomTextsToPapercraftPieces(papercraftState.generatedPieces);
+  renderPapercraftPreviewCanvas();
+}
+
+function onPapercraftTextChange() {
+  const getVal = (id, fallback) => {
+    const el = document.getElementById(id);
+    return el ? el.value : fallback;
+  };
+  papercraftState.customTitle = getVal('pcCustomTitleInput', papercraftState.customTitle || '');
+  papercraftState.customAuthor = getVal('pcCustomAuthorInput', papercraftState.customAuthor || '');
+  papercraftState.customCourseCenter = getVal('pcCustomCourseInput', papercraftState.customCourseCenter || '');
+  papercraftState.customDate = getVal('pcCustomDateInput', papercraftState.customDate || '');
+  papercraftState.customSubtitleNote = getVal('pcCustomNoteInput', papercraftState.customSubtitleNote || '');
+  papercraftState.customPiecePrefix = getVal('pcCustomPiecePrefixInput', papercraftState.customPiecePrefix || '');
+  papercraftState.customGlueWord = getVal('pcCustomGlueWordInput', papercraftState.customGlueWord || 'PEGAR') || 'PEGAR';
+
+  applyCustomTextsToPapercraftPieces(papercraftState.generatedPieces);
+  renderPapercraftPieceTitlesEditorUI();
+  renderPapercraftPreviewCanvas();
+}
+
+function resetPapercraftCustomTexts() {
+  papercraftState.customTitle = '';
+  papercraftState.customAuthor = '';
+  papercraftState.customCourseCenter = '';
+  papercraftState.customDate = '';
+  papercraftState.customSubtitleNote = '';
+  papercraftState.customPiecePrefix = '';
+  papercraftState.customGlueWord = 'PEGAR';
+  papercraftState.customPieceTitles = {};
+
+  syncPapercraftControlsUI();
+  applyCustomTextsToPapercraftPieces(papercraftState.generatedPieces);
+  renderPapercraftPieceTitlesEditorUI();
   renderPapercraftPreviewCanvas();
 }
 
@@ -4543,6 +4738,20 @@ function syncPapercraftControlsUI() {
 
   const lblExplode = document.getElementById('pcExplodeValLabel');
   if (lblExplode) lblExplode.textContent = Math.round(papercraftState.explodeLayersPct) + '%';
+
+  const setInputValIfDiff = (id, val) => {
+    const el = document.getElementById(id);
+    if (el && el.value !== String(val == null ? '' : val)) {
+      el.value = String(val == null ? '' : val);
+    }
+  };
+  setInputValIfDiff('pcCustomTitleInput', papercraftState.customTitle || '');
+  setInputValIfDiff('pcCustomAuthorInput', papercraftState.customAuthor || '');
+  setInputValIfDiff('pcCustomCourseInput', papercraftState.customCourseCenter || '');
+  setInputValIfDiff('pcCustomDateInput', papercraftState.customDate || '');
+  setInputValIfDiff('pcCustomNoteInput', papercraftState.customSubtitleNote || '');
+  setInputValIfDiff('pcCustomPiecePrefixInput', papercraftState.customPiecePrefix || '');
+  setInputValIfDiff('pcCustomGlueWordInput', papercraftState.customGlueWord || 'PEGAR');
 }
 
 function openPapercraftModal(initialSourceMode) {
@@ -4701,6 +4910,12 @@ if (typeof window !== 'undefined') {
   window.setPapercraftCutoutType = setPapercraftCutoutType;
   window.setPapercraftPreviewMode = setPapercraftPreviewMode;
   window.onPapercraftParamsChange = onPapercraftParamsChange;
+  window.onPapercraftTextChange = onPapercraftTextChange;
+  window.onPapercraftIndividualPieceTitleInput = onPapercraftIndividualPieceTitleInput;
+  window.resetPapercraftCustomTexts = resetPapercraftCustomTexts;
+  window.renderPapercraftPieceTitlesEditorUI = renderPapercraftPieceTitlesEditorUI;
+  window.applyCustomTextsToPapercraftPieces = applyCustomTextsToPapercraftPieces;
+  window.getPapercraftHeaderTextConfig = getPapercraftHeaderTextConfig;
   window.runPapercraftGeneration = runPapercraftGeneration;
   window.stepPapercraftSheetPage = stepPapercraftSheetPage;
   window.resetPapercraftViewport = resetPapercraftViewport;
