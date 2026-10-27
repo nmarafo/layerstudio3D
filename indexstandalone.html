@@ -23199,11 +23199,18 @@ const papercraftState = {
     yaw: -0.62,
     pitch: 0.52,
     zoom: 1.0,
+    panX: 0,
+    panY: 0,
     isDragging: false,
+    dragButton: 0,
     startX: 0,
     startY: 0,
+    lastX: 0,
+    lastY: 0,
     startYaw: -0.62,
-    startPitch: 0.52
+    startPitch: 0.52,
+    startPanX: 0,
+    startPanY: 0
   }
 };
 
@@ -26475,8 +26482,8 @@ function renderPapercraft3DPreviewOnCanvas(canvas) {
 
   const maxSpan = Math.max(wMM, hMM, baseLayers.length * wallH * 1.6) * 1.45;
   const baseScale = (Math.min(canvas.width, canvas.height) / maxSpan) * papercraftState.view3D.zoom;
-  const cx = canvas.width * 0.5;
-  const cy = canvas.height * 0.56;
+  const cx = canvas.width * 0.5 + (papercraftState.view3D.panX || 0);
+  const cy = canvas.height * 0.56 + (papercraftState.view3D.panY || 0);
 
   const project3D = (x, y, z) => {
     const rx = x * cosY - y * sinY;
@@ -26745,7 +26752,7 @@ function renderPapercraft3DPreviewOnCanvas(canvas) {
   ctx.font = 'bold 11px sans-serif';
   ctx.textAlign = 'left';
   ctx.fillText(
-    '🧊 Simulación 3D del Recortable Montado · Plegado: ' + Math.round(foldFrac * 100) + '% · Separación capas: ' + Math.round(explodeFrac * 100) + '% (Arrastra con el ratón para rotar)',
+    '🧊 Simulación 3D del Recortable Montado · Plegado: ' + Math.round(foldFrac * 100) + '% · Separación capas: ' + Math.round(explodeFrac * 100) + '% (Arrastrar: rotar · Shift + Arrastrar: desplazar)',
     14,
     22
   );
@@ -27720,6 +27727,8 @@ function resetPapercraftViewport() {
   papercraftState.view3D.yaw = -0.62;
   papercraftState.view3D.pitch = 0.52;
   papercraftState.view3D.zoom = 1.0;
+  papercraftState.view3D.panX = 0;
+  papercraftState.view3D.panY = 0;
   renderPapercraftPreviewCanvas();
 }
 
@@ -27737,6 +27746,10 @@ function bindPapercraftCanvasEvents() {
   if (!canvas || canvas.dataset.boundEvents === '1') return;
   canvas.dataset.boundEvents = '1';
 
+  canvas.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+  });
+
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
     const factor = e.deltaY < 0 ? 1.14 : 0.88;
@@ -27744,13 +27757,18 @@ function bindPapercraftCanvasEvents() {
   }, { passive: false });
 
   canvas.addEventListener('pointerdown', (e) => {
-    if (e.button !== 0 && e.button !== 1) return;
+    if (e.button !== 0 && e.button !== 1 && e.button !== 2) return;
     if (papercraftState.previewMode === 'assembled3d') {
       papercraftState.view3D.isDragging = true;
+      papercraftState.view3D.dragButton = e.button;
       papercraftState.view3D.startX = e.clientX;
       papercraftState.view3D.startY = e.clientY;
+      papercraftState.view3D.lastX = e.clientX;
+      papercraftState.view3D.lastY = e.clientY;
       papercraftState.view3D.startYaw = papercraftState.view3D.yaw;
       papercraftState.view3D.startPitch = papercraftState.view3D.pitch;
+      papercraftState.view3D.startPanX = papercraftState.view3D.panX || 0;
+      papercraftState.view3D.startPanY = papercraftState.view3D.panY || 0;
     } else {
       papercraftState.view2D.isDragging = true;
       papercraftState.view2D.startX = e.clientX;
@@ -27763,10 +27781,19 @@ function bindPapercraftCanvasEvents() {
 
   canvas.addEventListener('pointermove', (e) => {
     if (papercraftState.previewMode === 'assembled3d' && papercraftState.view3D.isDragging) {
-      const dx = e.clientX - papercraftState.view3D.startX;
-      const dy = e.clientY - papercraftState.view3D.startY;
-      papercraftState.view3D.yaw = papercraftState.view3D.startYaw + dx * 0.01;
-      papercraftState.view3D.pitch = Math.max(0.08, Math.min(1.45, papercraftState.view3D.startPitch + dy * 0.01));
+      const stepDx = e.clientX - papercraftState.view3D.lastX;
+      const stepDy = e.clientY - papercraftState.view3D.lastY;
+      papercraftState.view3D.lastX = e.clientX;
+      papercraftState.view3D.lastY = e.clientY;
+
+      const isPanGesture = e.shiftKey || e.ctrlKey || e.metaKey || papercraftState.view3D.dragButton === 1 || papercraftState.view3D.dragButton === 2;
+      if (isPanGesture) {
+        papercraftState.view3D.panX = (papercraftState.view3D.panX || 0) + stepDx;
+        papercraftState.view3D.panY = (papercraftState.view3D.panY || 0) + stepDy;
+      } else {
+        papercraftState.view3D.yaw += stepDx * 0.01;
+        papercraftState.view3D.pitch = Math.max(0.08, Math.min(1.45, papercraftState.view3D.pitch + stepDy * 0.01));
+      }
       renderPapercraftPreviewCanvas();
     } else if (papercraftState.view2D.isDragging) {
       const dx = e.clientX - papercraftState.view2D.startX;
