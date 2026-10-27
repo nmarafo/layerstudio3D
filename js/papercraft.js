@@ -68,6 +68,36 @@ const papercraftState = {
   // Resultado geométrico generado: piezas individuales y hojas DIN A4 maquetadas
   generatedPieces: [],
   packedSheets: [],
+  // Configuración de Corte Láser / Cricut: Ordenación en Tableros (Apartado 5) e Inclusión en Tablero Mayor / Soporte Mayor (Apartado 6)
+  laserFoldMode: 'dashed_cut',      // 'dashed_cut' (Corte discontinuo perforado universal) | 'score_solid' (Línea continua de hendido/marcado) | 'perforated_cut_layer' (Perforado en misma capa de corte interior)
+  laserDashLenMM: 3.5,              // Longitud del trazo cortado en pliegues perforados (mm)
+  laserGapLenMM: 1.8,               // Puente sin cortar entre trazos de pliegue (mm)
+  laserEngraveCode: true,           // Grabar código vectorial Hershey (C1, P1...) dentro de cada pieza
+  laserEngraveGlueGuides: true,     // Incluir contornos guía de zonas de pegado y etiquetas de pestañas
+  boardCutBorder: false,            // Incluir rectángulo de corte exterior del tablero
+  boardWidthMM: typeof state !== 'undefined' && state.boardWidthMM ? state.boardWidthMM : 300,
+  boardHeightMM: typeof state !== 'undefined' && state.boardHeightMM ? state.boardHeightMM : 250,
+  nestSpacingMM: typeof state !== 'undefined' && state.nestSpacingMM != null ? state.nestSpacingMM : 3,
+  nestMarginMM: typeof state !== 'undefined' && state.nestMarginMM != null ? state.nestMarginMM : 5,
+  nestAllowRotate: typeof state !== 'undefined' && state.nestAllowRotate != null ? Boolean(state.nestAllowRotate) : true,
+  nestUseInnerHoles: typeof state !== 'undefined' && state.nestUseInnerHoles != null ? Boolean(state.nestUseInnerHoles) : true,
+  nestClipOversized: typeof state !== 'undefined' && state.nestClipOversized != null ? Boolean(state.nestClipOversized) : true,
+  carrierEnabled: typeof state !== 'undefined' && state.carrierEnabled != null ? Boolean(state.carrierEnabled) : false,
+  carrierWidthMM: typeof state !== 'undefined' && state.carrierWidthMM ? state.carrierWidthMM : 1220,
+  carrierHeightMM: typeof state !== 'undefined' && state.carrierHeightMM ? state.carrierHeightMM : 800,
+  carrierSpacingMM: typeof state !== 'undefined' && state.carrierSpacingMM != null ? state.carrierSpacingMM : 8,
+  carrierMarginMM: typeof state !== 'undefined' && state.carrierMarginMM != null ? state.carrierMarginMM : 10,
+  carrierAllowRotate: typeof state !== 'undefined' && state.carrierAllowRotate != null ? Boolean(state.carrierAllowRotate) : true,
+  carrierCutBoardBorders: typeof state !== 'undefined' && state.carrierCutBoardBorders != null ? Boolean(state.carrierCutBoardBorders) : true,
+  carrierCutOuterBorder: typeof state !== 'undefined' && state.carrierCutOuterBorder != null ? Boolean(state.carrierCutOuterBorder) : false,
+  carrierEngraveBoardLabels: typeof state !== 'undefined' && state.carrierEngraveBoardLabels != null ? Boolean(state.carrierEngraveBoardLabels) : true,
+  laserBoards: [],
+  laserCarriers: [],
+  activeLaserBoardIndex: 0,
+  activeLaserCarrierIndex: 0,
+  unfitLaserPiecesCount: 0,
+  scaledLaserPiecesCount: 0,
+  unfitLaserBoardsCount: 0,
   // Viewport interactivo 2D y 3D del modal
   view2D: {
     zoom: 1,
@@ -2788,6 +2818,490 @@ function packPapercraftPiecesIntoSheets(pieces) {
 }
 
 // ============================================================================
+// MOTOR DE ANIDADO MAXRECTS EN TABLEROS DE CORTE LÁSER / CRICUT Y SOPORTE MAYOR
+// ============================================================================
+function splitPapercraftFreeRects(freeRects, usedRect, spacing) {
+  const nextFree = [];
+  for (let i = 0; i < freeRects.length; i++) {
+    const fr = freeRects[i];
+    if (
+      usedRect.x >= fr.x + fr.w ||
+      usedRect.x + usedRect.w <= fr.x ||
+      usedRect.y >= fr.y + fr.h ||
+      usedRect.y + usedRect.h <= fr.y
+    ) {
+      nextFree.push(fr);
+      continue;
+    }
+    if (usedRect.x > fr.x) {
+      nextFree.push({ x: fr.x, y: fr.y, w: usedRect.x - fr.x, h: fr.h });
+    }
+    if (usedRect.x + usedRect.w < fr.x + fr.w) {
+      nextFree.push({
+        x: usedRect.x + usedRect.w,
+        y: fr.y,
+        w: (fr.x + fr.w) - (usedRect.x + usedRect.w),
+        h: fr.h
+      });
+    }
+    if (usedRect.y > fr.y) {
+      nextFree.push({ x: fr.x, y: fr.y, w: fr.w, h: usedRect.y - fr.y });
+    }
+    if (usedRect.y + usedRect.h < fr.y + fr.h) {
+      nextFree.push({
+        x: fr.x,
+        y: usedRect.y + usedRect.h,
+        w: fr.w,
+        h: (fr.y + fr.h) - (usedRect.y + usedRect.h)
+      });
+    }
+  }
+
+  const pruned = [];
+  for (let i = 0; i < nextFree.length; i++) {
+    const a = nextFree[i];
+    if (a.w <= spacing + 0.5 || a.h <= spacing + 0.5) continue;
+    let contained = false;
+    for (let j = 0; j < nextFree.length; j++) {
+      if (i === j) continue;
+      const b = nextFree[j];
+      if (
+        a.x >= b.x - 1e-4 &&
+        a.y >= b.y - 1e-4 &&
+        a.x + a.w <= b.x + b.w + 1e-4 &&
+        a.y + a.h <= b.y + b.h + 1e-4
+      ) {
+        const areaA = a.w * a.h;
+        const areaB = b.w * b.h;
+        if (areaA < areaB - 1e-3 || (Math.abs(areaA - areaB) <= 1e-3 && i > j)) {
+          contained = true;
+          break;
+        }
+      }
+    }
+    if (!contained) pruned.push(a);
+  }
+  return pruned;
+}
+
+function packPapercraftPiecesIntoLaserBoards(pieces) {
+  const boardW = Math.max(20, Number(papercraftState.boardWidthMM) || 300);
+  const boardH = Math.max(20, Number(papercraftState.boardHeightMM) || 250);
+  const margin = Math.max(0, Number(papercraftState.nestMarginMM) || 0);
+  const spacing = Math.max(0, Number(papercraftState.nestSpacingMM) || 0);
+  const allowRot = Boolean(papercraftState.nestAllowRotate);
+  const useHoles = Boolean(papercraftState.nestUseInnerHoles);
+  const autoFitOversized = Boolean(papercraftState.nestClipOversized);
+
+  const usableW = Math.max(2, boardW - margin * 2);
+  const usableH = Math.max(2, boardH - margin * 2);
+
+  // Ordenar piezas por área envolvente decreciente para optimizar el empaquetado MaxRects
+  const indexedPieces = (pieces || []).map((piece, idx) => ({
+    piece,
+    originalIndex: idx,
+    bboxArea: Math.max(1, (piece.bounds ? piece.bounds.width : 10) * (piece.bounds ? piece.bounds.height : 10))
+  })).sort((a, b) => b.bboxArea - a.bboxArea);
+
+  const boards = [];
+  let unfitCount = 0;
+  let scaledCount = 0;
+
+  const createNewLaserBoard = () => {
+    const b = {
+      boardIndex: boards.length,
+      width: boardW,
+      height: boardH,
+      margin: margin,
+      spacing: spacing,
+      freeRects: [{ x: margin, y: margin, w: usableW, h: usableH }],
+      placements: [],
+      usedArea: 0,
+      efficiency: 0
+    };
+    boards.push(b);
+    return b;
+  };
+
+  indexedPieces.forEach((entry) => {
+    const piece = entry.piece;
+    const b = piece.bounds || computePolygonBounds2D(piece.outerCutPoints || []);
+    let w0 = Math.max(0.5, b.width);
+    let h0 = Math.max(0.5, b.height);
+    let scaleFit = 1.0;
+
+    let fitsNormalInEmpty = (w0 <= usableW + 1e-4 && h0 <= usableH + 1e-4);
+    let fitsRotInEmpty = allowRot && (h0 <= usableW + 1e-4 && w0 <= usableH + 1e-4);
+    let fitsNormalTight = (w0 <= boardW + 1e-3 && h0 <= boardH + 1e-3);
+    let fitsRotTight = allowRot && (h0 <= boardW + 1e-3 && w0 <= boardH + 1e-3);
+
+    if (!fitsNormalInEmpty && !fitsRotInEmpty && !fitsNormalTight && !fitsRotTight) {
+      if (autoFitOversized) {
+        const scaleNormal = Math.min(usableW / w0, usableH / h0);
+        const scaleRot = allowRot ? Math.min(usableW / h0, usableH / w0) : 0;
+        scaleFit = Math.max(0.05, Math.max(scaleNormal, scaleRot) * 0.992);
+        w0 *= scaleFit;
+        h0 *= scaleFit;
+        fitsNormalInEmpty = (w0 <= usableW + 1e-4 && h0 <= usableH + 1e-4);
+        fitsRotInEmpty = allowRot && (h0 <= usableW + 1e-4 && w0 <= usableH + 1e-4);
+        fitsNormalTight = true;
+        fitsRotTight = allowRot;
+        scaledCount++;
+      } else {
+        unfitCount++;
+        return;
+      }
+    }
+
+    let bestBoard = null;
+    let bestX = 0;
+    let bestY = 0;
+    let bestRotated = false;
+    let bestScore1 = Infinity;
+    let bestScore2 = Infinity;
+
+    const tryFindOnBoard = (board) => {
+      for (let i = 0; i < board.freeRects.length; i++) {
+        const fr = board.freeRects[i];
+        if (w0 <= fr.w + 1e-4 && h0 <= fr.h + 1e-4) {
+          const areaFit = fr.w * fr.h - w0 * h0;
+          const shortFit = Math.min(fr.w - w0, fr.h - h0);
+          if (areaFit < bestScore1 || (Math.abs(areaFit - bestScore1) < 1e-3 && shortFit < bestScore2)) {
+            bestBoard = board;
+            bestX = fr.x;
+            bestY = fr.y;
+            bestRotated = false;
+            bestScore1 = areaFit;
+            bestScore2 = shortFit;
+          }
+        }
+        if (allowRot && h0 <= fr.w + 1e-4 && w0 <= fr.h + 1e-4) {
+          const areaFit = fr.w * fr.h - w0 * h0;
+          const shortFit = Math.min(fr.w - h0, fr.h - w0);
+          if (areaFit < bestScore1 || (Math.abs(areaFit - bestScore1) < 1e-3 && shortFit < bestScore2)) {
+            bestBoard = board;
+            bestX = fr.x;
+            bestY = fr.y;
+            bestRotated = true;
+            bestScore1 = areaFit;
+            bestScore2 = shortFit;
+          }
+        }
+      }
+    };
+
+    for (let bIdx = 0; bIdx < boards.length; bIdx++) {
+      tryFindOnBoard(boards[bIdx]);
+      if (bestBoard) break;
+    }
+
+    if (!bestBoard) {
+      const nb = createNewLaserBoard();
+      if (fitsNormalInEmpty || fitsRotInEmpty) {
+        tryFindOnBoard(nb);
+      } else {
+        bestBoard = nb;
+        bestRotated = !fitsNormalTight && fitsRotTight;
+        const pW = bestRotated ? h0 : w0;
+        const pH = bestRotated ? w0 : h0;
+        bestX = Math.max(0, Math.min(margin, (boardW - pW) * 0.5));
+        bestY = Math.max(0, Math.min(margin, (boardH - pH) * 0.5));
+      }
+    }
+
+    if (!bestBoard) {
+      unfitCount++;
+      return;
+    }
+
+    const placedW = bestRotated ? h0 : w0;
+    const placedH = bestRotated ? w0 : h0;
+    const usedRect = { x: bestX, y: bestY, w: placedW + spacing, h: placedH + spacing };
+    bestBoard.freeRects = splitPapercraftFreeRects(bestBoard.freeRects, usedRect, spacing);
+
+    const pieceArea = Math.abs(computeSignedPolygonArea(piece.outerCutPoints || [])) * scaleFit * scaleFit;
+    bestBoard.usedArea += pieceArea;
+
+    // Transformación desde coordenadas locales de la pieza (Y hacia arriba) a coordenadas del tablero (0..boardW, 0..boardH con Y hacia arriba)
+    const transformPt = (pt) => {
+      const lx = (pt.x - b.minX) * scaleFit;
+      const ly = (pt.y - b.minY) * scaleFit;
+      if (!bestRotated) {
+        return { x: bestX + lx, y: bestY + ly };
+      }
+      return { x: bestX + (h0 - ly), y: bestY + lx };
+    };
+
+    const placedOuter = (piece.outerCutPoints || []).map(transformPt);
+    const placedBody = (piece.bodyPolygon || piece.outerCutPoints || []).map(transformPt);
+    const placedHoles = (piece.holePolygons || []).map((hp) => {
+      const pts = (hp || []).map(transformPt);
+      const area = Math.abs(computeSignedPolygonArea(pts));
+      return { points: pts, absArea: area };
+    });
+    const placedFoldLines = (piece.foldLines || []).map((fl) => ({
+      type: fl.type || 'mountain',
+      points: (fl.points || []).map(transformPt)
+    }));
+    const placedGlueTabs = (piece.glueTabs || []).map((gt) => {
+      const tfFold = (gt.foldLine || []).map(transformPt);
+      const tfPoly = (gt.polygon || []).map(transformPt);
+      const tfCenter = gt.center ? transformPt(gt.center) : (tfPoly[0] || { x: bestX, y: bestY });
+      let tfAngle = gt.angleRad || 0;
+      if (tfFold.length >= 2) {
+        tfAngle = Math.atan2(tfFold[1].y - tfFold[0].y, tfFold[1].x - tfFold[0].x);
+      }
+      return {
+        id: gt.id,
+        label: gt.label,
+        foldLine: tfFold,
+        polygon: tfPoly,
+        center: tfCenter,
+        angleRad: tfAngle
+      };
+    });
+    const placedGlueZones = (piece.glueTargetZones || []).map((gz) => ({
+      polygon: (gz.polygon || []).map(transformPt),
+      holePolygons: (gz.holePolygons || []).map((hp) => (hp || []).map(transformPt)),
+      center: gz.center ? transformPt(gz.center) : null,
+      label: gz.label || ''
+    }));
+
+    const bodyBounds = computePolygonBounds2D(placedBody.length >= 3 ? placedBody : placedOuter);
+    const labelCenter = { x: bodyBounds.cx, y: bodyBounds.cy };
+    const fontSizeMM = Math.max(1.8, Math.min(5.2, Math.min(bodyBounds.width, bodyBounds.height) * 0.14));
+
+    const placement = {
+      piece,
+      originalIndex: entry.originalIndex,
+      shortCode: piece.shortCode || ('P' + (entry.originalIndex + 1)),
+      title: piece.title || '',
+      colorObj: piece.colorObj,
+      x: bestX,
+      y: bestY,
+      w: placedW,
+      h: placedH,
+      rotated: bestRotated,
+      scaleFit,
+      outerPoints: placedOuter,
+      bodyPolygon: placedBody,
+      holes: placedHoles,
+      foldLines: placedFoldLines,
+      glueTabs: placedGlueTabs,
+      glueZones: placedGlueZones,
+      labelCenter,
+      fontSizeMM
+    };
+
+    bestBoard.placements.push(placement);
+
+    // Aprovechar huecos interiores grandes para anidar piezas menores
+    if (useHoles && placedHoles.length > 0 && typeof findInscribedFreeRectInHole === 'function') {
+      placedHoles.forEach((hLoop) => {
+        if (hLoop.absArea > 350) {
+          const inscribed = findInscribedFreeRectInHole(hLoop.points, spacing);
+          if (inscribed) {
+            bestBoard.freeRects.push(inscribed);
+          }
+        }
+      });
+    }
+  });
+
+  boards.forEach((b) => {
+    b.efficiency = Math.min(100, (b.usedArea / Math.max(1, boardW * boardH)) * 100);
+  });
+
+  return { boards, unfitCount, scaledCount };
+}
+
+function packPapercraftLaserBoardsIntoCarriers(boards) {
+  if (!boards || boards.length === 0) {
+    return { carriers: [], unfitBoardsCount: 0 };
+  }
+
+  const carrierW = Math.max(50, Number(papercraftState.carrierWidthMM) || 1220);
+  const carrierH = Math.max(50, Number(papercraftState.carrierHeightMM) || 800);
+  const margin = Math.max(0, Number(papercraftState.carrierMarginMM) || 0);
+  const spacing = Math.max(0, Number(papercraftState.carrierSpacingMM) || 0);
+  const allowRot = Boolean(papercraftState.carrierAllowRotate);
+
+  const usableW = Math.max(2, carrierW - margin * 2);
+  const usableH = Math.max(2, carrierH - margin * 2);
+
+  const carriers = [];
+  let unfitBoardsCount = 0;
+
+  const createNewCarrier = () => {
+    const c = {
+      carrierIndex: carriers.length,
+      width: carrierW,
+      height: carrierH,
+      margin: margin,
+      spacing: spacing,
+      freeRects: [{ x: margin, y: margin, w: usableW, h: usableH }],
+      boardPlacements: [],
+      usedBoardsArea: 0,
+      totalPieces: 0,
+      efficiency: 0
+    };
+    carriers.push(c);
+    return c;
+  };
+
+  boards.forEach((board) => {
+    const bw = board.width;
+    const bh = board.height;
+
+    const fitsNormalInEmpty = (bw <= usableW + 1e-4 && bh <= usableH + 1e-4);
+    const fitsRotInEmpty = allowRot && (bh <= usableW + 1e-4 && bw <= usableH + 1e-4);
+    const fitsNormalTight = (bw <= carrierW + 1e-3 && bh <= carrierH + 1e-3);
+    const fitsRotTight = allowRot && (bh <= carrierW + 1e-3 && bw <= carrierH + 1e-3);
+
+    if (!fitsNormalInEmpty && !fitsRotInEmpty && !fitsNormalTight && !fitsRotTight) {
+      unfitBoardsCount++;
+      return;
+    }
+
+    let bestCarrier = null;
+    let bestX = 0;
+    let bestY = 0;
+    let bestRotated = false;
+    let bestScore1 = Infinity;
+    let bestScore2 = Infinity;
+
+    const tryFindOnCarrier = (carrier) => {
+      for (let i = 0; i < carrier.freeRects.length; i++) {
+        const fr = carrier.freeRects[i];
+        if (bw <= fr.w + 1e-4 && bh <= fr.h + 1e-4) {
+          const areaFit = fr.w * fr.h - bw * bh;
+          const shortFit = Math.min(fr.w - bw, fr.h - bh);
+          if (areaFit < bestScore1 || (Math.abs(areaFit - bestScore1) < 1e-3 && shortFit < bestScore2)) {
+            bestCarrier = carrier;
+            bestX = fr.x;
+            bestY = fr.y;
+            bestRotated = false;
+            bestScore1 = areaFit;
+            bestScore2 = shortFit;
+          }
+        }
+        if (allowRot && bh <= fr.w + 1e-4 && bw <= fr.h + 1e-4) {
+          const areaFit = fr.w * fr.h - bw * bh;
+          const shortFit = Math.min(fr.w - bh, fr.h - bw);
+          if (areaFit < bestScore1 || (Math.abs(areaFit - bestScore1) < 1e-3 && shortFit < bestScore2)) {
+            bestCarrier = carrier;
+            bestX = fr.x;
+            bestY = fr.y;
+            bestRotated = true;
+            bestScore1 = areaFit;
+            bestScore2 = shortFit;
+          }
+        }
+      }
+    };
+
+    for (let cIdx = 0; cIdx < carriers.length; cIdx++) {
+      tryFindOnCarrier(carriers[cIdx]);
+      if (bestCarrier) break;
+    }
+
+    if (!bestCarrier) {
+      const nc = createNewCarrier();
+      if (fitsNormalInEmpty || fitsRotInEmpty) {
+        tryFindOnCarrier(nc);
+      } else {
+        bestCarrier = nc;
+        bestRotated = !fitsNormalTight && fitsRotTight;
+        const pW = bestRotated ? bh : bw;
+        const pH = bestRotated ? bw : bh;
+        bestX = Math.max(0, Math.min(margin, (carrierW - pW) * 0.5));
+        bestY = Math.max(0, Math.min(margin, (carrierH - pH) * 0.5));
+      }
+    }
+
+    if (!bestCarrier) {
+      unfitBoardsCount++;
+      return;
+    }
+
+    const placedW = bestRotated ? bh : bw;
+    const placedH = bestRotated ? bw : bh;
+    const usedRect = { x: bestX, y: bestY, w: placedW + spacing, h: placedH + spacing };
+    bestCarrier.freeRects = splitPapercraftFreeRects(bestCarrier.freeRects, usedRect, spacing);
+    bestCarrier.usedBoardsArea += bw * bh;
+    bestCarrier.totalPieces += board.placements.length;
+
+    const transformBoardPt = (pt) => {
+      if (!bestRotated) {
+        return { x: bestX + pt.x, y: bestY + pt.y };
+      }
+      return { x: bestX + (bh - pt.y), y: bestY + pt.x };
+    };
+
+    const transformedPlacements = board.placements.map((pl) => ({
+      piece: pl.piece,
+      shortCode: pl.shortCode,
+      title: pl.title,
+      colorObj: pl.colorObj,
+      scaleFit: pl.scaleFit,
+      rotated: Boolean(pl.rotated) !== Boolean(bestRotated),
+      outerPoints: (pl.outerPoints || []).map(transformBoardPt),
+      bodyPolygon: (pl.bodyPolygon || []).map(transformBoardPt),
+      holes: (pl.holes || []).map((h) => ({
+        points: (h.points || []).map(transformBoardPt),
+        absArea: h.absArea
+      })),
+      foldLines: (pl.foldLines || []).map((fl) => ({
+        type: fl.type || 'mountain',
+        points: (fl.points || []).map(transformBoardPt)
+      })),
+      glueTabs: (pl.glueTabs || []).map((gt) => {
+        const tfFold = (gt.foldLine || []).map(transformBoardPt);
+        const tfPoly = (gt.polygon || []).map(transformBoardPt);
+        const tfCenter = gt.center ? transformBoardPt(gt.center) : (tfPoly[0] || { x: bestX, y: bestY });
+        let tfAngle = gt.angleRad || 0;
+        if (tfFold.length >= 2) {
+          tfAngle = Math.atan2(tfFold[1].y - tfFold[0].y, tfFold[1].x - tfFold[0].x);
+        }
+        return {
+          id: gt.id,
+          label: gt.label,
+          foldLine: tfFold,
+          polygon: tfPoly,
+          center: tfCenter,
+          angleRad: tfAngle
+        };
+      }),
+      glueZones: (pl.glueZones || []).map((gz) => ({
+        polygon: (gz.polygon || []).map(transformBoardPt),
+        holePolygons: (gz.holePolygons || []).map((hp) => (hp || []).map(transformBoardPt)),
+        center: gz.center ? transformBoardPt(gz.center) : null,
+        label: gz.label || ''
+      })),
+      labelCenter: pl.labelCenter ? transformBoardPt(pl.labelCenter) : { x: bestX + placedW * 0.5, y: bestY + placedH * 0.5 },
+      fontSizeMM: pl.fontSizeMM || 3.0
+    }));
+
+    bestCarrier.boardPlacements.push({
+      boardIndex: board.boardIndex,
+      board,
+      x: bestX,
+      y: bestY,
+      w: placedW,
+      h: placedH,
+      rotated: bestRotated,
+      transformedPlacements
+    });
+  });
+
+  carriers.forEach((c) => {
+    c.efficiency = Math.min(100, (c.usedBoardsArea / Math.max(1, carrierW * carrierH)) * 100);
+  });
+
+  return { carriers, unfitBoardsCount };
+}
+
+// ============================================================================
 // CÁLCULO GEOMÉTRICO DEL DIAGRAMA DEL MODELO CON EL PROGRESO EN CADA HOJA A4
 // (Estilo Guía Ilustrada: Alzado Apilado + Vista 3D del Modelo con Progreso)
 // ============================================================================
@@ -3879,6 +4393,419 @@ function renderPapercraft3DPreviewOnCanvas(canvas) {
   ctx.restore();
 }
 
+// Dibuja un Tablero de Corte Láser / Cricut (Apartado 6 del modal) en el lienzo 2D interactivo
+function drawPapercraftLaserBoardToContext(ctx, board, canvas) {
+  if (!board) return;
+  const pad = 28;
+  const basePxPerMM = Math.min(
+    (canvas.width - pad * 2) / Math.max(1, board.width),
+    (canvas.height - pad * 2) / Math.max(1, board.height)
+  );
+  const pxPerMM = basePxPerMM * (papercraftState.view2D.zoom || 1);
+  const drawW = board.width * pxPerMM;
+  const drawH = board.height * pxPerMM;
+  const offX = (canvas.width - drawW) * 0.5 + (papercraftState.view2D.panX || 0);
+  const offY = (canvas.height - drawH) * 0.5 + (papercraftState.view2D.panY || 0);
+
+  // Coordenadas del tablero (x: 0..board.width hacia la derecha, y: 0..board.height hacia arriba) a píxeles de pantalla
+  const toScreenX = (xMM) => offX + xMM * pxPerMM;
+  const toScreenY = (yMM) => offY + (board.height - yMM) * pxPerMM;
+
+  ctx.save();
+  // Fondo mesa de corte láser / tapete Cricut
+  ctx.fillStyle = '#0f172a';
+  ctx.fillRect(offX, offY, drawW, drawH);
+
+  // Cuadrícula milimétrica del tapete Cricut / mesa láser (cada 10 mm y 50 mm)
+  const stepMinor = 10;
+  ctx.beginPath();
+  for (let x = stepMinor; x < board.width; x += stepMinor) {
+    if (x % 50 === 0) continue;
+    const sx = toScreenX(x);
+    ctx.moveTo(sx, offY);
+    ctx.lineTo(sx, offY + drawH);
+  }
+  for (let y = stepMinor; y < board.height; y += stepMinor) {
+    if (y % 50 === 0) continue;
+    const sy = toScreenY(y);
+    ctx.moveTo(offX, sy);
+    ctx.lineTo(offX + drawW, sy);
+  }
+  ctx.strokeStyle = 'rgba(56, 189, 248, 0.08)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.beginPath();
+  for (let x = 50; x < board.width; x += 50) {
+    const sx = toScreenX(x);
+    ctx.moveTo(sx, offY);
+    ctx.lineTo(sx, offY + drawH);
+  }
+  for (let y = 50; y < board.height; y += 50) {
+    const sy = toScreenY(y);
+    ctx.moveTo(offX, sy);
+    ctx.lineTo(offX + drawW, sy);
+  }
+  ctx.strokeStyle = 'rgba(56, 189, 248, 0.18)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Borde físico del tablero
+  ctx.strokeStyle = papercraftState.boardCutBorder ? '#ef4444' : '#10b981';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(offX, offY, drawW, drawH);
+
+  // Margen perimetral de seguridad
+  if (board.margin > 0) {
+    ctx.save();
+    ctx.setLineDash([5, 4]);
+    ctx.strokeStyle = 'rgba(16, 185, 129, 0.45)';
+    ctx.lineWidth = 1.1;
+    ctx.strokeRect(
+      toScreenX(board.margin),
+      toScreenY(board.height - board.margin),
+      (board.width - board.margin * 2) * pxPerMM,
+      (board.height - board.margin * 2) * pxPerMM
+    );
+    ctx.restore();
+  }
+
+  const foldMode = papercraftState.laserFoldMode || 'dashed_cut';
+  const dashMM = Number(papercraftState.laserDashLenMM) || 3.5;
+  const gapMM = Number(papercraftState.laserGapLenMM) || 1.8;
+
+  // Dibujar cada pieza anidada en el tablero
+  (board.placements || []).forEach((pl) => {
+    const pts = pl.outerPoints;
+    if (!pts || pts.length < 3) return;
+
+    // Relleno de material con huecos interiores descontados
+    ctx.beginPath();
+    pts.forEach((p, i) => {
+      if (i === 0) ctx.moveTo(toScreenX(p.x), toScreenY(p.y));
+      else ctx.lineTo(toScreenX(p.x), toScreenY(p.y));
+    });
+    ctx.closePath();
+    (pl.holes || []).forEach((h) => {
+      if (!h.points || h.points.length < 3) return;
+      h.points.forEach((p, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(p.x), toScreenY(p.y));
+        else ctx.lineTo(toScreenX(p.x), toScreenY(p.y));
+      });
+      ctx.closePath();
+    });
+    ctx.fillStyle = 'rgba(14, 165, 233, 0.16)';
+    ctx.fill('evenodd');
+
+    // Zonas guía de pegado (naranja/ámbar)
+    if (papercraftState.laserEngraveGlueGuides && pl.glueZones && pl.glueZones.length > 0) {
+      ctx.save();
+      ctx.setLineDash([4, 3]);
+      ctx.strokeStyle = 'rgba(245, 158, 11, 0.78)';
+      ctx.fillStyle = 'rgba(245, 158, 11, 0.12)';
+      ctx.lineWidth = 1.1;
+      pl.glueZones.forEach((gz) => {
+        if (!gz.polygon || gz.polygon.length < 3) return;
+        ctx.beginPath();
+        gz.polygon.forEach((p, i) => {
+          if (i === 0) ctx.moveTo(toScreenX(p.x), toScreenY(p.y));
+          else ctx.lineTo(toScreenX(p.x), toScreenY(p.y));
+        });
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
+
+    // Sombreado sutil de pestañas de pegamento
+    if (pl.glueTabs && pl.glueTabs.length > 0) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(245, 158, 11, 0.22)';
+      pl.glueTabs.forEach((gt) => {
+        if (!gt.polygon || gt.polygon.length < 3) return;
+        ctx.beginPath();
+        gt.polygon.forEach((p, i) => {
+          if (i === 0) ctx.moveTo(toScreenX(p.x), toScreenY(p.y));
+          else ctx.lineTo(toScreenX(p.x), toScreenY(p.y));
+        });
+        ctx.closePath();
+        ctx.fill();
+      });
+      ctx.restore();
+    }
+
+    // Líneas de pliegue / hendido (Montaña #22c55e, Valle #a855f7, o Azul #38bdf8 si va en capa de corte perforado)
+    if (pl.foldLines && pl.foldLines.length > 0) {
+      ctx.save();
+      pl.foldLines.forEach((fl) => {
+        if (!fl.points || fl.points.length < 2) return;
+        const isVal = fl.type === 'valley';
+        if (foldMode === 'score_solid') {
+          ctx.setLineDash([]);
+          ctx.strokeStyle = isVal ? '#a855f7' : '#22c55e';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          fl.points.forEach((p, i) => {
+            if (i === 0) ctx.moveTo(toScreenX(p.x), toScreenY(p.y));
+            else ctx.lineTo(toScreenX(p.x), toScreenY(p.y));
+          });
+          ctx.stroke();
+        } else {
+          const perfSegs = typeof subdivideFoldPolylineIntoPerforatedSegments === 'function'
+            ? subdivideFoldPolylineIntoPerforatedSegments(fl.points, dashMM, gapMM)
+            : [fl.points];
+          ctx.setLineDash([]);
+          ctx.strokeStyle = foldMode === 'perforated_cut_layer' ? '#38bdf8' : (isVal ? '#a855f7' : '#22c55e');
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          perfSegs.forEach((seg) => {
+            if (!seg || seg.length < 2) return;
+            ctx.moveTo(toScreenX(seg[0].x), toScreenY(seg[0].y));
+            ctx.lineTo(toScreenX(seg[1].x), toScreenY(seg[1].y));
+          });
+          ctx.stroke();
+        }
+      });
+      ctx.restore();
+    }
+
+    // Contorno de corte interior (huecos) en azul (#38bdf8)
+    (pl.holes || []).forEach((h) => {
+      if (!h.points || h.points.length < 3) return;
+      ctx.beginPath();
+      h.points.forEach((p, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(p.x), toScreenY(p.y));
+        else ctx.lineTo(toScreenX(p.x), toScreenY(p.y));
+      });
+      ctx.closePath();
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 1.45;
+      ctx.stroke();
+    });
+
+    // Contorno de corte exterior en rojo láser (#ef4444)
+    ctx.beginPath();
+    pts.forEach((p, i) => {
+      if (i === 0) ctx.moveTo(toScreenX(p.x), toScreenY(p.y));
+      else ctx.lineTo(toScreenX(p.x), toScreenY(p.y));
+    });
+    ctx.closePath();
+    ctx.strokeStyle = '#ef4444';
+    ctx.lineWidth = 1.65;
+    ctx.stroke();
+
+    // Código de pieza grabado en el centro del cuerpo
+    if (papercraftState.laserEngraveCode && pl.labelCenter) {
+      const fontPx = Math.max(9, Math.min(20, (pl.fontSizeMM || 3.2) * pxPerMM));
+      ctx.save();
+      ctx.fillStyle = '#34d399';
+      ctx.font = 'bold ' + fontPx.toFixed(1) + 'px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const rotTag = pl.rotated ? ' ↻' : '';
+      const scaleTag = pl.scaleFit && pl.scaleFit < 0.999 ? (' (' + Math.round(pl.scaleFit * 100) + '%)') : '';
+      ctx.fillText(pl.shortCode + rotTag + scaleTag, toScreenX(pl.labelCenter.x), toScreenY(pl.labelCenter.y));
+      ctx.restore();
+    }
+  });
+
+  // Etiqueta superior del tablero
+  ctx.fillStyle = '#6ee7b7';
+  ctx.font = 'bold 11px monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText(
+    '🧩 TABLERO #' + (board.boardIndex + 1) + ' DE ' + Math.max(1, (papercraftState.laserBoards || []).length) +
+    ' [' + board.width.toFixed(0) + ' × ' + board.height.toFixed(0) + ' mm · Piezas: ' + board.placements.length +
+    ' · Aprovechamiento: ' + board.efficiency.toFixed(1) + '%]',
+    offX,
+    Math.max(16, offY - 6)
+  );
+  ctx.restore();
+}
+
+// Dibuja un Soporte Mayor / Tablero Mayor (Apartado 7 del modal) con múltiples tableros anidados
+function drawPapercraftLaserCarrierToContext(ctx, carrier, canvas) {
+  if (!carrier) return;
+  const pad = 28;
+  const basePxPerMM = Math.min(
+    (canvas.width - pad * 2) / Math.max(1, carrier.width),
+    (canvas.height - pad * 2) / Math.max(1, carrier.height)
+  );
+  const pxPerMM = basePxPerMM * (papercraftState.view2D.zoom || 1);
+  const drawW = carrier.width * pxPerMM;
+  const drawH = carrier.height * pxPerMM;
+  const offX = (canvas.width - drawW) * 0.5 + (papercraftState.view2D.panX || 0);
+  const offY = (canvas.height - drawH) * 0.5 + (papercraftState.view2D.panY || 0);
+
+  const toScreenX = (xMM) => offX + xMM * pxPerMM;
+  const toScreenY = (yMM) => offY + (carrier.height - yMM) * pxPerMM;
+
+  ctx.save();
+  ctx.fillStyle = '#0f172a';
+  ctx.fillRect(offX, offY, drawW, drawH);
+
+  // Borde físico del Soporte Mayor
+  ctx.strokeStyle = papercraftState.carrierCutOuterBorder ? '#ef4444' : '#f59e0b';
+  ctx.lineWidth = 2.2;
+  ctx.strokeRect(offX, offY, drawW, drawH);
+
+  if (carrier.margin > 0) {
+    ctx.save();
+    ctx.setLineDash([6, 4]);
+    ctx.strokeStyle = 'rgba(245, 158, 11, 0.45)';
+    ctx.lineWidth = 1.1;
+    ctx.strokeRect(
+      toScreenX(carrier.margin),
+      toScreenY(carrier.height - carrier.margin),
+      (carrier.width - carrier.margin * 2) * pxPerMM,
+      (carrier.height - carrier.margin * 2) * pxPerMM
+    );
+    ctx.restore();
+  }
+
+  const foldMode = papercraftState.laserFoldMode || 'dashed_cut';
+  const dashMM = Number(papercraftState.laserDashLenMM) || 3.5;
+  const gapMM = Number(papercraftState.laserGapLenMM) || 1.8;
+
+  (carrier.boardPlacements || []).forEach((bPl) => {
+    const bx = toScreenX(bPl.x);
+    const by = toScreenY(bPl.y + bPl.h);
+    const bw = bPl.w * pxPerMM;
+    const bh = bPl.h * pxPerMM;
+
+    ctx.fillStyle = 'rgba(16, 185, 129, 0.06)';
+    ctx.fillRect(bx, by, bw, bh);
+
+    ctx.save();
+    if (!papercraftState.carrierCutBoardBorders) {
+      ctx.setLineDash([5, 4]);
+    }
+    ctx.strokeStyle = papercraftState.carrierCutBoardBorders ? '#ef4444' : '#10b981';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(bx, by, bw, bh);
+    ctx.restore();
+
+    if (papercraftState.carrierEngraveBoardLabels) {
+      ctx.save();
+      ctx.fillStyle = '#fbbf24';
+      ctx.font = 'bold 10px monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText(
+        'TABLERO #' + (bPl.boardIndex + 1) + (bPl.rotated ? ' ↻' : '') + ' (' + bPl.w.toFixed(0) + '×' + bPl.h.toFixed(0) + 'mm)',
+        bx + 4,
+        by + 3
+      );
+      ctx.restore();
+    }
+
+    (bPl.transformedPlacements || []).forEach((pl) => {
+      const pts = pl.outerPoints;
+      if (!pts || pts.length < 3) return;
+
+      ctx.beginPath();
+      pts.forEach((p, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(p.x), toScreenY(p.y));
+        else ctx.lineTo(toScreenX(p.x), toScreenY(p.y));
+      });
+      ctx.closePath();
+      (pl.holes || []).forEach((h) => {
+        if (!h.points || h.points.length < 3) return;
+        h.points.forEach((p, i) => {
+          if (i === 0) ctx.moveTo(toScreenX(p.x), toScreenY(p.y));
+          else ctx.lineTo(toScreenX(p.x), toScreenY(p.y));
+        });
+        ctx.closePath();
+      });
+      ctx.fillStyle = 'rgba(14, 165, 233, 0.16)';
+      ctx.fill('evenodd');
+
+      if (pl.foldLines && pl.foldLines.length > 0) {
+        ctx.save();
+        pl.foldLines.forEach((fl) => {
+          if (!fl.points || fl.points.length < 2) return;
+          const isVal = fl.type === 'valley';
+          if (foldMode === 'score_solid') {
+            ctx.setLineDash([]);
+            ctx.strokeStyle = isVal ? '#a855f7' : '#22c55e';
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            fl.points.forEach((p, i) => {
+              if (i === 0) ctx.moveTo(toScreenX(p.x), toScreenY(p.y));
+              else ctx.lineTo(toScreenX(p.x), toScreenY(p.y));
+            });
+            ctx.stroke();
+          } else {
+            const perfSegs = typeof subdivideFoldPolylineIntoPerforatedSegments === 'function'
+              ? subdivideFoldPolylineIntoPerforatedSegments(fl.points, dashMM, gapMM)
+              : [fl.points];
+            ctx.setLineDash([]);
+            ctx.strokeStyle = foldMode === 'perforated_cut_layer' ? '#38bdf8' : (isVal ? '#a855f7' : '#22c55e');
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            perfSegs.forEach((seg) => {
+              if (!seg || seg.length < 2) return;
+              ctx.moveTo(toScreenX(seg[0].x), toScreenY(seg[0].y));
+              ctx.lineTo(toScreenX(seg[1].x), toScreenY(seg[1].y));
+            });
+            ctx.stroke();
+          }
+        });
+        ctx.restore();
+      }
+
+      (pl.holes || []).forEach((h) => {
+        if (!h.points || h.points.length < 3) return;
+        ctx.beginPath();
+        h.points.forEach((p, i) => {
+          if (i === 0) ctx.moveTo(toScreenX(p.x), toScreenY(p.y));
+          else ctx.lineTo(toScreenX(p.x), toScreenY(p.y));
+        });
+        ctx.closePath();
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 1.25;
+        ctx.stroke();
+      });
+
+      ctx.beginPath();
+      pts.forEach((p, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(p.x), toScreenY(p.y));
+        else ctx.lineTo(toScreenX(p.x), toScreenY(p.y));
+      });
+      ctx.closePath();
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = 1.45;
+      ctx.stroke();
+
+      if (papercraftState.laserEngraveCode && pl.labelCenter) {
+        const fontPx = Math.max(8, Math.min(16, (pl.fontSizeMM || 3.0) * pxPerMM));
+        ctx.save();
+        ctx.fillStyle = '#34d399';
+        ctx.font = 'bold ' + fontPx.toFixed(1) + 'px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(pl.shortCode, toScreenX(pl.labelCenter.x), toScreenY(pl.labelCenter.y));
+        ctx.restore();
+      }
+    });
+  });
+
+  ctx.fillStyle = '#fcd34d';
+  ctx.font = 'bold 11px monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'bottom';
+  ctx.fillText(
+    '📦 SOPORTE MAYOR #' + (carrier.carrierIndex + 1) + ' DE ' + Math.max(1, (papercraftState.laserCarriers || []).length) +
+    ' [' + carrier.width.toFixed(0) + ' × ' + carrier.height.toFixed(0) + ' mm · Tableros: ' + carrier.boardPlacements.length +
+    ' · Piezas: ' + carrier.totalPieces + ' · Aprovechamiento: ' + carrier.efficiency.toFixed(1) + '%]',
+    offX,
+    Math.max(16, offY - 6)
+  );
+  ctx.restore();
+}
+
 // Renderizador principal del lienzo del modal de Recortables
 function renderPapercraftPreviewCanvas() {
   const canvas = document.getElementById('papercraftPreviewCanvas');
@@ -3895,9 +4822,31 @@ function renderPapercraftPreviewCanvas() {
   const ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Fondo mesa de trabajo escolar
+  // Fondo mesa de trabajo escolar / taller láser
   ctx.fillStyle = '#0b1120';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  if (papercraftState.previewMode === 'laser_boards2d') {
+    const boards = papercraftState.laserBoards || [];
+    if (boards.length === 0) return;
+    const bIdx = Math.max(0, Math.min(boards.length - 1, papercraftState.activeLaserBoardIndex || 0));
+    drawPapercraftLaserBoardToContext(ctx, boards[bIdx], canvas);
+    return;
+  }
+
+  if (papercraftState.previewMode === 'laser_carrier2d') {
+    const carriers = papercraftState.laserCarriers || [];
+    if (carriers.length === 0) {
+      ctx.fillStyle = '#fcd34d';
+      ctx.font = 'bold 12px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('El tablero actual (' + papercraftState.boardWidthMM + '×' + papercraftState.boardHeightMM + ' mm) supera el Soporte Mayor (' + papercraftState.carrierWidthMM + '×' + papercraftState.carrierHeightMM + ' mm).', canvas.width * 0.5, canvas.height * 0.5);
+      return;
+    }
+    const cIdx = Math.max(0, Math.min(carriers.length - 1, papercraftState.activeLaserCarrierIndex || 0));
+    drawPapercraftLaserCarrierToContext(ctx, carriers[cIdx], canvas);
+    return;
+  }
 
   const sheets = papercraftState.packedSheets || [];
   if (sheets.length === 0) return;
@@ -4277,6 +5226,881 @@ function downloadPapercraftSheetsSVG() {
 }
 
 // ============================================================================
+// EXPORTADORES VECTORIALES PUROS 1:1 MM PARA CORTADORA LÁSER Y CRICUT (SVG/DXF/ZIP)
+// ============================================================================
+function hersheyPolylinesToSvgPathD(polylines, toX, toY) {
+  let d = '';
+  (polylines || []).forEach((pl) => {
+    if (!pl || !pl.points || pl.points.length < 2) return;
+    d += 'M ' + toX(pl.points[0].x) + ' ' + toY(pl.points[0].y);
+    for (let i = 1; i < pl.points.length; i++) {
+      d += ' L ' + toX(pl.points[i].x) + ' ' + toY(pl.points[i].y);
+    }
+    if (pl.closed) d += ' Z';
+    d += ' ';
+  });
+  return d.trim();
+}
+
+function generatePapercraftLaserPieceSVG(piece) {
+  const b = piece.bounds || computePolygonBounds2D(piece.outerCutPoints || []);
+  const pad = 2.0;
+  const svgW = Math.max(5, b.width + pad * 2);
+  const svgH = Math.max(5, b.height + pad * 2);
+  const toX = (lx) => ((lx - b.minX) + pad).toFixed(4);
+  const toY = (ly) => (svgH - ((ly - b.minY) + pad)).toFixed(4);
+  const strokeMm = '0.2000';
+
+  const foldMode = papercraftState.laserFoldMode || 'dashed_cut';
+  const dashMM = Number(papercraftState.laserDashLenMM) || 3.5;
+  const gapMM = Number(papercraftState.laserGapLenMM) || 1.8;
+
+  const outerPts = piece.outerCutPoints || [];
+  const dOuter = outerPts.length >= 3
+    ? ('M ' + outerPts.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z')
+    : '';
+
+  const holePaths = [];
+  (piece.holePolygons || []).forEach((hp) => {
+    if (!hp || hp.length < 3) return;
+    holePaths.push('M ' + hp.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z');
+  });
+
+  let mountainFoldD = '';
+  let valleyFoldD = '';
+  (piece.foldLines || []).forEach((fl) => {
+    if (!fl.points || fl.points.length < 2) return;
+    const isVal = fl.type === 'valley';
+    if (foldMode === 'score_solid') {
+      const segD = 'M ' + fl.points.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' ';
+      if (isVal) valleyFoldD += segD;
+      else mountainFoldD += segD;
+    } else {
+      const perfSegs = typeof subdivideFoldPolylineIntoPerforatedSegments === 'function'
+        ? subdivideFoldPolylineIntoPerforatedSegments(fl.points, dashMM, gapMM)
+        : [fl.points];
+      perfSegs.forEach((seg) => {
+        if (!seg || seg.length < 2) return;
+        const segD = 'M ' + toX(seg[0].x) + ' ' + toY(seg[0].y) + ' L ' + toX(seg[1].x) + ' ' + toY(seg[1].y) + ' ';
+        if (foldMode === 'perforated_cut_layer') {
+          holePaths.push(segD.trim());
+        } else if (isVal) {
+          valleyFoldD += segD;
+        } else {
+          mountainFoldD += segD;
+        }
+      });
+    }
+  });
+
+  let glueZonesD = '';
+  if (papercraftState.laserEngraveGlueGuides && piece.glueTargetZones && piece.glueTargetZones.length > 0) {
+    piece.glueTargetZones.forEach((gz) => {
+      if (!gz.polygon || gz.polygon.length < 3) return;
+      glueZonesD += 'M ' + gz.polygon.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z ';
+    });
+  }
+
+  let engraveTextD = '';
+  if (papercraftState.laserEngraveCode && typeof hersheyTextToPolylinesDXF === 'function') {
+    const bodyB = computePolygonBounds2D((piece.bodyPolygon && piece.bodyPolygon.length >= 3) ? piece.bodyPolygon : outerPts);
+    const fontH = Math.max(1.8, Math.min(5.0, Math.min(bodyB.width, bodyB.height) * 0.14));
+    const codePolys = hersheyTextToPolylinesDXF(piece.shortCode || 'P', bodyB.cx, bodyB.cy, fontH, 'middle', 'central');
+    engraveTextD = hersheyPolylinesToSvgPathD(codePolys, toX, toY);
+  }
+
+  const escapeAttr = typeof escapeXmlAttr === 'function'
+    ? escapeXmlAttr
+    : (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  const xmlHeader = '<' + '?xml version="1.0" encoding="UTF-8" standalone="no"?' + '>';
+  const lines = [
+    xmlHeader,
+    '<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="' + svgW.toFixed(3) + 'mm" height="' + svgH.toFixed(3) + 'mm" viewBox="0 0 ' + svgW.toFixed(4) + ' ' + svgH.toFixed(4) + '">',
+    '  <title>' + escapeAttr((piece.shortCode || 'Pieza') + ' - ' + (piece.title || 'Recortable Laser/Cricut')) + '</title>',
+    '  <desc>' + escapeAttr('Recortable Laser / Cricut 1:1 mm | Pieza: ' + (piece.shortCode || '') + ' | Modo pliegue: ' + foldMode) + '</desc>'
+  ];
+
+  if (dOuter) {
+    lines.push('  <g id="CORTE_EXTERIOR" fill="none" stroke="#ff0000" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    lines.push('    <path id="corte_ext_' + escapeAttr(piece.shortCode || 'pieza') + '" d="' + dOuter + '" />');
+    lines.push('  </g>');
+  }
+
+  if (holePaths.length > 0) {
+    lines.push('  <g id="CORTE_INTERIOR_HUECOS" fill="none" stroke="#0055ff" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    holePaths.forEach((hd, i) => {
+      lines.push('    <path id="corte_int_' + (i + 1) + '" d="' + hd + '" />');
+    });
+    lines.push('  </g>');
+  }
+
+  if (mountainFoldD.trim().length > 0) {
+    lines.push('  <g id="PLIEGUE_HENDIDO_MONTANA" fill="none" stroke="#00aa00" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    lines.push('    <path id="pliegue_montana" d="' + mountainFoldD.trim() + '" />');
+    lines.push('  </g>');
+  }
+
+  if (valleyFoldD.trim().length > 0) {
+    lines.push('  <g id="PLIEGUE_HENDIDO_VALLE" fill="none" stroke="#9900ff" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    lines.push('    <path id="pliegue_valle" d="' + valleyFoldD.trim() + '" />');
+    lines.push('  </g>');
+  }
+
+  if (glueZonesD.trim().length > 0) {
+    lines.push('  <g id="GUIA_ZONAS_PEGADO" fill="none" stroke="#ff8800" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    lines.push('    <path id="guia_pegado" d="' + glueZonesD.trim() + '" />');
+    lines.push('  </g>');
+  }
+
+  if (engraveTextD.length > 0) {
+    lines.push('  <g id="GRABADO_CODIGOS_TEXTO" fill="none" stroke="#008800" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    lines.push('    <path id="codigo_pieza_vector" d="' + engraveTextD + '" />');
+    lines.push('  </g>');
+  }
+
+  lines.push('</svg>');
+  return lines.join('\n');
+}
+
+function generatePapercraftLaserPieceDXF(piece) {
+  const b = piece.bounds || computePolygonBounds2D(piece.outerCutPoints || []);
+  const pad = 2.0;
+  const docW = Math.max(5, b.width + pad * 2);
+  const docH = Math.max(5, b.height + pad * 2);
+  const shiftPt = (p) => ({ x: (p.x - b.minX) + pad, y: (p.y - b.minY) + pad });
+
+  const byLayer = { C00: [], C01: [], C02: [], C03: [], C04: [] };
+  const foldMode = papercraftState.laserFoldMode || 'dashed_cut';
+  const dashMM = Number(papercraftState.laserDashLenMM) || 3.5;
+  const gapMM = Number(papercraftState.laserGapLenMM) || 1.8;
+
+  if (piece.outerCutPoints && piece.outerCutPoints.length >= 3) {
+    byLayer.C04.push({
+      closed: true,
+      points: piece.outerCutPoints.map(shiftPt)
+    });
+  }
+
+  (piece.holePolygons || []).forEach((hp) => {
+    if (!hp || hp.length < 3) return;
+    byLayer.C03.push({
+      closed: true,
+      points: hp.map(shiftPt)
+    });
+  });
+
+  (piece.foldLines || []).forEach((fl) => {
+    if (!fl.points || fl.points.length < 2) return;
+    const isVal = fl.type === 'valley';
+    const shifted = fl.points.map(shiftPt);
+    if (foldMode === 'score_solid') {
+      const targetLayer = isVal ? byLayer.C02 : byLayer.C01;
+      targetLayer.push({ closed: false, points: shifted });
+    } else {
+      const perfSegs = typeof subdivideFoldPolylineIntoPerforatedSegments === 'function'
+        ? subdivideFoldPolylineIntoPerforatedSegments(shifted, dashMM, gapMM)
+        : [shifted];
+      const targetLayer = foldMode === 'perforated_cut_layer' ? byLayer.C03 : (isVal ? byLayer.C02 : byLayer.C01);
+      perfSegs.forEach((seg) => {
+        if (seg && seg.length >= 2) targetLayer.push({ closed: false, points: seg });
+      });
+    }
+  });
+
+  if (papercraftState.laserEngraveGlueGuides && piece.glueTargetZones && piece.glueTargetZones.length > 0) {
+    piece.glueTargetZones.forEach((gz) => {
+      if (!gz.polygon || gz.polygon.length < 3) return;
+      byLayer.C02.push({
+        closed: true,
+        points: gz.polygon.map(shiftPt)
+      });
+    });
+  }
+
+  if (papercraftState.laserEngraveCode && typeof hersheyTextToPolylinesDXF === 'function') {
+    const bodyB = computePolygonBounds2D((piece.bodyPolygon && piece.bodyPolygon.length >= 3) ? piece.bodyPolygon : (piece.outerCutPoints || []));
+    const center = shiftPt({ x: bodyB.cx, y: bodyB.cy });
+    const fontH = Math.max(1.8, Math.min(5.0, Math.min(bodyB.width, bodyB.height) * 0.14));
+    byLayer.C00.push(...hersheyTextToPolylinesDXF(piece.shortCode || 'P', center.x, center.y, fontH, 'middle', 'central'));
+  }
+
+  if (typeof buildStandardLaserDXF === 'function') {
+    return buildStandardLaserDXF(docW, docH, byLayer);
+  }
+  return '';
+}
+
+function generatePapercraftLaserBoardSVG(board) {
+  const svgW = board.width;
+  const svgH = board.height;
+  const toX = (x) => Number(x).toFixed(4);
+  const toY = (y) => (svgH - Number(y)).toFixed(4);
+  const strokeMm = '0.2000';
+
+  const foldMode = papercraftState.laserFoldMode || 'dashed_cut';
+  const dashMM = Number(papercraftState.laserDashLenMM) || 3.5;
+  const gapMM = Number(papercraftState.laserGapLenMM) || 1.8;
+
+  const outerPaths = [];
+  const holePaths = [];
+  let mountainFoldD = '';
+  let valleyFoldD = '';
+  let glueZonesD = '';
+  let engraveTextD = '';
+
+  if (papercraftState.boardCutBorder) {
+    const dBorder = 'M ' + toX(0) + ' ' + toY(0) + ' L ' + toX(svgW) + ' ' + toY(0) + ' L ' + toX(svgW) + ' ' + toY(svgH) + ' L ' + toX(0) + ' ' + toY(svgH) + ' Z';
+    outerPaths.push({ id: 'borde_tablero_' + (board.boardIndex + 1), d: dBorder });
+  }
+
+  (board.placements || []).forEach((pl, idx) => {
+    const pts = pl.outerPoints || [];
+    if (pts.length >= 3) {
+      const dOut = 'M ' + pts.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z';
+      outerPaths.push({ id: 'pieza_' + (idx + 1) + '_' + (pl.shortCode || 'P'), d: dOut });
+    }
+
+    (pl.holes || []).forEach((h) => {
+      if (!h.points || h.points.length < 3) return;
+      holePaths.push('M ' + h.points.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z');
+    });
+
+    (pl.foldLines || []).forEach((fl) => {
+      if (!fl.points || fl.points.length < 2) return;
+      const isVal = fl.type === 'valley';
+      if (foldMode === 'score_solid') {
+        const segD = 'M ' + fl.points.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' ';
+        if (isVal) valleyFoldD += segD;
+        else mountainFoldD += segD;
+      } else {
+        const perfSegs = typeof subdivideFoldPolylineIntoPerforatedSegments === 'function'
+          ? subdivideFoldPolylineIntoPerforatedSegments(fl.points, dashMM, gapMM)
+          : [fl.points];
+        perfSegs.forEach((seg) => {
+          if (!seg || seg.length < 2) return;
+          const segD = 'M ' + toX(seg[0].x) + ' ' + toY(seg[0].y) + ' L ' + toX(seg[1].x) + ' ' + toY(seg[1].y) + ' ';
+          if (foldMode === 'perforated_cut_layer') {
+            holePaths.push(segD.trim());
+          } else if (isVal) {
+            valleyFoldD += segD;
+          } else {
+            mountainFoldD += segD;
+          }
+        });
+      }
+    });
+
+    if (papercraftState.laserEngraveGlueGuides && pl.glueZones && pl.glueZones.length > 0) {
+      pl.glueZones.forEach((gz) => {
+        if (!gz.polygon || gz.polygon.length < 3) return;
+        glueZonesD += 'M ' + gz.polygon.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z ';
+      });
+    }
+
+    if (papercraftState.laserEngraveCode && pl.labelCenter && typeof hersheyTextToPolylinesDXF === 'function') {
+      const codePolys = hersheyTextToPolylinesDXF(
+        pl.shortCode || ('P' + (idx + 1)),
+        pl.labelCenter.x,
+        pl.labelCenter.y,
+        pl.fontSizeMM || 3.0,
+        'middle',
+        'central'
+      );
+      const dTxt = hersheyPolylinesToSvgPathD(codePolys, toX, toY);
+      if (dTxt) engraveTextD += dTxt + ' ';
+    }
+  });
+
+  const escapeAttr = typeof escapeXmlAttr === 'function'
+    ? escapeXmlAttr
+    : (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  const xmlHeader = '<' + '?xml version="1.0" encoding="UTF-8" standalone="no"?' + '>';
+  const lines = [
+    xmlHeader,
+    '<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="' + svgW.toFixed(3) + 'mm" height="' + svgH.toFixed(3) + 'mm" viewBox="0 0 ' + svgW.toFixed(4) + ' ' + svgH.toFixed(4) + '">',
+    '  <title>' + escapeAttr('Tablero Recortable #' + (board.boardIndex + 1) + ' (' + svgW.toFixed(0) + 'x' + svgH.toFixed(0) + 'mm)') + '</title>',
+    '  <desc>' + escapeAttr('Tablero Corte Laser / Cricut #' + (board.boardIndex + 1) + ' | Dimensiones: ' + svgW.toFixed(1) + 'x' + svgH.toFixed(1) + 'mm | Piezas: ' + board.placements.length + ' | Aprovechamiento: ' + board.efficiency.toFixed(1) + '% | Modo pliegue: ' + foldMode) + '</desc>'
+  ];
+
+  lines.push('  <g id="CORTE_EXTERIOR" fill="none" stroke="#ff0000" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+  outerPaths.forEach((item) => {
+    lines.push('    <path id="' + escapeAttr(item.id) + '" d="' + item.d + '" />');
+  });
+  lines.push('  </g>');
+
+  if (holePaths.length > 0) {
+    lines.push('  <g id="CORTE_INTERIOR_HUECOS" fill="none" stroke="#0055ff" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    holePaths.forEach((hd, i) => {
+      lines.push('    <path id="hueco_int_' + (i + 1) + '" d="' + hd + '" />');
+    });
+    lines.push('  </g>');
+  }
+
+  if (mountainFoldD.trim().length > 0) {
+    lines.push('  <g id="PLIEGUE_HENDIDO_MONTANA" fill="none" stroke="#00aa00" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    lines.push('    <path id="pliegues_montana_tablero" d="' + mountainFoldD.trim() + '" />');
+    lines.push('  </g>');
+  }
+
+  if (valleyFoldD.trim().length > 0) {
+    lines.push('  <g id="PLIEGUE_HENDIDO_VALLE" fill="none" stroke="#9900ff" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    lines.push('    <path id="pliegues_valle_tablero" d="' + valleyFoldD.trim() + '" />');
+    lines.push('  </g>');
+  }
+
+  if (glueZonesD.trim().length > 0) {
+    lines.push('  <g id="GUIA_ZONAS_PEGADO" fill="none" stroke="#ff8800" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    lines.push('    <path id="guia_zonas_pegado_tablero" d="' + glueZonesD.trim() + '" />');
+    lines.push('  </g>');
+  }
+
+  if (engraveTextD.trim().length > 0) {
+    lines.push('  <g id="GRABADO_CODIGOS_TEXTO" fill="none" stroke="#008800" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    lines.push('    <path id="codigos_piezas_tablero" d="' + engraveTextD.trim() + '" />');
+    lines.push('  </g>');
+  }
+
+  lines.push('</svg>');
+  return lines.join('\n');
+}
+
+function generatePapercraftLaserBoardDXF(board) {
+  const byLayer = { C00: [], C01: [], C02: [], C03: [], C04: [] };
+  const foldMode = papercraftState.laserFoldMode || 'dashed_cut';
+  const dashMM = Number(papercraftState.laserDashLenMM) || 3.5;
+  const gapMM = Number(papercraftState.laserGapLenMM) || 1.8;
+
+  if (papercraftState.boardCutBorder) {
+    byLayer.C04.push({
+      closed: true,
+      points: [
+        { x: 0, y: 0 },
+        { x: board.width, y: 0 },
+        { x: board.width, y: board.height },
+        { x: 0, y: board.height }
+      ]
+    });
+  }
+
+  (board.placements || []).forEach((pl, idx) => {
+    if (pl.outerPoints && pl.outerPoints.length >= 3) {
+      byLayer.C04.push({
+        closed: true,
+        points: pl.outerPoints.map((p) => ({ x: p.x, y: p.y }))
+      });
+    }
+
+    (pl.holes || []).forEach((h) => {
+      if (!h.points || h.points.length < 3) return;
+      byLayer.C03.push({
+        closed: true,
+        points: h.points.map((p) => ({ x: p.x, y: p.y }))
+      });
+    });
+
+    (pl.foldLines || []).forEach((fl) => {
+      if (!fl.points || fl.points.length < 2) return;
+      const isVal = fl.type === 'valley';
+      if (foldMode === 'score_solid') {
+        const targetLayer = isVal ? byLayer.C02 : byLayer.C01;
+        targetLayer.push({
+          closed: false,
+          points: fl.points.map((p) => ({ x: p.x, y: p.y }))
+        });
+      } else {
+        const perfSegs = typeof subdivideFoldPolylineIntoPerforatedSegments === 'function'
+          ? subdivideFoldPolylineIntoPerforatedSegments(fl.points, dashMM, gapMM)
+          : [fl.points];
+        const targetLayer = foldMode === 'perforated_cut_layer' ? byLayer.C03 : (isVal ? byLayer.C02 : byLayer.C01);
+        perfSegs.forEach((seg) => {
+          if (seg && seg.length >= 2) {
+            targetLayer.push({
+              closed: false,
+              points: seg.map((p) => ({ x: p.x, y: p.y }))
+            });
+          }
+        });
+      }
+    });
+
+    if (papercraftState.laserEngraveGlueGuides && pl.glueZones && pl.glueZones.length > 0) {
+      pl.glueZones.forEach((gz) => {
+        if (!gz.polygon || gz.polygon.length < 3) return;
+        byLayer.C02.push({
+          closed: true,
+          points: gz.polygon.map((p) => ({ x: p.x, y: p.y }))
+        });
+      });
+    }
+
+    if (papercraftState.laserEngraveCode && pl.labelCenter && typeof hersheyTextToPolylinesDXF === 'function') {
+      byLayer.C00.push(
+        ...hersheyTextToPolylinesDXF(
+          pl.shortCode || ('P' + (idx + 1)),
+          pl.labelCenter.x,
+          pl.labelCenter.y,
+          pl.fontSizeMM || 3.0,
+          'middle',
+          'central'
+        )
+      );
+    }
+  });
+
+  if (papercraftState.laserEngraveCode && typeof hersheyTextToPolylinesDXF === 'function') {
+    const headerText = 'TABLERO #' + (board.boardIndex + 1) + ' [' + board.width.toFixed(0) + 'x' + board.height.toFixed(0) + 'mm | Piezas: ' + board.placements.length + ' | Uso: ' + board.efficiency.toFixed(1) + '%]';
+    const hx = Math.max(2, board.margin);
+    const hy = Math.max(1.5, board.margin * 0.4);
+    byLayer.C00.push(...hersheyTextToPolylinesDXF(headerText, hx, hy, 3.0, 'start', 'alphabetic'));
+  }
+
+  if (typeof buildStandardLaserDXF === 'function') {
+    return buildStandardLaserDXF(board.width, board.height, byLayer);
+  }
+  return '';
+}
+
+function generatePapercraftLaserCarrierSVG(carrier) {
+  const svgW = carrier.width;
+  const svgH = carrier.height;
+  const toX = (x) => Number(x).toFixed(4);
+  const toY = (y) => (svgH - Number(y)).toFixed(4);
+  const strokeMm = '0.2000';
+
+  const foldMode = papercraftState.laserFoldMode || 'dashed_cut';
+  const dashMM = Number(papercraftState.laserDashLenMM) || 3.5;
+  const gapMM = Number(papercraftState.laserGapLenMM) || 1.8;
+
+  const outerPaths = [];
+  const holePaths = [];
+  let mountainFoldD = '';
+  let valleyFoldD = '';
+  let glueZonesD = '';
+  let engraveTextD = '';
+
+  if (papercraftState.carrierCutOuterBorder) {
+    const dCarrier = 'M ' + toX(0) + ' ' + toY(0) + ' L ' + toX(svgW) + ' ' + toY(0) + ' L ' + toX(svgW) + ' ' + toY(svgH) + ' L ' + toX(0) + ' ' + toY(svgH) + ' Z';
+    outerPaths.push({ id: 'borde_soporte_mayor_' + (carrier.carrierIndex + 1), d: dCarrier });
+  }
+
+  (carrier.boardPlacements || []).forEach((bPl) => {
+    if (papercraftState.carrierCutBoardBorders) {
+      const dBoard = 'M ' + toX(bPl.x) + ' ' + toY(bPl.y) +
+        ' L ' + toX(bPl.x + bPl.w) + ' ' + toY(bPl.y) +
+        ' L ' + toX(bPl.x + bPl.w) + ' ' + toY(bPl.y + bPl.h) +
+        ' L ' + toX(bPl.x) + ' ' + toY(bPl.y + bPl.h) + ' Z';
+      outerPaths.push({ id: 'borde_tablero_' + (bPl.boardIndex + 1), d: dBoard });
+    }
+
+    if (papercraftState.carrierEngraveBoardLabels && typeof hersheyTextToPolylinesDXF === 'function') {
+      const padLbl = Math.max(2.5, (bPl.board.margin || 4) * 0.55);
+      const bLblText = 'TABLERO #' + (bPl.boardIndex + 1) + ' (' + bPl.w.toFixed(0) + 'x' + bPl.h.toFixed(0) + 'mm)';
+      const bPolys = hersheyTextToPolylinesDXF(bLblText, bPl.x + padLbl, bPl.y + bPl.h - padLbl, 3.2, 'start', 'alphabetic');
+      const dBLbl = hersheyPolylinesToSvgPathD(bPolys, toX, toY);
+      if (dBLbl) engraveTextD += dBLbl + ' ';
+    }
+
+    (bPl.transformedPlacements || []).forEach((pl, idx) => {
+      const pts = pl.outerPoints || [];
+      if (pts.length >= 3) {
+        const dOut = 'M ' + pts.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z';
+        outerPaths.push({ id: 'tab_' + (bPl.boardIndex + 1) + '_pieza_' + (idx + 1) + '_' + (pl.shortCode || 'P'), d: dOut });
+      }
+
+      (pl.holes || []).forEach((h) => {
+        if (!h.points || h.points.length < 3) return;
+        holePaths.push('M ' + h.points.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z');
+      });
+
+      (pl.foldLines || []).forEach((fl) => {
+        if (!fl.points || fl.points.length < 2) return;
+        const isVal = fl.type === 'valley';
+        if (foldMode === 'score_solid') {
+          const segD = 'M ' + fl.points.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' ';
+          if (isVal) valleyFoldD += segD;
+          else mountainFoldD += segD;
+        } else {
+          const perfSegs = typeof subdivideFoldPolylineIntoPerforatedSegments === 'function'
+            ? subdivideFoldPolylineIntoPerforatedSegments(fl.points, dashMM, gapMM)
+            : [fl.points];
+          perfSegs.forEach((seg) => {
+            if (!seg || seg.length < 2) return;
+            const segD = 'M ' + toX(seg[0].x) + ' ' + toY(seg[0].y) + ' L ' + toX(seg[1].x) + ' ' + toY(seg[1].y) + ' ';
+            if (foldMode === 'perforated_cut_layer') {
+              holePaths.push(segD.trim());
+            } else if (isVal) {
+              valleyFoldD += segD;
+            } else {
+              mountainFoldD += segD;
+            }
+          });
+        }
+      });
+
+      if (papercraftState.laserEngraveGlueGuides && pl.glueZones && pl.glueZones.length > 0) {
+        pl.glueZones.forEach((gz) => {
+          if (!gz.polygon || gz.polygon.length < 3) return;
+          glueZonesD += 'M ' + gz.polygon.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z ';
+        });
+      }
+
+      if (papercraftState.laserEngraveCode && pl.labelCenter && typeof hersheyTextToPolylinesDXF === 'function') {
+        const codePolys = hersheyTextToPolylinesDXF(
+          pl.shortCode || ('P' + (idx + 1)),
+          pl.labelCenter.x,
+          pl.labelCenter.y,
+          pl.fontSizeMM || 3.0,
+          'middle',
+          'central'
+        );
+        const dTxt = hersheyPolylinesToSvgPathD(codePolys, toX, toY);
+        if (dTxt) engraveTextD += dTxt + ' ';
+      }
+    });
+  });
+
+  const escapeAttr = typeof escapeXmlAttr === 'function'
+    ? escapeXmlAttr
+    : (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  const xmlHeader = '<' + '?xml version="1.0" encoding="UTF-8" standalone="no"?' + '>';
+  const lines = [
+    xmlHeader,
+    '<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="' + svgW.toFixed(3) + 'mm" height="' + svgH.toFixed(3) + 'mm" viewBox="0 0 ' + svgW.toFixed(4) + ' ' + svgH.toFixed(4) + '">',
+    '  <title>' + escapeAttr('Soporte Mayor Recortable #' + (carrier.carrierIndex + 1) + ' (' + svgW.toFixed(0) + 'x' + svgH.toFixed(0) + 'mm)') + '</title>',
+    '  <desc>' + escapeAttr('Soporte Mayor Laser #' + (carrier.carrierIndex + 1) + ' | Dimensiones: ' + svgW.toFixed(1) + 'x' + svgH.toFixed(1) + 'mm | Tableros: ' + carrier.boardPlacements.length + ' | Piezas: ' + carrier.totalPieces) + '</desc>'
+  ];
+
+  lines.push('  <g id="CORTE_EXTERIOR" fill="none" stroke="#ff0000" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+  outerPaths.forEach((item) => {
+    lines.push('    <path id="' + escapeAttr(item.id) + '" d="' + item.d + '" />');
+  });
+  lines.push('  </g>');
+
+  if (holePaths.length > 0) {
+    lines.push('  <g id="CORTE_INTERIOR_HUECOS" fill="none" stroke="#0055ff" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    holePaths.forEach((hd, i) => {
+      lines.push('    <path id="hueco_soporte_' + (i + 1) + '" d="' + hd + '" />');
+    });
+    lines.push('  </g>');
+  }
+
+  if (mountainFoldD.trim().length > 0) {
+    lines.push('  <g id="PLIEGUE_HENDIDO_MONTANA" fill="none" stroke="#00aa00" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    lines.push('    <path id="pliegues_montana_soporte" d="' + mountainFoldD.trim() + '" />');
+    lines.push('  </g>');
+  }
+
+  if (valleyFoldD.trim().length > 0) {
+    lines.push('  <g id="PLIEGUE_HENDIDO_VALLE" fill="none" stroke="#9900ff" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    lines.push('    <path id="pliegues_valle_soporte" d="' + valleyFoldD.trim() + '" />');
+    lines.push('  </g>');
+  }
+
+  if (glueZonesD.trim().length > 0) {
+    lines.push('  <g id="GUIA_ZONAS_PEGADO" fill="none" stroke="#ff8800" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    lines.push('    <path id="guia_zonas_pegado_soporte" d="' + glueZonesD.trim() + '" />');
+    lines.push('  </g>');
+  }
+
+  if (engraveTextD.trim().length > 0) {
+    lines.push('  <g id="GRABADO_CODIGOS_TEXTO" fill="none" stroke="#008800" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    lines.push('    <path id="codigos_piezas_soporte" d="' + engraveTextD.trim() + '" />');
+    lines.push('  </g>');
+  }
+
+  lines.push('</svg>');
+  return lines.join('\n');
+}
+
+function generatePapercraftLaserCarrierDXF(carrier) {
+  const byLayer = { C00: [], C01: [], C02: [], C03: [], C04: [] };
+  const foldMode = papercraftState.laserFoldMode || 'dashed_cut';
+  const dashMM = Number(papercraftState.laserDashLenMM) || 3.5;
+  const gapMM = Number(papercraftState.laserGapLenMM) || 1.8;
+
+  if (papercraftState.carrierCutOuterBorder) {
+    byLayer.C04.push({
+      closed: true,
+      points: [
+        { x: 0, y: 0 },
+        { x: carrier.width, y: 0 },
+        { x: carrier.width, y: carrier.height },
+        { x: 0, y: carrier.height }
+      ]
+    });
+  }
+
+  (carrier.boardPlacements || []).forEach((bPl) => {
+    if (papercraftState.carrierCutBoardBorders) {
+      byLayer.C04.push({
+        closed: true,
+        points: [
+          { x: bPl.x, y: bPl.y },
+          { x: bPl.x + bPl.w, y: bPl.y },
+          { x: bPl.x + bPl.w, y: bPl.y + bPl.h },
+          { x: bPl.x, y: bPl.y + bPl.h }
+        ]
+      });
+    }
+
+    if (papercraftState.carrierEngraveBoardLabels && typeof hersheyTextToPolylinesDXF === 'function') {
+      const padLbl = Math.max(2.5, (bPl.board.margin || 4) * 0.55);
+      const bLblText = 'TABLERO #' + (bPl.boardIndex + 1) + ' (' + bPl.w.toFixed(0) + 'x' + bPl.h.toFixed(0) + 'mm)';
+      byLayer.C00.push(...hersheyTextToPolylinesDXF(bLblText, bPl.x + padLbl, bPl.y + bPl.h - padLbl, 3.2, 'start', 'alphabetic'));
+    }
+
+    (bPl.transformedPlacements || []).forEach((pl, idx) => {
+      if (pl.outerPoints && pl.outerPoints.length >= 3) {
+        byLayer.C04.push({
+          closed: true,
+          points: pl.outerPoints.map((p) => ({ x: p.x, y: p.y }))
+        });
+      }
+
+      (pl.holes || []).forEach((h) => {
+        if (!h.points || h.points.length < 3) return;
+        byLayer.C03.push({
+          closed: true,
+          points: h.points.map((p) => ({ x: p.x, y: p.y }))
+        });
+      });
+
+      (pl.foldLines || []).forEach((fl) => {
+        if (!fl.points || fl.points.length < 2) return;
+        const isVal = fl.type === 'valley';
+        if (foldMode === 'score_solid') {
+          const targetLayer = isVal ? byLayer.C02 : byLayer.C01;
+          targetLayer.push({
+            closed: false,
+            points: fl.points.map((p) => ({ x: p.x, y: p.y }))
+          });
+        } else {
+          const perfSegs = typeof subdivideFoldPolylineIntoPerforatedSegments === 'function'
+            ? subdivideFoldPolylineIntoPerforatedSegments(fl.points, dashMM, gapMM)
+            : [fl.points];
+          const targetLayer = foldMode === 'perforated_cut_layer' ? byLayer.C03 : (isVal ? byLayer.C02 : byLayer.C01);
+          perfSegs.forEach((seg) => {
+            if (seg && seg.length >= 2) {
+              targetLayer.push({
+                closed: false,
+                points: seg.map((p) => ({ x: p.x, y: p.y }))
+              });
+            }
+          });
+        }
+      });
+
+      if (papercraftState.laserEngraveGlueGuides && pl.glueZones && pl.glueZones.length > 0) {
+        pl.glueZones.forEach((gz) => {
+          if (!gz.polygon || gz.polygon.length < 3) return;
+          byLayer.C02.push({
+            closed: true,
+            points: gz.polygon.map((p) => ({ x: p.x, y: p.y }))
+          });
+        });
+      }
+
+      if (papercraftState.laserEngraveCode && pl.labelCenter && typeof hersheyTextToPolylinesDXF === 'function') {
+        byLayer.C00.push(
+          ...hersheyTextToPolylinesDXF(
+            pl.shortCode || ('P' + (idx + 1)),
+            pl.labelCenter.x,
+            pl.labelCenter.y,
+            pl.fontSizeMM || 3.0,
+            'middle',
+            'central'
+          )
+        );
+      }
+    });
+  });
+
+  if (papercraftState.laserEngraveCode && typeof hersheyTextToPolylinesDXF === 'function') {
+    const headerText = 'SOPORTE MAYOR #' + (carrier.carrierIndex + 1) + ' [' + carrier.width.toFixed(0) + 'x' + carrier.height.toFixed(0) + 'mm | Tableros: ' + carrier.boardPlacements.length + ' | Piezas: ' + carrier.totalPieces + ']';
+    const hx = Math.max(2, carrier.margin);
+    const hy = Math.max(1.5, carrier.margin * 0.4);
+    byLayer.C00.push(...hersheyTextToPolylinesDXF(headerText, hx, hy, 3.4, 'start', 'alphabetic'));
+  }
+
+  if (typeof buildStandardLaserDXF === 'function') {
+    return buildStandardLaserDXF(carrier.width, carrier.height, byLayer);
+  }
+  return '';
+}
+
+function downloadPapercraftLaserSVG() {
+  if (!papercraftState.laserBoards || papercraftState.laserBoards.length === 0) {
+    runPapercraftGeneration();
+  }
+  const txtCfg = getPapercraftHeaderTextConfig(null, null);
+
+  if (papercraftState.previewMode === 'laser_carrier2d' && papercraftState.laserCarriers && papercraftState.laserCarriers.length > 0) {
+    const cIdx = Math.max(0, Math.min(papercraftState.laserCarriers.length - 1, papercraftState.activeLaserCarrierIndex || 0));
+    const carrier = papercraftState.laserCarriers[cIdx];
+    const svg = generatePapercraftLaserCarrierSVG(carrier);
+    const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+    const filename = txtCfg.safeFileSlug + '_SOPORTE_MAYOR_' + (cIdx + 1) + '_' + carrier.width.toFixed(0) + 'x' + carrier.height.toFixed(0) + 'mm_LASER_CRICUT.svg';
+    if (typeof triggerVectorizerFileDownload === 'function') {
+      triggerVectorizerFileDownload(blob, filename);
+    }
+    return;
+  }
+
+  // Cambiar automáticamente a la vista de tableros láser/Cricut para que la persona usuaria vea el tablero exportado
+  if (papercraftState.previewMode !== 'laser_boards2d') {
+    setPapercraftPreviewMode('laser_boards2d');
+  }
+  const boards = papercraftState.laserBoards || [];
+  if (boards.length === 0) return;
+  const bIdx = Math.max(0, Math.min(boards.length - 1, papercraftState.activeLaserBoardIndex || 0));
+  const board = boards[bIdx];
+  const svg = generatePapercraftLaserBoardSVG(board);
+  const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+  const filename = txtCfg.safeFileSlug + '_TABLERO_' + (bIdx + 1) + '_' + board.width.toFixed(0) + 'x' + board.height.toFixed(0) + 'mm_LASER_CRICUT.svg';
+  if (typeof triggerVectorizerFileDownload === 'function') {
+    triggerVectorizerFileDownload(blob, filename);
+  }
+}
+
+function downloadPapercraftLaserDXF() {
+  if (!papercraftState.laserBoards || papercraftState.laserBoards.length === 0) {
+    runPapercraftGeneration();
+  }
+  const txtCfg = getPapercraftHeaderTextConfig(null, null);
+
+  if (papercraftState.previewMode === 'laser_carrier2d' && papercraftState.laserCarriers && papercraftState.laserCarriers.length > 0) {
+    const cIdx = Math.max(0, Math.min(papercraftState.laserCarriers.length - 1, papercraftState.activeLaserCarrierIndex || 0));
+    const carrier = papercraftState.laserCarriers[cIdx];
+    const dxf = generatePapercraftLaserCarrierDXF(carrier);
+    const blob = new Blob([dxf], { type: 'application/dxf;charset=utf-8' });
+    const filename = txtCfg.safeFileSlug + '_SOPORTE_MAYOR_' + (cIdx + 1) + '_' + carrier.width.toFixed(0) + 'x' + carrier.height.toFixed(0) + 'mm_LASER.dxf';
+    if (typeof triggerVectorizerFileDownload === 'function') {
+      triggerVectorizerFileDownload(blob, filename);
+    }
+    return;
+  }
+
+  if (papercraftState.previewMode !== 'laser_boards2d') {
+    setPapercraftPreviewMode('laser_boards2d');
+  }
+  const boards = papercraftState.laserBoards || [];
+  if (boards.length === 0) return;
+  const bIdx = Math.max(0, Math.min(boards.length - 1, papercraftState.activeLaserBoardIndex || 0));
+  const board = boards[bIdx];
+  const dxf = generatePapercraftLaserBoardDXF(board);
+  const blob = new Blob([dxf], { type: 'application/dxf;charset=utf-8' });
+  const filename = txtCfg.safeFileSlug + '_TABLERO_' + (bIdx + 1) + '_' + board.width.toFixed(0) + 'x' + board.height.toFixed(0) + 'mm_LASER.dxf';
+  if (typeof triggerVectorizerFileDownload === 'function') {
+    triggerVectorizerFileDownload(blob, filename);
+  }
+}
+
+async function exportPapercraftLaserCricutZip() {
+  if (typeof JSZip === 'undefined') {
+    alert('La librería JSZip no está disponible en este navegador.');
+    return;
+  }
+  if (!papercraftState.generatedPieces || papercraftState.generatedPieces.length === 0) {
+    runPapercraftGeneration();
+  }
+
+  const zip = new JSZip();
+  const txtCfg = getPapercraftHeaderTextConfig(null, null);
+  const slug = txtCfg.safeFileSlug || 'RECORTABLE_3D';
+  const pieces = papercraftState.generatedPieces || [];
+  const boards = papercraftState.laserBoards || [];
+  const carriers = papercraftState.laserCarriers || [];
+  const sheets = papercraftState.packedSheets || [];
+
+  // 1. Tableros Anidados para Cortadora Láser / Cricut (SVG y DXF)
+  const fBoardsSvg = zip.folder('01_Tableros_Anidados_Laser_Cricut/SVG');
+  const fBoardsDxf = zip.folder('01_Tableros_Anidados_Laser_Cricut/DXF');
+  boards.forEach((b, i) => {
+    const bNum = String(i + 1).padStart(2, '0');
+    const dimTag = b.width.toFixed(0) + 'x' + b.height.toFixed(0) + 'mm';
+    fBoardsSvg.file(slug + '_TABLERO_' + bNum + '_' + dimTag + '.svg', generatePapercraftLaserBoardSVG(b));
+    fBoardsDxf.file(slug + '_TABLERO_' + bNum + '_' + dimTag + '.dxf', generatePapercraftLaserBoardDXF(b));
+  });
+
+  // 2. Soporte Mayor / Tablero Mayor Multitablero (SVG y DXF)
+  if (carriers.length > 0) {
+    const fCarrSvg = zip.folder('02_Soporte_Mayor_Multitablero/SVG');
+    const fCarrDxf = zip.folder('02_Soporte_Mayor_Multitablero/DXF');
+    carriers.forEach((c, i) => {
+      const cNum = String(i + 1).padStart(2, '0');
+      const dimTag = c.width.toFixed(0) + 'x' + c.height.toFixed(0) + 'mm';
+      fCarrSvg.file(slug + '_SOPORTE_MAYOR_' + cNum + '_' + dimTag + '.svg', generatePapercraftLaserCarrierSVG(c));
+      fCarrDxf.file(slug + '_SOPORTE_MAYOR_' + cNum + '_' + dimTag + '.dxf', generatePapercraftLaserCarrierDXF(c));
+    });
+  }
+
+  // 3. Piezas Individuales 1 a 1 (SVG y DXF)
+  const fPiecesSvg = zip.folder('03_Piezas_Sueltas_1a1/SVG');
+  const fPiecesDxf = zip.folder('03_Piezas_Sueltas_1a1/DXF');
+  pieces.forEach((p, i) => {
+    const pNum = String(i + 1).padStart(2, '0');
+    const safeCode = String(p.shortCode || ('P' + pNum)).replace(/[^a-zA-Z0-9_-]/g, '_');
+    fPiecesSvg.file(slug + '_PIEZA_' + pNum + '_' + safeCode + '.svg', generatePapercraftLaserPieceSVG(p));
+    fPiecesDxf.file(slug + '_PIEZA_' + pNum + '_' + safeCode + '.dxf', generatePapercraftLaserPieceDXF(p));
+  });
+
+  // 4. Hojas Imprimibles A4 de Referencia Escolar y Guía de Montaje
+  const fSheets = zip.folder('04_Hojas_Imprimibles_A4_Referencia');
+  sheets.forEach((sh, i) => {
+    const sNum = String(i + 1).padStart(2, '0');
+    fSheets.file(slug + '_HOJA_A4_' + sNum + '.svg', generatePapercraftSheetSVG(sh));
+  });
+  fSheets.file(slug + '_CUADERNO_MONTAJE_IMPRIMIBLE_A4.html', buildPapercraftPrintableHTMLDocument());
+
+  // 5. Instrucciones técnicas para Cortadora Láser y Cricut Design Space
+  const readmeLines = [
+    '================================================================================',
+    '  PAQUETE DE FABRICACIÓN DE RECORTABLE 3D — CORTADORA LÁSER Y CRICUT',
+    '  Proyecto: ' + (txtCfg.titleText || slug),
+    '================================================================================',
+    '',
+    'RESUMEN DE DISTRIBUCIÓN:',
+    '  - Piezas totales del recortable: ' + pieces.length,
+    '  - Tableros de corte (' + papercraftState.boardWidthMM + ' x ' + papercraftState.boardHeightMM + ' mm): ' + boards.length + ' tablero(s)',
+    '  - Soportes Mayores (' + papercraftState.carrierWidthMM + ' x ' + papercraftState.carrierHeightMM + ' mm): ' + carriers.length + ' soporte(s)',
+    '  - Modo de líneas de pliegue / doblez: ' + papercraftState.laserFoldMode,
+    '',
+    'CAPAS Y COLORES EN ARCHIVOS .SVG (ESCALA 1:1 EN MILÍMETROS):',
+    '  1. #ff0000 (Rojo)    -> CORTE_EXTERIOR (Contorno exterior de la pieza y pestañas)',
+    '  2. #0055ff (Azul)    -> CORTE_INTERIOR_HUECOS (Ventanas y calados interiores)',
+    '  3. #00aa00 (Verde)   -> PLIEGUE_HENDIDO_MONTANA (Líneas de doblez en montaña)',
+    '  4. #9900ff (Violeta) -> PLIEGUE_HENDIDO_VALLE (Líneas de doblez en valle)',
+    '  5. #ff8800 (Naranja) -> GUIA_ZONAS_PEGADO (Zonas guía donde apoyar pestañas)',
+    '  6. #008800 (Esmer.)  -> GRABADO_CODIGOS_TEXTO (Códigos vectoriales Hershey de pieza)',
+    '',
+    'CAPAS EN ARCHIVOS .DXF (AUTOCAD R12 / LIGHTBURN / RDWORKS):',
+    '  - C04 (Rojo)    : Corte exterior perimetral',
+    '  - C03 (Azul)    : Corte interior de huecos',
+    '  - C01 (Verde)   : Pliegues en montaña (perforados o hendido continuo)',
+    '  - C02 (Magenta) : Pliegues en valle y guías de pegado',
+    '  - C00 (Negro)   : Grabado vectorial Hershey de códigos y numeración',
+    '',
+    'CONSEJOS PARA CRICUT DESIGN SPACE:',
+    '  - Importe los archivos .SVG de la carpeta 01_Tableros_Anidados_Laser_Cricut/SVG.',
+    '  - Todos los textos están convertidos a trazos vectoriales Hershey (sin fuentes',
+    '    externas) y no hay fondos rectangulares opacos.',
+    '  - Seleccione todos los elementos del grupo y pulse "Adjuntar" (Attach) para',
+    '    conservar la ordenación exacta del tablero en el tapete de corte Cricut.',
+    '================================================================================'
+  ];
+  zip.file('LEEME_CORTE_LASER_Y_CRICUT.txt', readmeLines.join('\n'));
+
+  const content = await zip.generateAsync({ type: 'blob' });
+  const zipFilename = slug + '_PACK_LASER_Y_CRICUT_' + boards.length + 'TAB_' + papercraftState.boardWidthMM + 'x' + papercraftState.boardHeightMM + 'mm.zip';
+  if (typeof triggerVectorizerFileDownload === 'function') {
+    triggerVectorizerFileDownload(content, zipFilename);
+  }
+}
+
+// ============================================================================
 // INTEGRACIÓN CON EL VISOR 3D Y 2D PRINCIPAL DE LAYERSTUDIO 3D
 // ============================================================================
 function applyPapercraftToMainStudio() {
@@ -4286,9 +6110,13 @@ function applyPapercraftToMainStudio() {
   const pieces = papercraftState.generatedPieces;
   if (!pieces || pieces.length === 0) return;
 
-  // Filtrar las piezas principales de capa (1 por nivel) para que state.sliceCount y state.slices.length coincidan exactamente con 2. Sistema Constructivo
-  const mainLayerPieces = pieces.filter((p) => !p.isSpacerPiece && !p.isPeanaBase && !p.isCollarStrip);
-  const studioPieces = mainLayerPieces.length > 0 ? mainLayerPieces : pieces;
+  // Transferir TODAS las piezas del recortable (incluyendo bases de peana, bandas y separadores)
+  // para que la distribución en tablero (Apartado 5) y soporte mayor (Apartado 6) del estudio principal
+  // aniden y exporten el recortable completo.
+  const studioPieces = pieces;
+
+  // Sincronizar también la configuración de Tablero y Soporte Mayor con el estudio principal
+  syncMainStudioBoardAndCarrierFromPapercraft();
 
   const targetAxis = papercraftState.sliceAxis || state.axis || 'z';
   const map = getPapercraftAxesMapping(targetAxis);
@@ -4590,6 +6418,98 @@ function renderPapercraftMultiImagesListUI() {
 // ============================================================================
 // CONTROLADORES DE FLUJO PRINCIPAL DEL ESTUDIO DE RECORTABLES
 // ============================================================================
+function syncPapercraftBoardAndCarrierFromMainStudio(redraw = false) {
+  if (typeof state === 'undefined') return;
+  if (Number.isFinite(Number(state.boardWidthMM))) papercraftState.boardWidthMM = Number(state.boardWidthMM);
+  if (Number.isFinite(Number(state.boardHeightMM))) papercraftState.boardHeightMM = Number(state.boardHeightMM);
+  if (Number.isFinite(Number(state.nestSpacingMM))) papercraftState.nestSpacingMM = Number(state.nestSpacingMM);
+  if (Number.isFinite(Number(state.nestMarginMM))) papercraftState.nestMarginMM = Number(state.nestMarginMM);
+  if (typeof state.nestAllowRotate === 'boolean') papercraftState.nestAllowRotate = state.nestAllowRotate;
+  if (typeof state.nestUseInnerHoles === 'boolean') papercraftState.nestUseInnerHoles = state.nestUseInnerHoles;
+  if (typeof state.nestClipOversized === 'boolean') papercraftState.nestClipOversized = state.nestClipOversized;
+
+  if (typeof state.carrierEnabled === 'boolean') papercraftState.carrierEnabled = state.carrierEnabled;
+  if (Number.isFinite(Number(state.carrierWidthMM))) papercraftState.carrierWidthMM = Number(state.carrierWidthMM);
+  if (Number.isFinite(Number(state.carrierHeightMM))) papercraftState.carrierHeightMM = Number(state.carrierHeightMM);
+  if (Number.isFinite(Number(state.carrierSpacingMM))) papercraftState.carrierSpacingMM = Number(state.carrierSpacingMM);
+  if (Number.isFinite(Number(state.carrierMarginMM))) papercraftState.carrierMarginMM = Number(state.carrierMarginMM);
+  if (typeof state.carrierAllowRotate === 'boolean') papercraftState.carrierAllowRotate = state.carrierAllowRotate;
+  if (typeof state.carrierCutBoardBorders === 'boolean') papercraftState.carrierCutBoardBorders = state.carrierCutBoardBorders;
+  if (typeof state.carrierCutOuterBorder === 'boolean') papercraftState.carrierCutOuterBorder = state.carrierCutOuterBorder;
+  if (typeof state.carrierEngraveBoardLabels === 'boolean') papercraftState.carrierEngraveBoardLabels = state.carrierEngraveBoardLabels;
+
+  if (redraw && papercraftState.isOpen) {
+    syncPapercraftControlsUI();
+    runPapercraftGeneration();
+  }
+}
+
+function syncMainStudioBoardAndCarrierFromPapercraft() {
+  if (typeof state === 'undefined') return;
+  state.boardWidthMM = papercraftState.boardWidthMM;
+  state.boardHeightMM = papercraftState.boardHeightMM;
+  state.nestSpacingMM = papercraftState.nestSpacingMM;
+  state.nestMarginMM = papercraftState.nestMarginMM;
+  state.nestAllowRotate = papercraftState.nestAllowRotate;
+  state.nestUseInnerHoles = papercraftState.nestUseInnerHoles;
+  state.nestClipOversized = papercraftState.nestClipOversized;
+
+  state.carrierEnabled = papercraftState.carrierEnabled;
+  state.carrierWidthMM = papercraftState.carrierWidthMM;
+  state.carrierHeightMM = papercraftState.carrierHeightMM;
+  state.carrierSpacingMM = papercraftState.carrierSpacingMM;
+  state.carrierMarginMM = papercraftState.carrierMarginMM;
+  state.carrierAllowRotate = papercraftState.carrierAllowRotate;
+  state.carrierCutBoardBorders = papercraftState.carrierCutBoardBorders;
+  state.carrierCutOuterBorder = papercraftState.carrierCutOuterBorder;
+  state.carrierEngraveBoardLabels = papercraftState.carrierEngraveBoardLabels;
+
+  const setElVal = (id, v) => {
+    const el = document.getElementById(id);
+    if (el) el.value = String(v);
+  };
+  const setElChk = (id, v) => {
+    const el = document.getElementById(id);
+    if (el) el.checked = Boolean(v);
+  };
+  setElVal('boardWidthInput', papercraftState.boardWidthMM);
+  setElVal('boardHeightInput', papercraftState.boardHeightMM);
+  setElVal('nestSpacingInput', papercraftState.nestSpacingMM);
+  setElVal('nestMarginInput', papercraftState.nestMarginMM);
+  setElChk('nestRotateToggle', papercraftState.nestAllowRotate);
+  setElChk('nestUseHolesToggle', papercraftState.nestUseInnerHoles);
+  setElChk('nestClipOversizedToggle', papercraftState.nestClipOversized);
+
+  setElChk('carrierEnableToggle', papercraftState.carrierEnabled);
+  setElVal('carrierWidthInput', papercraftState.carrierWidthMM);
+  setElVal('carrierHeightInput', papercraftState.carrierHeightMM);
+  setElVal('carrierSpacingInput', papercraftState.carrierSpacingMM);
+  setElVal('carrierMarginInput', papercraftState.carrierMarginMM);
+  setElChk('carrierRotateToggle', papercraftState.carrierAllowRotate);
+  setElChk('carrierCutBoardBordersToggle', papercraftState.carrierCutBoardBorders);
+  setElChk('carrierCutOuterBorderToggle', papercraftState.carrierCutOuterBorder);
+  setElChk('carrierEngraveLabelsToggle', papercraftState.carrierEngraveBoardLabels);
+}
+
+function setPapercraftBoardPresetMM(wMM, hMM) {
+  papercraftState.boardWidthMM = Math.max(20, Number(wMM) || 300);
+  papercraftState.boardHeightMM = Math.max(20, Number(hMM) || 250);
+  papercraftState.previewMode = 'laser_boards2d';
+  syncMainStudioBoardAndCarrierFromPapercraft();
+  syncPapercraftControlsUI();
+  runPapercraftGeneration();
+}
+
+function setPapercraftCarrierPresetMM(wMM, hMM) {
+  papercraftState.carrierWidthMM = Math.max(50, Number(wMM) || 1220);
+  papercraftState.carrierHeightMM = Math.max(50, Number(hMM) || 800);
+  papercraftState.carrierEnabled = true;
+  papercraftState.previewMode = 'laser_carrier2d';
+  syncMainStudioBoardAndCarrierFromPapercraft();
+  syncPapercraftControlsUI();
+  runPapercraftGeneration();
+}
+
 function runPapercraftGeneration() {
   const rawPieces = buildPapercraftPieces();
   papercraftState.generatedPieces = applyCustomTextsToPapercraftPieces(rawPieces);
@@ -4597,6 +6517,24 @@ function runPapercraftGeneration() {
   if (papercraftState.activeSheetIndex >= papercraftState.packedSheets.length) {
     papercraftState.activeSheetIndex = 0;
   }
+
+  // Empaquetado MaxRects en Tableros de Corte Láser / Cricut (Apartado 6)
+  const laserPack = packPapercraftPiecesIntoLaserBoards(papercraftState.generatedPieces);
+  papercraftState.laserBoards = laserPack.boards || [];
+  papercraftState.unfitLaserPiecesCount = laserPack.unfitCount || 0;
+  papercraftState.scaledLaserPiecesCount = laserPack.scaledCount || 0;
+  if (papercraftState.activeLaserBoardIndex >= papercraftState.laserBoards.length) {
+    papercraftState.activeLaserBoardIndex = 0;
+  }
+
+  // Empaquetado MaxRects de los Tableros dentro del Soporte Mayor / Tablero Mayor (Apartado 7)
+  const carrierPack = packPapercraftLaserBoardsIntoCarriers(papercraftState.laserBoards);
+  papercraftState.laserCarriers = carrierPack.carriers || [];
+  papercraftState.unfitLaserBoardsCount = carrierPack.unfitBoardsCount || 0;
+  if (papercraftState.activeLaserCarrierIndex >= papercraftState.laserCarriers.length) {
+    papercraftState.activeLaserCarrierIndex = 0;
+  }
+
   renderPapercraftPieceTitlesEditorUI();
   updatePapercraftStatsAndSheetNavUI();
   renderPapercraftPreviewCanvas();
@@ -4679,6 +6617,8 @@ function resetPapercraftCustomTexts() {
 function updatePapercraftStatsAndSheetNavUI() {
   const pieces = papercraftState.generatedPieces || [];
   const sheets = papercraftState.packedSheets || [];
+  const boards = papercraftState.laserBoards || [];
+  const carriers = papercraftState.laserCarriers || [];
   const totalTabs = pieces.reduce((acc, p) => acc + ((p.glueTabs && p.glueTabs.length) || 0), 0);
   const totalFolds = pieces.reduce((acc, p) => acc + ((p.foldLines && p.foldLines.length) || 0), 0);
   const map = getPapercraftAxesMapping(papercraftState.sliceAxis);
@@ -4692,16 +6632,65 @@ function updatePapercraftStatsAndSheetNavUI() {
       '✂️ <strong>' + pieces.length + ' piezas</strong> · ' +
       '🧴 <strong>' + totalTabs + ' pestañas</strong> · ' +
       '📐 <strong>' + totalFolds + ' pliegues</strong> · ' +
-      '📄 <strong>' + sheets.length + ' hoja(s) ' + (papercraftState.sheetFormat.replace('_', ' ')) + '</strong>';
+      '📄 <strong>' + sheets.length + ' hoja(s) A4</strong> · ' +
+      '🧩 <strong>' + boards.length + ' tablero(s) (' + fmtDim(papercraftState.boardWidthMM) + '×' + fmtDim(papercraftState.boardHeightMM) + 'mm)</strong>' +
+      (carriers.length > 0 ? (' · 📦 <strong>' + carriers.length + ' soporte(s) (' + fmtDim(papercraftState.carrierWidthMM) + '×' + fmtDim(papercraftState.carrierHeightMM) + 'mm)</strong>') : '');
+  }
+
+  const laserBoardBadge = document.getElementById('pcLaserBoardsStatsBadge');
+  if (laserBoardBadge) {
+    const avgEff = boards.length > 0
+      ? (boards.reduce((s, b) => s + (b.efficiency || 0), 0) / boards.length).toFixed(1)
+      : '0.0';
+    let extraNote = '';
+    if (papercraftState.scaledLaserPiecesCount > 0) {
+      extraNote += ' · 📐 ' + papercraftState.scaledLaserPiecesCount + ' auto-ajustada(s)';
+    }
+    if (papercraftState.unfitLaserPiecesCount > 0) {
+      extraNote += ' · ⚠️ ' + papercraftState.unfitLaserPiecesCount + ' no cabe(n)';
+    }
+    laserBoardBadge.textContent = boards.length + ' tablero(s) · Uso medio: ' + avgEff + '%' + extraNote;
+  }
+
+  const carrierBadge = document.getElementById('pcLaserCarrierStatsBadge');
+  if (carrierBadge) {
+    if (carriers.length > 0) {
+      const avgCEff = (carriers.reduce((s, c) => s + (c.efficiency || 0), 0) / carriers.length).toFixed(1);
+      carrierBadge.textContent = carriers.length + ' soporte(s) · ' + boards.length + ' tab. · Uso: ' + avgCEff + '%';
+    } else {
+      carrierBadge.textContent = '0 soportes (tablero mayor que soporte)';
+    }
   }
 
   const sheetIndicator = document.getElementById('papercraftSheetPageLabel');
   if (sheetIndicator) {
-    sheetIndicator.textContent = 'Hoja ' + ((papercraftState.activeSheetIndex || 0) + 1) + ' / ' + Math.max(1, sheets.length);
+    if (papercraftState.previewMode === 'laser_boards2d') {
+      sheetIndicator.textContent = 'Tablero ' + ((papercraftState.activeLaserBoardIndex || 0) + 1) + ' / ' + Math.max(1, boards.length);
+    } else if (papercraftState.previewMode === 'laser_carrier2d') {
+      sheetIndicator.textContent = 'Soporte ' + ((papercraftState.activeLaserCarrierIndex || 0) + 1) + ' / ' + Math.max(1, carriers.length);
+    } else {
+      sheetIndicator.textContent = 'Hoja ' + ((papercraftState.activeSheetIndex || 0) + 1) + ' / ' + Math.max(1, sheets.length);
+    }
   }
 }
 
 function stepPapercraftSheetPage(delta) {
+  if (papercraftState.previewMode === 'laser_boards2d') {
+    const boards = papercraftState.laserBoards || [];
+    if (boards.length <= 1) return;
+    papercraftState.activeLaserBoardIndex = (papercraftState.activeLaserBoardIndex + delta + boards.length) % boards.length;
+    updatePapercraftStatsAndSheetNavUI();
+    renderPapercraftPreviewCanvas();
+    return;
+  }
+  if (papercraftState.previewMode === 'laser_carrier2d') {
+    const carriers = papercraftState.laserCarriers || [];
+    if (carriers.length <= 1) return;
+    papercraftState.activeLaserCarrierIndex = (papercraftState.activeLaserCarrierIndex + delta + carriers.length) % carriers.length;
+    updatePapercraftStatsAndSheetNavUI();
+    renderPapercraftPreviewCanvas();
+    return;
+  }
   const sheets = papercraftState.packedSheets || [];
   if (sheets.length <= 1) return;
   papercraftState.activeSheetIndex = (papercraftState.activeSheetIndex + delta + sheets.length) % sheets.length;
@@ -4728,7 +6717,11 @@ function setPapercraftCutoutType(type) {
 
 function setPapercraftPreviewMode(mode) {
   papercraftState.previewMode = mode;
+  if (mode === 'laser_carrier2d') {
+    papercraftState.carrierEnabled = true;
+  }
   syncPapercraftControlsUI();
+  updatePapercraftStatsAndSheetNavUI();
   renderPapercraftPreviewCanvas();
 }
 
@@ -4797,6 +6790,49 @@ function onPapercraftParamsChange(sourceControlId) {
   papercraftState.foldProgressPct = getNum('pcFoldSlider', papercraftState.foldProgressPct);
   papercraftState.explodeLayersPct = getNum('pcExplodeSlider', papercraftState.explodeLayersPct);
 
+  // Parámetros de Corte Láser / Cricut: Ordenación en Tableros (Apartado 6) e Inclusión en Soporte Mayor (Apartado 7)
+  papercraftState.laserFoldMode = getVal('pcLaserFoldModeSelect', papercraftState.laserFoldMode || 'dashed_cut');
+  papercraftState.laserDashLenMM = Math.max(0.8, Math.min(20, getNum('pcLaserDashLenInput', papercraftState.laserDashLenMM || 3.5)));
+  papercraftState.laserGapLenMM = Math.max(0.6, Math.min(15, getNum('pcLaserGapLenInput', papercraftState.laserGapLenMM || 1.8)));
+  papercraftState.laserEngraveCode = getCheck('pcLaserEngraveCodeCheck', papercraftState.laserEngraveCode);
+  papercraftState.laserEngraveGlueGuides = getCheck('pcLaserEngraveGlueCheck', papercraftState.laserEngraveGlueGuides);
+  papercraftState.boardCutBorder = getCheck('pcBoardCutBorderCheck', papercraftState.boardCutBorder);
+
+  papercraftState.boardWidthMM = Math.max(20, Math.min(3000, getNum('pcBoardWidthInput', papercraftState.boardWidthMM || 300)));
+  papercraftState.boardHeightMM = Math.max(20, Math.min(3000, getNum('pcBoardHeightInput', papercraftState.boardHeightMM || 250)));
+  papercraftState.nestSpacingMM = Math.max(0, Math.min(50, getNum('pcNestSpacingInput', papercraftState.nestSpacingMM != null ? papercraftState.nestSpacingMM : 3)));
+  papercraftState.nestMarginMM = Math.max(0, Math.min(50, getNum('pcNestMarginInput', papercraftState.nestMarginMM != null ? papercraftState.nestMarginMM : 5)));
+  papercraftState.nestAllowRotate = getCheck('pcNestRotateCheck', papercraftState.nestAllowRotate);
+  papercraftState.nestUseInnerHoles = getCheck('pcNestUseHolesCheck', papercraftState.nestUseInnerHoles);
+  papercraftState.nestClipOversized = getCheck('pcNestAutoFitCheck', papercraftState.nestClipOversized);
+
+  papercraftState.carrierEnabled = getCheck('pcCarrierEnableCheck', papercraftState.carrierEnabled);
+  papercraftState.carrierWidthMM = Math.max(50, Math.min(5000, getNum('pcCarrierWidthInput', papercraftState.carrierWidthMM || 1220)));
+  papercraftState.carrierHeightMM = Math.max(50, Math.min(5000, getNum('pcCarrierHeightInput', papercraftState.carrierHeightMM || 800)));
+  papercraftState.carrierSpacingMM = Math.max(0, Math.min(100, getNum('pcCarrierSpacingInput', papercraftState.carrierSpacingMM != null ? papercraftState.carrierSpacingMM : 8)));
+  papercraftState.carrierMarginMM = Math.max(0, Math.min(100, getNum('pcCarrierMarginInput', papercraftState.carrierMarginMM != null ? papercraftState.carrierMarginMM : 10)));
+  papercraftState.carrierAllowRotate = getCheck('pcCarrierRotateCheck', papercraftState.carrierAllowRotate);
+  papercraftState.carrierCutBoardBorders = getCheck('pcCarrierCutBoardsCheck', papercraftState.carrierCutBoardBorders);
+  papercraftState.carrierCutOuterBorder = getCheck('pcCarrierCutOuterCheck', papercraftState.carrierCutOuterBorder);
+  papercraftState.carrierEngraveBoardLabels = getCheck('pcCarrierEngraveLabelsCheck', papercraftState.carrierEngraveBoardLabels);
+
+  if (sourceControlId === 'pcCarrierEnableCheck' && papercraftState.carrierEnabled) {
+    papercraftState.previewMode = 'laser_carrier2d';
+  } else if (
+    sourceControlId &&
+    (sourceControlId.startsWith('pcBoard') || sourceControlId.startsWith('pcNest') || sourceControlId.startsWith('pcLaser')) &&
+    papercraftState.previewMode === 'sheets2d'
+  ) {
+    papercraftState.previewMode = 'laser_boards2d';
+  } else if (
+    sourceControlId &&
+    sourceControlId.startsWith('pcCarrier') &&
+    papercraftState.previewMode !== 'laser_carrier2d'
+  ) {
+    papercraftState.previewMode = 'laser_carrier2d';
+  }
+
+  syncMainStudioBoardAndCarrierFromPapercraft();
   syncPapercraftControlsUI();
   runPapercraftGeneration();
 }
@@ -4835,13 +6871,13 @@ function syncPapercraftControlsUI() {
   const tabsPerLayerRow = document.getElementById('pcTabsPerLayerRow');
   if (tabsPerLayerRow) tabsPerLayerRow.classList.toggle('hidden', papercraftState.cutoutType !== 'layered_tabs');
 
-  // Pestañas de vista previa (Hojas A4 2D vs Vista 3D Montada)
-  ['sheets2d', 'assembled3d'].forEach((pm) => {
+  // Pestañas de vista previa (Hojas A4 2D, Tableros Láser/Cricut 2D, Soporte Mayor 2D, Vista 3D Montada)
+  ['sheets2d', 'laser_boards2d', 'laser_carrier2d', 'assembled3d'].forEach((pm) => {
     const btn = document.getElementById('pcPrevModeBtn_' + pm);
     if (btn) {
       btn.className = papercraftState.previewMode === pm
-        ? 'px-3 py-1 rounded-lg bg-amber-500/25 border border-amber-400 text-amber-200 text-xs font-bold transition'
-        : 'px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-medium transition';
+        ? 'px-2.5 py-1 rounded-lg bg-amber-500/25 border border-amber-400 text-amber-200 text-[11px] font-bold transition shadow'
+        : 'px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-[11px] font-medium transition';
     }
   });
 
@@ -4911,6 +6947,40 @@ function syncPapercraftControlsUI() {
   setInputValIfDiff('pcCustomNoteInput', papercraftState.customSubtitleNote || '');
   setInputValIfDiff('pcCustomPiecePrefixInput', papercraftState.customPiecePrefix || '');
   setInputValIfDiff('pcCustomGlueWordInput', papercraftState.customGlueWord || 'PEGAR');
+
+  // Sincronizar controles de Corte Láser / Cricut (Apartado 6) y Soporte Mayor (Apartado 7)
+  setInputValIfDiff('pcLaserFoldModeSelect', papercraftState.laserFoldMode || 'dashed_cut');
+  setInputValIfDiff('pcLaserDashLenInput', papercraftState.laserDashLenMM != null ? papercraftState.laserDashLenMM : 3.5);
+  setInputValIfDiff('pcLaserGapLenInput', papercraftState.laserGapLenMM != null ? papercraftState.laserGapLenMM : 1.8);
+  setInputValIfDiff('pcBoardWidthInput', papercraftState.boardWidthMM || 300);
+  setInputValIfDiff('pcBoardHeightInput', papercraftState.boardHeightMM || 250);
+  setInputValIfDiff('pcNestSpacingInput', papercraftState.nestSpacingMM != null ? papercraftState.nestSpacingMM : 3);
+  setInputValIfDiff('pcNestMarginInput', papercraftState.nestMarginMM != null ? papercraftState.nestMarginMM : 5);
+  setInputValIfDiff('pcCarrierWidthInput', papercraftState.carrierWidthMM || 1220);
+  setInputValIfDiff('pcCarrierHeightInput', papercraftState.carrierHeightMM || 800);
+  setInputValIfDiff('pcCarrierSpacingInput', papercraftState.carrierSpacingMM != null ? papercraftState.carrierSpacingMM : 8);
+  setInputValIfDiff('pcCarrierMarginInput', papercraftState.carrierMarginMM != null ? papercraftState.carrierMarginMM : 10);
+
+  const setCheckVal = (id, v) => {
+    const el = document.getElementById(id);
+    if (el) el.checked = Boolean(v);
+  };
+  setCheckVal('pcLaserEngraveCodeCheck', papercraftState.laserEngraveCode);
+  setCheckVal('pcLaserEngraveGlueCheck', papercraftState.laserEngraveGlueGuides);
+  setCheckVal('pcBoardCutBorderCheck', papercraftState.boardCutBorder);
+  setCheckVal('pcNestRotateCheck', papercraftState.nestAllowRotate);
+  setCheckVal('pcNestUseHolesCheck', papercraftState.nestUseInnerHoles);
+  setCheckVal('pcNestAutoFitCheck', papercraftState.nestClipOversized);
+  setCheckVal('pcCarrierEnableCheck', papercraftState.carrierEnabled);
+  setCheckVal('pcCarrierRotateCheck', papercraftState.carrierAllowRotate);
+  setCheckVal('pcCarrierCutBoardsCheck', papercraftState.carrierCutBoardBorders);
+  setCheckVal('pcCarrierCutOuterCheck', papercraftState.carrierCutOuterBorder);
+  setCheckVal('pcCarrierEngraveLabelsCheck', papercraftState.carrierEngraveBoardLabels);
+
+  const dashRow = document.getElementById('pcLaserDashParamsRow');
+  if (dashRow) {
+    dashRow.classList.toggle('hidden', papercraftState.laserFoldMode === 'score_solid');
+  }
 }
 
 function openPapercraftModal(initialSourceMode) {
@@ -4919,8 +6989,9 @@ function openPapercraftModal(initialSourceMode) {
   if (initialSourceMode && ['model3d', 'single_image', 'multi_images'].includes(initialSourceMode)) {
     papercraftState.sourceMode = initialSourceMode;
   }
-  // Sincronizar siempre el número de capas y el eje con 2. Sistema Constructivo al abrir
+  // Sincronizar siempre el número de capas, el eje y la configuración de Tablero/Soporte Mayor al abrir
   syncPapercraftWithConstructiveSystem(false);
+  syncPapercraftBoardAndCarrierFromMainStudio(false);
 
   if (!papercraftState.singleImageCanvas) {
     loadPapercraftSingleDemo('owl', false);
@@ -5100,6 +7171,21 @@ if (typeof window !== 'undefined') {
   window.computeSheetModelProgressLayout = computeSheetModelProgressLayout;
   window.buildPapercraftPrintableHTMLDocument = buildPapercraftPrintableHTMLDocument;
   window.applyPapercraftToMainStudio = applyPapercraftToMainStudio;
+  window.packPapercraftPiecesIntoLaserBoards = packPapercraftPiecesIntoLaserBoards;
+  window.packPapercraftLaserBoardsIntoCarriers = packPapercraftLaserBoardsIntoCarriers;
+  window.syncPapercraftBoardAndCarrierFromMainStudio = syncPapercraftBoardAndCarrierFromMainStudio;
+  window.syncMainStudioBoardAndCarrierFromPapercraft = syncMainStudioBoardAndCarrierFromPapercraft;
+  window.setPapercraftBoardPresetMM = setPapercraftBoardPresetMM;
+  window.setPapercraftCarrierPresetMM = setPapercraftCarrierPresetMM;
+  window.generatePapercraftLaserPieceSVG = generatePapercraftLaserPieceSVG;
+  window.generatePapercraftLaserPieceDXF = generatePapercraftLaserPieceDXF;
+  window.generatePapercraftLaserBoardSVG = generatePapercraftLaserBoardSVG;
+  window.generatePapercraftLaserBoardDXF = generatePapercraftLaserBoardDXF;
+  window.generatePapercraftLaserCarrierSVG = generatePapercraftLaserCarrierSVG;
+  window.generatePapercraftLaserCarrierDXF = generatePapercraftLaserCarrierDXF;
+  window.downloadPapercraftLaserSVG = downloadPapercraftLaserSVG;
+  window.downloadPapercraftLaserDXF = downloadPapercraftLaserDXF;
+  window.exportPapercraftLaserCricutZip = exportPapercraftLaserCricutZip;
 
   if (typeof window.addEventListener === 'function') {
     window.addEventListener('DOMContentLoaded', () => {

@@ -532,6 +532,53 @@ function generateSliceSVG(slice, idx) {
   return lines.join('\n');
 }
 
+// Subdivide una polilínea de pliegue en micro-segmentos físicos discontinuos (corte perforado para Láser y Cricut)
+// dejando puentes en los extremos para no seccionar la pestaña ni despegar la pieza.
+function subdivideFoldPolylineIntoPerforatedSegments(pts, dashLenMM = 3.5, gapLenMM = 1.8) {
+  if (!pts || pts.length < 2) return [];
+  const dash = Math.max(0.8, Number(dashLenMM) || 3.5);
+  const gap = Math.max(0.6, Number(gapLenMM) || 1.8);
+  const outSegments = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i];
+    const p1 = pts[i + 1];
+    const dx = p1.x - p0.x;
+    const dy = p1.y - p0.y;
+    const segLen = Math.hypot(dx, dy);
+    if (segLen < 0.4) continue;
+    const ux = dx / segLen;
+    const uy = dy / segLen;
+    // Dejar un pequeño puente de seguridad en ambos extremos del pliegue
+    const endBridge = Math.min(gap * 0.65, segLen * 0.16);
+    const usableLen = segLen - endBridge * 2;
+    if (usableLen <= dash * 0.7) {
+      const mid = segLen * 0.5;
+      const half = Math.max(0.25, Math.min(dash * 0.4, segLen * 0.28));
+      outSegments.push([
+        { x: p0.x + ux * (mid - half), y: p0.y + uy * (mid - half) },
+        { x: p0.x + ux * (mid + half), y: p0.y + uy * (mid + half) }
+      ]);
+      continue;
+    }
+    const step = dash + gap;
+    const count = Math.max(1, Math.floor((usableLen + gap) / step));
+    const totalSpan = count * dash + (count - 1) * gap;
+    let dist = endBridge + Math.max(0, (usableLen - totalSpan) * 0.5);
+    for (let k = 0; k < count; k++) {
+      const dStart = dist;
+      const dEnd = Math.min(segLen - endBridge, dist + dash);
+      if (dEnd - dStart >= 0.25) {
+        outSegments.push([
+          { x: p0.x + ux * dStart, y: p0.y + uy * dStart },
+          { x: p0.x + ux * dEnd, y: p0.y + uy * dEnd }
+        ]);
+      }
+      dist += step;
+    }
+  }
+  return outSegments;
+}
+
 // Genera el archivo .SVG de un tablero completo con todas sus islas anidadas
 function generateBoardSVG(board) {
   const svgW = board.width;
@@ -548,7 +595,13 @@ function generateBoardSVG(board) {
   let boardEngravePath = '';
   let upperGuidePath = '';
   let lowerGuidePath = '';
+  let mountainFoldPath = '';
+  let valleyFoldPath = '';
+  let glueZonesPath = '';
   const islandLabels = [];
+  const pcFoldMode = (typeof window !== 'undefined' && window.papercraftState && window.papercraftState.laserFoldMode) || 'dashed_cut';
+  const pcDashMM = (typeof window !== 'undefined' && window.papercraftState && window.papercraftState.laserDashLenMM) || 3.5;
+  const pcGapMM = (typeof window !== 'undefined' && window.papercraftState && window.papercraftState.laserGapLenMM) || 1.8;
 
   board.placements.forEach((pl, pIdx) => {
     const pts = pl.outerPoints;
@@ -608,6 +661,37 @@ function generateBoardSVG(board) {
           lowerGuidePath += ' L ' + toX(poly[i].x) + ' ' + toY(poly[i].y);
         }
         lowerGuidePath += ' ';
+      });
+    }
+
+    if (pl.papercraftGlueZones && pl.papercraftGlueZones.length > 0) {
+      pl.papercraftGlueZones.forEach((gz) => {
+        if (!gz.polygon || gz.polygon.length < 3) return;
+        glueZonesPath += 'M ' + gz.polygon.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z ';
+      });
+    }
+
+    if (pl.papercraftFoldLines && pl.papercraftFoldLines.length > 0) {
+      pl.papercraftFoldLines.forEach((fl) => {
+        if (!fl.points || fl.points.length < 2) return;
+        const isVal = fl.type === 'valley';
+        if (pcFoldMode === 'score_solid') {
+          const dSeg = 'M ' + fl.points.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' ';
+          if (isVal) valleyFoldPath += dSeg;
+          else mountainFoldPath += dSeg;
+        } else {
+          const perfSegs = subdivideFoldPolylineIntoPerforatedSegments(fl.points, pcDashMM, pcGapMM);
+          perfSegs.forEach((seg) => {
+            const dSeg = 'M ' + toX(seg[0].x) + ' ' + toY(seg[0].y) + ' L ' + toX(seg[1].x) + ' ' + toY(seg[1].y) + ' ';
+            if (pcFoldMode === 'perforated_cut_layer') {
+              holePaths.push(dSeg.trim());
+            } else if (isVal) {
+              valleyFoldPath += dSeg;
+            } else {
+              mountainFoldPath += dSeg;
+            }
+          });
+        }
       });
     }
 
@@ -704,6 +788,24 @@ function generateBoardSVG(board) {
     lines.push('  </g>');
   }
 
+  if (mountainFoldPath.trim().length > 0) {
+    lines.push('  <g id="PLIEGUE_HENDIDO_MONTANA" fill="none" stroke="#00aa00" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    lines.push('    <path id="pliegue_montana_tablero" d="' + mountainFoldPath.trim() + '" vector-effect="non-scaling-stroke" />');
+    lines.push('  </g>');
+  }
+
+  if (valleyFoldPath.trim().length > 0) {
+    lines.push('  <g id="PLIEGUE_HENDIDO_VALLE" fill="none" stroke="#9900ff" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    lines.push('    <path id="pliegue_valle_tablero" d="' + valleyFoldPath.trim() + '" vector-effect="non-scaling-stroke" />');
+    lines.push('  </g>');
+  }
+
+  if (glueZonesPath.trim().length > 0) {
+    lines.push('  <g id="GUIA_ZONAS_PEGADO" fill="none" stroke="#ff8800" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    lines.push('    <path id="zonas_pegado_tablero" d="' + glueZonesPath.trim() + '" vector-effect="non-scaling-stroke" />');
+    lines.push('  </g>');
+  }
+
   if (islandLabels.length > 0 || state.includeLabels) {
     lines.push('  <g id="GRABADO_ETIQUETA_ISLAS">');
     islandLabels.forEach((lbl, i) => {
@@ -764,6 +866,42 @@ function generateBoardDXF(board) {
           closed: false,
           points: poly.map((p) => ({ x: p.x, y: p.y }))
         });
+      });
+    }
+
+    if (pl.papercraftGlueZones && pl.papercraftGlueZones.length > 0) {
+      pl.papercraftGlueZones.forEach((gz) => {
+        if (!gz.polygon || gz.polygon.length < 3) return;
+        byLayer.C02.push({
+          closed: true,
+          points: gz.polygon.map((p) => ({ x: p.x, y: p.y }))
+        });
+      });
+    }
+
+    if (pl.papercraftFoldLines && pl.papercraftFoldLines.length > 0) {
+      const pcFoldMode = (typeof window !== 'undefined' && window.papercraftState && window.papercraftState.laserFoldMode) || 'dashed_cut';
+      const pcDashMM = (typeof window !== 'undefined' && window.papercraftState && window.papercraftState.laserDashLenMM) || 3.5;
+      const pcGapMM = (typeof window !== 'undefined' && window.papercraftState && window.papercraftState.laserGapLenMM) || 1.8;
+      pl.papercraftFoldLines.forEach((fl) => {
+        if (!fl.points || fl.points.length < 2) return;
+        const isVal = fl.type === 'valley';
+        if (pcFoldMode === 'score_solid') {
+          const targetLayer = isVal ? byLayer.C02 : byLayer.C01;
+          targetLayer.push({
+            closed: false,
+            points: fl.points.map((p) => ({ x: p.x, y: p.y }))
+          });
+        } else {
+          const perfSegs = subdivideFoldPolylineIntoPerforatedSegments(fl.points, pcDashMM, pcGapMM);
+          const targetLayer = pcFoldMode === 'perforated_cut_layer' ? byLayer.C03 : (isVal ? byLayer.C02 : byLayer.C01);
+          perfSegs.forEach((seg) => {
+            targetLayer.push({
+              closed: false,
+              points: seg.map((p) => ({ x: p.x, y: p.y }))
+            });
+          });
+        }
       });
     }
 
@@ -834,8 +972,14 @@ function generateCarrierSVG(carrier) {
   let carrierEngravePath = '';
   let upperGuidePath = '';
   let lowerGuidePath = '';
+  let mountainFoldPath = '';
+  let valleyFoldPath = '';
+  let glueZonesPath = '';
   const islandLabels = [];
   const boardHeaderLabels = [];
+  const pcFoldMode = (typeof window !== 'undefined' && window.papercraftState && window.papercraftState.laserFoldMode) || 'dashed_cut';
+  const pcDashMM = (typeof window !== 'undefined' && window.papercraftState && window.papercraftState.laserDashLenMM) || 3.5;
+  const pcGapMM = (typeof window !== 'undefined' && window.papercraftState && window.papercraftState.laserGapLenMM) || 1.8;
 
   if (state.carrierCutOuterBorder) {
     const outerCarrierRect = [
@@ -964,6 +1108,37 @@ function generateCarrierSVG(carrier) {
         });
       }
 
+      if (pl.papercraftGlueZones && pl.papercraftGlueZones.length > 0) {
+        pl.papercraftGlueZones.forEach((gz) => {
+          if (!gz.polygon || gz.polygon.length < 3) return;
+          glueZonesPath += 'M ' + gz.polygon.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z ';
+        });
+      }
+
+      if (pl.papercraftFoldLines && pl.papercraftFoldLines.length > 0) {
+        pl.papercraftFoldLines.forEach((fl) => {
+          if (!fl.points || fl.points.length < 2) return;
+          const isVal = fl.type === 'valley';
+          if (pcFoldMode === 'score_solid') {
+            const dSeg = 'M ' + fl.points.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' ';
+            if (isVal) valleyFoldPath += dSeg;
+            else mountainFoldPath += dSeg;
+          } else {
+            const perfSegs = subdivideFoldPolylineIntoPerforatedSegments(fl.points, pcDashMM, pcGapMM);
+            perfSegs.forEach((seg) => {
+              const dSeg = 'M ' + toX(seg[0].x) + ' ' + toY(seg[0].y) + ' L ' + toX(seg[1].x) + ' ' + toY(seg[1].y) + ' ';
+              if (pcFoldMode === 'perforated_cut_layer') {
+                holePaths.push(dSeg.trim());
+              } else if (isVal) {
+                valleyFoldPath += dSeg;
+              } else {
+                mountainFoldPath += dSeg;
+              }
+            });
+          }
+        });
+      }
+
       const tl = pl.textLayout;
       if (tl && tl.lines && tl.lines.length > 0 && tl.fontSizeMM > 0.04) {
         const fontSize = tl.fontSizeMM.toFixed(3);
@@ -1030,6 +1205,24 @@ function generateCarrierSVG(carrier) {
     const upperDashAttr = getSvgDashAttr(state.upperGuideStyle);
     lines.push('  <g id="GUIA_SUPERIOR_SOPORTE" fill="none" stroke="#ff8800" stroke-width="' + strokeMm + '"' + upperDashAttr + ' stroke-linecap="round" stroke-linejoin="round">');
     lines.push('    <path id="guia_sup_soporte_trazos" d="' + upperGuidePath.trim() + '" vector-effect="non-scaling-stroke" />');
+    lines.push('  </g>');
+  }
+
+  if (mountainFoldPath.trim().length > 0) {
+    lines.push('  <g id="PLIEGUE_HENDIDO_MONTANA" fill="none" stroke="#00aa00" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    lines.push('    <path id="pliegue_montana_soporte" d="' + mountainFoldPath.trim() + '" vector-effect="non-scaling-stroke" />');
+    lines.push('  </g>');
+  }
+
+  if (valleyFoldPath.trim().length > 0) {
+    lines.push('  <g id="PLIEGUE_HENDIDO_VALLE" fill="none" stroke="#9900ff" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    lines.push('    <path id="pliegue_valle_soporte" d="' + valleyFoldPath.trim() + '" vector-effect="non-scaling-stroke" />');
+    lines.push('  </g>');
+  }
+
+  if (glueZonesPath.trim().length > 0) {
+    lines.push('  <g id="GUIA_ZONAS_PEGADO" fill="none" stroke="#ff8800" stroke-width="' + strokeMm + '" stroke-linecap="round" stroke-linejoin="round">');
+    lines.push('    <path id="zonas_pegado_soporte" d="' + glueZonesPath.trim() + '" vector-effect="non-scaling-stroke" />');
     lines.push('  </g>');
   }
 
@@ -1157,6 +1350,42 @@ function generateCarrierDXF(carrier) {
         });
       }
 
+      if (pl.papercraftGlueZones && pl.papercraftGlueZones.length > 0) {
+        pl.papercraftGlueZones.forEach((gz) => {
+          if (!gz.polygon || gz.polygon.length < 3) return;
+          byLayer.C02.push({
+            closed: true,
+            points: gz.polygon.map((p) => ({ x: p.x, y: p.y }))
+          });
+        });
+      }
+
+      if (pl.papercraftFoldLines && pl.papercraftFoldLines.length > 0) {
+        const pcFoldMode = (typeof window !== 'undefined' && window.papercraftState && window.papercraftState.laserFoldMode) || 'dashed_cut';
+        const pcDashMM = (typeof window !== 'undefined' && window.papercraftState && window.papercraftState.laserDashLenMM) || 3.5;
+        const pcGapMM = (typeof window !== 'undefined' && window.papercraftState && window.papercraftState.laserGapLenMM) || 1.8;
+        pl.papercraftFoldLines.forEach((fl) => {
+          if (!fl.points || fl.points.length < 2) return;
+          const isVal = fl.type === 'valley';
+          if (pcFoldMode === 'score_solid') {
+            const targetLayer = isVal ? byLayer.C02 : byLayer.C01;
+            targetLayer.push({
+              closed: false,
+              points: fl.points.map((p) => ({ x: p.x, y: p.y }))
+            });
+          } else {
+            const perfSegs = subdivideFoldPolylineIntoPerforatedSegments(fl.points, pcDashMM, pcGapMM);
+            const targetLayer = pcFoldMode === 'perforated_cut_layer' ? byLayer.C03 : (isVal ? byLayer.C02 : byLayer.C01);
+            perfSegs.forEach((seg) => {
+              targetLayer.push({
+                closed: false,
+                points: seg.map((p) => ({ x: p.x, y: p.y }))
+              });
+            });
+          }
+        });
+      }
+
       pl.rods.forEach((r) => {
         byLayer.C03.push(createCirclePolylineDXF(r.x, r.y, rodRadius));
       });
@@ -1254,6 +1483,39 @@ function generateSliceDXF(slice, idx) {
         points: fl.points.map((p) => ({ x: p.x - ox, y: p.y - oy }))
       });
     });
+  }
+
+  if (slice.papercraftMeta) {
+    const pm = slice.papercraftMeta;
+    const pcFoldMode = (typeof window !== 'undefined' && window.papercraftState && window.papercraftState.laserFoldMode) || 'dashed_cut';
+    const pcDashMM = (typeof window !== 'undefined' && window.papercraftState && window.papercraftState.laserDashLenMM) || 3.5;
+    const pcGapMM = (typeof window !== 'undefined' && window.papercraftState && window.papercraftState.laserGapLenMM) || 1.8;
+    if (pm.glueTargetZones && pm.glueTargetZones.length > 0) {
+      pm.glueTargetZones.forEach((gz) => {
+        if (!gz.polygon || gz.polygon.length < 3) return;
+        byLayer.C02.push({
+          closed: true,
+          points: gz.polygon.map((p) => ({ x: p.x - ox, y: p.y - oy }))
+        });
+      });
+    }
+    if (pm.foldLines && pm.foldLines.length > 0) {
+      pm.foldLines.forEach((fl) => {
+        if (!fl.points || fl.points.length < 2) return;
+        const isVal = fl.type === 'valley';
+        const shiftedPts = fl.points.map((p) => ({ x: p.x - ox, y: p.y - oy }));
+        if (pcFoldMode === 'score_solid') {
+          const targetLayer = isVal ? byLayer.C02 : byLayer.C01;
+          targetLayer.push({ closed: false, points: shiftedPts });
+        } else {
+          const perfSegs = subdivideFoldPolylineIntoPerforatedSegments(shiftedPts, pcDashMM, pcGapMM);
+          const targetLayer = pcFoldMode === 'perforated_cut_layer' ? byLayer.C03 : (isVal ? byLayer.C02 : byLayer.C01);
+          perfSegs.forEach((seg) => {
+            targetLayer.push({ closed: false, points: seg });
+          });
+        }
+      });
+    }
   }
 
   let hasUpperGuide = false;
@@ -2672,6 +2934,9 @@ function copyCurrentOkfShareUrl() {
 }
 
 if (typeof window !== 'undefined') {
+  window.subdivideFoldPolylineIntoPerforatedSegments = subdivideFoldPolylineIntoPerforatedSegments;
+  window.hersheyTextToPolylinesDXF = hersheyTextToPolylinesDXF;
+  window.buildStandardLaserDXF = buildStandardLaserDXF;
   window.applyOkfProjectConfig = applyOkfProjectConfig;
   window.getOkfRecipePayload = getOkfRecipePayload;
   window.parseOkfUrlQuery = parseOkfUrlQuery;

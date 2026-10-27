@@ -699,6 +699,26 @@ function extractIslandsFromSlices(targetSlices) {
       const upperPolys = nextSlice ? getGuidePolylinesForIsland(outer.points, islandHoles, nextSlice) : [];
       const lowerPolys = prevSlice ? getGuidePolylinesForIsland(outer.points, islandHoles, prevSlice) : [];
 
+      // Metadatos de Recortable / Papercraft (líneas de pliegue, pestañas y zonas de pegado) asociados a esta isla
+      let islandFoldLines = [];
+      let islandGlueTabs = [];
+      let islandGlueZones = [];
+      if (slice.papercraftMeta) {
+        const pcMeta = slice.papercraftMeta;
+        const belongsToIsland = (pts) => {
+          if (!pts || !pts.length) return false;
+          if (outers.length === 1) return true;
+          const mid = pts[Math.floor(pts.length / 2)] || pts[0];
+          if (mid.x >= minX - 2 && mid.x <= maxX + 2 && mid.y >= minY - 2 && mid.y <= maxY + 2) {
+            if (isPointInPolygon(mid, outer.points) || isPointInPolygon(pts[0], outer.points)) return true;
+          }
+          return false;
+        };
+        islandFoldLines = (pcMeta.foldLines || []).filter((fl) => belongsToIsland(fl.points));
+        islandGlueTabs = (pcMeta.glueTabs || []).filter((gt) => belongsToIsland(gt.polygon || gt.foldLine));
+        islandGlueZones = (pcMeta.glueTargetZones || []).filter((gz) => belongsToIsland(gz.polygon));
+      }
+
       let customCode = null;
       if (isSplitMulti && outer.sectorCode) {
         const sc = outer.sectorCode;
@@ -729,6 +749,9 @@ function extractIslandsFromSlices(targetSlices) {
         engraveLoops: islandEngraveLoops,
         upperPolys: upperPolys,
         lowerPolys: lowerPolys,
+        papercraftFoldLines: islandFoldLines,
+        papercraftGlueTabs: islandGlueTabs,
+        papercraftGlueZones: islandGlueZones,
         bounds: bounds,
         textLayout: null
       };
@@ -1229,6 +1252,32 @@ function packIslandsIntoBoards(islands, boardW, boardH, margin, spacing, allowRo
       points: el.points.map(transformPt),
       isHole: Boolean(el.isHole)
     }));
+    const placedFoldLines = (island.papercraftFoldLines || []).map((fl) => ({
+      type: fl.type || 'mountain',
+      points: (fl.points || []).map(transformPt)
+    }));
+    const placedGlueTabs = (island.papercraftGlueTabs || []).map((gt) => {
+      const tfFold = (gt.foldLine || []).map(transformPt);
+      const tfPoly = (gt.polygon || []).map(transformPt);
+      const tfCenter = gt.center ? transformPt(gt.center) : (tfPoly[0] || { x: bestX, y: bestY });
+      let tfAngle = gt.angleRad || 0;
+      if (tfFold.length >= 2) {
+        tfAngle = Math.atan2(tfFold[1].y - tfFold[0].y, tfFold[1].x - tfFold[0].x);
+      }
+      return {
+        id: gt.id,
+        label: gt.label,
+        foldLine: tfFold,
+        polygon: tfPoly,
+        center: tfCenter,
+        angleRad: tfAngle
+      };
+    });
+    const placedGlueZones = (island.papercraftGlueZones || []).map((gz) => ({
+      polygon: (gz.polygon || []).map(transformPt),
+      center: gz.center ? transformPt(gz.center) : null,
+      label: gz.label || ''
+    }));
 
     // Calcular el encaje exacto del texto en la orientación final de la isla sobre el tablero
     const placedTextLayout = computeOptimalIslandTextLayout(placedOuter, placedHoles, placedRods, island);
@@ -1250,6 +1299,9 @@ function packIslandsIntoBoards(islands, boardW, boardH, margin, spacing, allowRo
       engraveLoops: placedEngraves,
       upperPolys: island.upperPolys.map((poly) => poly.map(transformPt)),
       lowerPolys: island.lowerPolys.map((poly) => poly.map(transformPt)),
+      papercraftFoldLines: placedFoldLines,
+      papercraftGlueTabs: placedGlueTabs,
+      papercraftGlueZones: placedGlueZones,
       textLayout: placedTextLayout
     };
 
@@ -2103,6 +2155,32 @@ function packBoardsIntoCarriers(boards, carrierW, carrierH, margin, spacing, all
       }));
       const tfUpper = (pl.upperPolys || []).map((poly) => poly.map(transformBoardPt));
       const tfLower = (pl.lowerPolys || []).map((poly) => poly.map(transformBoardPt));
+      const tfFoldLines = (pl.papercraftFoldLines || []).map((fl) => ({
+        type: fl.type || 'mountain',
+        points: (fl.points || []).map(transformBoardPt)
+      }));
+      const tfGlueTabs = (pl.papercraftGlueTabs || []).map((gt) => {
+        const tfFold = (gt.foldLine || []).map(transformBoardPt);
+        const tfPoly = (gt.polygon || []).map(transformBoardPt);
+        const tfCenter = gt.center ? transformBoardPt(gt.center) : (tfPoly[0] || { x: bestX, y: bestY });
+        let tfAngle = gt.angleRad || 0;
+        if (tfFold.length >= 2) {
+          tfAngle = Math.atan2(tfFold[1].y - tfFold[0].y, tfFold[1].x - tfFold[0].x);
+        }
+        return {
+          id: gt.id,
+          label: gt.label,
+          foldLine: tfFold,
+          polygon: tfPoly,
+          center: tfCenter,
+          angleRad: tfAngle
+        };
+      });
+      const tfGlueZones = (pl.papercraftGlueZones || []).map((gz) => ({
+        polygon: (gz.polygon || []).map(transformBoardPt),
+        center: gz.center ? transformBoardPt(gz.center) : null,
+        label: gz.label || ''
+      }));
 
       let tfTextLayout = null;
       if (pl.textLayout) {
@@ -2126,6 +2204,9 @@ function packBoardsIntoCarriers(boards, carrierW, carrierH, margin, spacing, all
         engraveLoops: tfEngraves,
         upperPolys: tfUpper,
         lowerPolys: tfLower,
+        papercraftFoldLines: tfFoldLines,
+        papercraftGlueTabs: tfGlueTabs,
+        papercraftGlueZones: tfGlueZones,
         textLayout: tfTextLayout
       };
     });

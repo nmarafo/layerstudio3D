@@ -652,6 +652,59 @@ function render2DBoard(ctx, canvas) {
       ctx.restore();
     }
 
+    // Zonas de pegado, pestañas y líneas de pliegue (Modo Recortable / Papercraft)
+    if (pl.papercraftGlueZones && pl.papercraftGlueZones.length > 0) {
+      ctx.save();
+      ctx.setLineDash([4, 3]);
+      ctx.fillStyle = 'rgba(245, 158, 11, 0.14)';
+      ctx.strokeStyle = 'rgba(245, 158, 11, 0.72)';
+      ctx.lineWidth = 1.0;
+      pl.papercraftGlueZones.forEach((gz) => {
+        if (!gz.polygon || gz.polygon.length < 3) return;
+        ctx.beginPath();
+        gz.polygon.forEach((pt, i) => {
+          if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+          else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+        });
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
+    if (pl.papercraftGlueTabs && pl.papercraftGlueTabs.length > 0) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(245, 158, 11, 0.22)';
+      pl.papercraftGlueTabs.forEach((gt) => {
+        if (!gt.polygon || gt.polygon.length < 3) return;
+        ctx.beginPath();
+        gt.polygon.forEach((pt, i) => {
+          if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+          else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+        });
+        ctx.closePath();
+        ctx.fill();
+      });
+      ctx.restore();
+    }
+    if (pl.papercraftFoldLines && pl.papercraftFoldLines.length > 0) {
+      ctx.save();
+      pl.papercraftFoldLines.forEach((fl) => {
+        if (!fl.points || fl.points.length < 2) return;
+        const isValley = fl.type === 'valley';
+        ctx.setLineDash(isValley ? [6, 3, 2, 3] : [6, 4]);
+        ctx.strokeStyle = isValley ? '#a855f7' : '#22c55e';
+        ctx.lineWidth = 1.35;
+        ctx.beginPath();
+        fl.points.forEach((pt, i) => {
+          if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+          else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+        });
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
+
     // Guía inferior (#N-1) si está activa
     if (state.includePrevSliceGuide && pl.lowerPolys.length > 0) {
       ctx.save();
@@ -1009,6 +1062,58 @@ function render2DCarrier(ctx, canvas) {
         ctx.strokeStyle = '#10b981';
         ctx.lineWidth = 1.1;
         ctx.stroke();
+        ctx.restore();
+      }
+
+      if (pl.papercraftGlueZones && pl.papercraftGlueZones.length > 0) {
+        ctx.save();
+        ctx.setLineDash([4, 3]);
+        ctx.fillStyle = 'rgba(245, 158, 11, 0.14)';
+        ctx.strokeStyle = 'rgba(245, 158, 11, 0.72)';
+        ctx.lineWidth = 0.95;
+        pl.papercraftGlueZones.forEach((gz) => {
+          if (!gz.polygon || gz.polygon.length < 3) return;
+          ctx.beginPath();
+          gz.polygon.forEach((pt, i) => {
+            if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+            else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+          });
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        });
+        ctx.restore();
+      }
+      if (pl.papercraftGlueTabs && pl.papercraftGlueTabs.length > 0) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(245, 158, 11, 0.22)';
+        pl.papercraftGlueTabs.forEach((gt) => {
+          if (!gt.polygon || gt.polygon.length < 3) return;
+          ctx.beginPath();
+          gt.polygon.forEach((pt, i) => {
+            if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+            else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+          });
+          ctx.closePath();
+          ctx.fill();
+        });
+        ctx.restore();
+      }
+      if (pl.papercraftFoldLines && pl.papercraftFoldLines.length > 0) {
+        ctx.save();
+        pl.papercraftFoldLines.forEach((fl) => {
+          if (!fl.points || fl.points.length < 2) return;
+          const isValley = fl.type === 'valley';
+          ctx.setLineDash(isValley ? [5, 3, 2, 3] : [5, 3]);
+          ctx.strokeStyle = isValley ? '#a855f7' : '#22c55e';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          fl.points.forEach((pt, i) => {
+            if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+            else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+          });
+          ctx.stroke();
+        });
         ctx.restore();
       }
 
