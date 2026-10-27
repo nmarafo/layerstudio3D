@@ -93,6 +93,14 @@ const papercraftState = {
   carrierCutBoardBorders: typeof state !== 'undefined' && state.carrierCutBoardBorders != null ? Boolean(state.carrierCutBoardBorders) : true,
   carrierCutOuterBorder: typeof state !== 'undefined' && state.carrierCutOuterBorder != null ? Boolean(state.carrierCutOuterBorder) : false,
   carrierEngraveBoardLabels: typeof state !== 'undefined' && state.carrierEngraveBoardLabels != null ? Boolean(state.carrierEngraveBoardLabels) : true,
+  // Sujeción por presión (Micro-uniones / Holding Tabs) sincronizada con el estudio principal
+  tabsEnabled: typeof state !== 'undefined' && state.tabsEnabled != null ? Boolean(state.tabsEnabled) : false,
+  tabMode: typeof state !== 'undefined' && state.tabMode ? state.tabMode : 'count',
+  tabCount: typeof state !== 'undefined' && state.tabCount ? state.tabCount : 4,
+  tabSpacingMM: typeof state !== 'undefined' && state.tabSpacingMM ? state.tabSpacingMM : 60,
+  tabWidthMM: typeof state !== 'undefined' && state.tabWidthMM ? state.tabWidthMM : 1.0,
+  tabApplyToHoles: typeof state !== 'undefined' && state.tabApplyToHoles != null ? Boolean(state.tabApplyToHoles) : false,
+  tabShowMarkers: typeof state !== 'undefined' && state.tabShowMarkers != null ? Boolean(state.tabShowMarkers) : true,
   laserBoards: [],
   laserCarriers: [],
   activeLaserBoardIndex: 0,
@@ -5198,6 +5206,22 @@ function renderPapercraft3DPreviewOnCanvas(canvas) {
   ctx.restore();
 }
 
+// Determina si un hueco interior corresponde a una hendidura fina de Kirigami (< 1.5 mm) en la que no deben dejarse puentes sin cortar
+function shouldSkipPapercraftHoleHoldingTabs(holePts) {
+  if (!holePts || holePts.length < 3) return true;
+  const hb = computePolygonBounds2D(holePts);
+  return hb.width < 1.5 || hb.height < 1.5;
+}
+
+function getPapercraftHoldingTabsSummaryText() {
+  if (!papercraftState.tabsEnabled) return '';
+  const wStr = Number(papercraftState.tabWidthMM || 1.0).toFixed(1);
+  if (papercraftState.tabMode === 'spacing') {
+    return '1×' + wStr + 'mm cada ' + Math.round(Number(papercraftState.tabSpacingMM) || 60) + 'mm';
+  }
+  return (parseInt(papercraftState.tabCount, 10) || 4) + '×' + wStr + 'mm';
+}
+
 // Dibuja un Tablero de Corte Láser / Cricut (Apartado 6 del modal) en el lienzo 2D interactivo
 function drawPapercraftLaserBoardToContext(ctx, board, canvas) {
   if (!board) return;
@@ -5375,30 +5399,39 @@ function drawPapercraftLaserBoardToContext(ctx, board, canvas) {
       ctx.restore();
     }
 
-    // Contorno de corte interior (huecos) en azul (#38bdf8)
+    // Contorno de corte interior (huecos) en azul (#38bdf8) con soporte de micro-uniones (puentes de sujeción)
     (pl.holes || []).forEach((h) => {
       if (!h.points || h.points.length < 3) return;
+      const skipHoleTabs = shouldSkipPapercraftHoleHoldingTabs(h.points);
+      if (typeof drawContourWithTabsOnCanvas === 'function') {
+        drawContourWithTabsOnCanvas(ctx, h.points, true, '#38bdf8', 1.45, toScreenX, toScreenY, skipHoleTabs);
+      } else {
+        ctx.beginPath();
+        h.points.forEach((p, i) => {
+          if (i === 0) ctx.moveTo(toScreenX(p.x), toScreenY(p.y));
+          else ctx.lineTo(toScreenX(p.x), toScreenY(p.y));
+        });
+        ctx.closePath();
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 1.45;
+        ctx.stroke();
+      }
+    });
+
+    // Contorno de corte exterior en rojo láser (#ef4444) con soporte de micro-uniones (puentes amarillos de sujeción por presión)
+    if (typeof drawContourWithTabsOnCanvas === 'function') {
+      drawContourWithTabsOnCanvas(ctx, pts, false, '#ef4444', 1.65, toScreenX, toScreenY, false);
+    } else {
       ctx.beginPath();
-      h.points.forEach((p, i) => {
+      pts.forEach((p, i) => {
         if (i === 0) ctx.moveTo(toScreenX(p.x), toScreenY(p.y));
         else ctx.lineTo(toScreenX(p.x), toScreenY(p.y));
       });
       ctx.closePath();
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 1.45;
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = 1.65;
       ctx.stroke();
-    });
-
-    // Contorno de corte exterior en rojo láser (#ef4444)
-    ctx.beginPath();
-    pts.forEach((p, i) => {
-      if (i === 0) ctx.moveTo(toScreenX(p.x), toScreenY(p.y));
-      else ctx.lineTo(toScreenX(p.x), toScreenY(p.y));
-    });
-    ctx.closePath();
-    ctx.strokeStyle = '#ef4444';
-    ctx.lineWidth = 1.65;
-    ctx.stroke();
+    }
 
     // Código de pieza grabado en el centro del cuerpo
     if (papercraftState.laserEngraveCode && pl.labelCenter) {
@@ -5416,6 +5449,7 @@ function drawPapercraftLaserBoardToContext(ctx, board, canvas) {
   });
 
   // Etiqueta superior del tablero
+  const tabsTag = papercraftState.tabsEnabled ? (' · 🔗 Micro-uniones: ' + getPapercraftHoldingTabsSummaryText()) : '';
   ctx.fillStyle = '#6ee7b7';
   ctx.font = 'bold 11px monospace';
   ctx.textAlign = 'left';
@@ -5423,7 +5457,7 @@ function drawPapercraftLaserBoardToContext(ctx, board, canvas) {
   ctx.fillText(
     '🧩 TABLERO #' + (board.boardIndex + 1) + ' DE ' + Math.max(1, (papercraftState.laserBoards || []).length) +
     ' [' + board.width.toFixed(0) + ' × ' + board.height.toFixed(0) + ' mm · Piezas: ' + board.placements.length +
-    ' · Aprovechamiento: ' + board.efficiency.toFixed(1) + '%]',
+    ' · Aprovechamiento: ' + board.efficiency.toFixed(1) + '%' + tabsTag + ']',
     offX,
     Math.max(16, offY - 6)
   );
@@ -5563,26 +5597,35 @@ function drawPapercraftLaserCarrierToContext(ctx, carrier, canvas) {
 
       (pl.holes || []).forEach((h) => {
         if (!h.points || h.points.length < 3) return;
+        const skipHoleTabs = shouldSkipPapercraftHoleHoldingTabs(h.points);
+        if (typeof drawContourWithTabsOnCanvas === 'function') {
+          drawContourWithTabsOnCanvas(ctx, h.points, true, '#38bdf8', 1.25, toScreenX, toScreenY, skipHoleTabs);
+        } else {
+          ctx.beginPath();
+          h.points.forEach((p, i) => {
+            if (i === 0) ctx.moveTo(toScreenX(p.x), toScreenY(p.y));
+            else ctx.lineTo(toScreenX(p.x), toScreenY(p.y));
+          });
+          ctx.closePath();
+          ctx.strokeStyle = '#38bdf8';
+          ctx.lineWidth = 1.25;
+          ctx.stroke();
+        }
+      });
+
+      if (typeof drawContourWithTabsOnCanvas === 'function') {
+        drawContourWithTabsOnCanvas(ctx, pts, false, '#ef4444', 1.45, toScreenX, toScreenY, false);
+      } else {
         ctx.beginPath();
-        h.points.forEach((p, i) => {
+        pts.forEach((p, i) => {
           if (i === 0) ctx.moveTo(toScreenX(p.x), toScreenY(p.y));
           else ctx.lineTo(toScreenX(p.x), toScreenY(p.y));
         });
         ctx.closePath();
-        ctx.strokeStyle = '#38bdf8';
-        ctx.lineWidth = 1.25;
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 1.45;
         ctx.stroke();
-      });
-
-      ctx.beginPath();
-      pts.forEach((p, i) => {
-        if (i === 0) ctx.moveTo(toScreenX(p.x), toScreenY(p.y));
-        else ctx.lineTo(toScreenX(p.x), toScreenY(p.y));
-      });
-      ctx.closePath();
-      ctx.strokeStyle = '#ef4444';
-      ctx.lineWidth = 1.45;
-      ctx.stroke();
+      }
 
       if (papercraftState.laserEngraveCode && pl.labelCenter) {
         const fontPx = Math.max(8, Math.min(16, (pl.fontSizeMM || 3.0) * pxPerMM));
@@ -5597,6 +5640,7 @@ function drawPapercraftLaserCarrierToContext(ctx, carrier, canvas) {
     });
   });
 
+  const carrierTabsTag = papercraftState.tabsEnabled ? (' · 🔗 Micro-uniones: ' + getPapercraftHoldingTabsSummaryText()) : '';
   ctx.fillStyle = '#fcd34d';
   ctx.font = 'bold 11px monospace';
   ctx.textAlign = 'left';
@@ -5604,7 +5648,7 @@ function drawPapercraftLaserCarrierToContext(ctx, carrier, canvas) {
   ctx.fillText(
     '📦 SOPORTE MAYOR #' + (carrier.carrierIndex + 1) + ' DE ' + Math.max(1, (papercraftState.laserCarriers || []).length) +
     ' [' + carrier.width.toFixed(0) + ' × ' + carrier.height.toFixed(0) + ' mm · Tableros: ' + carrier.boardPlacements.length +
-    ' · Piezas: ' + carrier.totalPieces + ' · Aprovechamiento: ' + carrier.efficiency.toFixed(1) + '%]',
+    ' · Piezas: ' + carrier.totalPieces + ' · Aprovechamiento: ' + carrier.efficiency.toFixed(1) + '%' + carrierTabsTag + ']',
     offX,
     Math.max(16, offY - 6)
   );
@@ -6062,13 +6106,19 @@ function generatePapercraftLaserPieceSVG(piece) {
 
   const outerPts = piece.outerCutPoints || [];
   const dOuter = outerPts.length >= 3
-    ? ('M ' + outerPts.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z')
+    ? (typeof buildSvgCutPathD === 'function'
+        ? buildSvgCutPathD(outerPts, false, toX, toY, false)
+        : ('M ' + outerPts.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z'))
     : '';
 
   const holePaths = [];
   (piece.holePolygons || []).forEach((hp) => {
     if (!hp || hp.length < 3) return;
-    holePaths.push('M ' + hp.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z');
+    const skipHoleTabs = shouldSkipPapercraftHoleHoldingTabs(hp);
+    const dHole = typeof buildSvgCutPathD === 'function'
+      ? buildSvgCutPathD(hp, true, toX, toY, skipHoleTabs)
+      : ('M ' + hp.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z');
+    if (dHole) holePaths.push(dHole);
   });
 
   let mountainFoldD = '';
@@ -6181,18 +6231,29 @@ function generatePapercraftLaserPieceDXF(piece) {
   const gapMM = Number(papercraftState.laserGapLenMM) || 1.8;
 
   if (piece.outerCutPoints && piece.outerCutPoints.length >= 3) {
-    byLayer.C04.push({
-      closed: true,
-      points: piece.outerCutPoints.map(shiftPt)
-    });
+    const shiftedOuter = piece.outerCutPoints.map(shiftPt);
+    if (typeof collectLoopPolylinesWithTabsDXF === 'function') {
+      collectLoopPolylinesWithTabsDXF(byLayer.C04, shiftedOuter, false, 0, 0, false);
+    } else {
+      byLayer.C04.push({
+        closed: true,
+        points: shiftedOuter
+      });
+    }
   }
 
   (piece.holePolygons || []).forEach((hp) => {
     if (!hp || hp.length < 3) return;
-    byLayer.C03.push({
-      closed: true,
-      points: hp.map(shiftPt)
-    });
+    const shiftedHole = hp.map(shiftPt);
+    const skipHoleTabs = shouldSkipPapercraftHoleHoldingTabs(shiftedHole);
+    if (typeof collectLoopPolylinesWithTabsDXF === 'function') {
+      collectLoopPolylinesWithTabsDXF(byLayer.C03, shiftedHole, true, 0, 0, skipHoleTabs);
+    } else {
+      byLayer.C03.push({
+        closed: true,
+        points: shiftedHole
+      });
+    }
   });
 
   (piece.foldLines || []).forEach((fl) => {
@@ -6262,13 +6323,19 @@ function generatePapercraftLaserBoardSVG(board) {
   (board.placements || []).forEach((pl, idx) => {
     const pts = pl.outerPoints || [];
     if (pts.length >= 3) {
-      const dOut = 'M ' + pts.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z';
-      outerPaths.push({ id: 'pieza_' + (idx + 1) + '_' + (pl.shortCode || 'P'), d: dOut });
+      const dOut = typeof buildSvgCutPathD === 'function'
+        ? buildSvgCutPathD(pts, false, toX, toY, false)
+        : ('M ' + pts.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z');
+      if (dOut) outerPaths.push({ id: 'pieza_' + (idx + 1) + '_' + (pl.shortCode || 'P'), d: dOut });
     }
 
     (pl.holes || []).forEach((h) => {
       if (!h.points || h.points.length < 3) return;
-      holePaths.push('M ' + h.points.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z');
+      const skipHoleTabs = shouldSkipPapercraftHoleHoldingTabs(h.points);
+      const dHole = typeof buildSvgCutPathD === 'function'
+        ? buildSvgCutPathD(h.points, true, toX, toY, skipHoleTabs)
+        : ('M ' + h.points.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z');
+      if (dHole) holePaths.push(dHole);
     });
 
     (pl.foldLines || []).forEach((fl) => {
@@ -6391,18 +6458,27 @@ function generatePapercraftLaserBoardDXF(board) {
 
   (board.placements || []).forEach((pl, idx) => {
     if (pl.outerPoints && pl.outerPoints.length >= 3) {
-      byLayer.C04.push({
-        closed: true,
-        points: pl.outerPoints.map((p) => ({ x: p.x, y: p.y }))
-      });
+      if (typeof collectLoopPolylinesWithTabsDXF === 'function') {
+        collectLoopPolylinesWithTabsDXF(byLayer.C04, pl.outerPoints, false, 0, 0, false);
+      } else {
+        byLayer.C04.push({
+          closed: true,
+          points: pl.outerPoints.map((p) => ({ x: p.x, y: p.y }))
+        });
+      }
     }
 
     (pl.holes || []).forEach((h) => {
       if (!h.points || h.points.length < 3) return;
-      byLayer.C03.push({
-        closed: true,
-        points: h.points.map((p) => ({ x: p.x, y: p.y }))
-      });
+      const skipHoleTabs = shouldSkipPapercraftHoleHoldingTabs(h.points);
+      if (typeof collectLoopPolylinesWithTabsDXF === 'function') {
+        collectLoopPolylinesWithTabsDXF(byLayer.C03, h.points, true, 0, 0, skipHoleTabs);
+      } else {
+        byLayer.C03.push({
+          closed: true,
+          points: h.points.map((p) => ({ x: p.x, y: p.y }))
+        });
+      }
     });
 
     (pl.foldLines || []).forEach((fl) => {
@@ -6510,13 +6586,19 @@ function generatePapercraftLaserCarrierSVG(carrier) {
     (bPl.transformedPlacements || []).forEach((pl, idx) => {
       const pts = pl.outerPoints || [];
       if (pts.length >= 3) {
-        const dOut = 'M ' + pts.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z';
-        outerPaths.push({ id: 'tab_' + (bPl.boardIndex + 1) + '_pieza_' + (idx + 1) + '_' + (pl.shortCode || 'P'), d: dOut });
+        const dOut = typeof buildSvgCutPathD === 'function'
+          ? buildSvgCutPathD(pts, false, toX, toY, false)
+          : ('M ' + pts.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z');
+        if (dOut) outerPaths.push({ id: 'tab_' + (bPl.boardIndex + 1) + '_pieza_' + (idx + 1) + '_' + (pl.shortCode || 'P'), d: dOut });
       }
 
       (pl.holes || []).forEach((h) => {
         if (!h.points || h.points.length < 3) return;
-        holePaths.push('M ' + h.points.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z');
+        const skipHoleTabs = shouldSkipPapercraftHoleHoldingTabs(h.points);
+        const dHole = typeof buildSvgCutPathD === 'function'
+          ? buildSvgCutPathD(h.points, true, toX, toY, skipHoleTabs)
+          : ('M ' + h.points.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z');
+        if (dHole) holePaths.push(dHole);
       });
 
       (pl.foldLines || []).forEach((fl) => {
@@ -6659,18 +6741,27 @@ function generatePapercraftLaserCarrierDXF(carrier) {
 
     (bPl.transformedPlacements || []).forEach((pl, idx) => {
       if (pl.outerPoints && pl.outerPoints.length >= 3) {
-        byLayer.C04.push({
-          closed: true,
-          points: pl.outerPoints.map((p) => ({ x: p.x, y: p.y }))
-        });
+        if (typeof collectLoopPolylinesWithTabsDXF === 'function') {
+          collectLoopPolylinesWithTabsDXF(byLayer.C04, pl.outerPoints, false, 0, 0, false);
+        } else {
+          byLayer.C04.push({
+            closed: true,
+            points: pl.outerPoints.map((p) => ({ x: p.x, y: p.y }))
+          });
+        }
       }
 
       (pl.holes || []).forEach((h) => {
         if (!h.points || h.points.length < 3) return;
-        byLayer.C03.push({
-          closed: true,
-          points: h.points.map((p) => ({ x: p.x, y: p.y }))
-        });
+        const skipHoleTabs = shouldSkipPapercraftHoleHoldingTabs(h.points);
+        if (typeof collectLoopPolylinesWithTabsDXF === 'function') {
+          collectLoopPolylinesWithTabsDXF(byLayer.C03, h.points, true, 0, 0, skipHoleTabs);
+        } else {
+          byLayer.C03.push({
+            closed: true,
+            points: h.points.map((p) => ({ x: p.x, y: p.y }))
+          });
+        }
       });
 
       (pl.foldLines || []).forEach((fl) => {
@@ -6872,6 +6963,7 @@ async function exportPapercraftLaserCricutZip() {
     '  - Tableros de corte (' + papercraftState.boardWidthMM + ' x ' + papercraftState.boardHeightMM + ' mm): ' + boards.length + ' tablero(s)',
     '  - Soportes Mayores (' + papercraftState.carrierWidthMM + ' x ' + papercraftState.carrierHeightMM + ' mm): ' + carriers.length + ' soporte(s)',
     '  - Modo de líneas de pliegue / doblez: ' + papercraftState.laserFoldMode,
+    '  - Sujeción por presión (Micro-uniones): ' + (papercraftState.tabsEnabled ? ('ACTIVA (' + getPapercraftHoldingTabsSummaryText() + (papercraftState.tabApplyToHoles ? ', incluye huecos internos' : '') + ')') : 'DESACTIVADA (corte continuo cerrado)'),
     '',
     'CAPAS Y COLORES EN ARCHIVOS .SVG (ESCALA 1:1 EN MILÍMETROS):',
     '  1. #ff0000 (Rojo)    -> CORTE_EXTERIOR (Contorno exterior de la pieza y pestañas)',
@@ -7243,6 +7335,15 @@ function syncPapercraftBoardAndCarrierFromMainStudio(redraw = false) {
   if (typeof state.carrierCutOuterBorder === 'boolean') papercraftState.carrierCutOuterBorder = state.carrierCutOuterBorder;
   if (typeof state.carrierEngraveBoardLabels === 'boolean') papercraftState.carrierEngraveBoardLabels = state.carrierEngraveBoardLabels;
 
+  // Sincronizar Sujeción por presión (Micro-uniones / Holding Tabs) desde el estudio principal
+  if (typeof state.tabsEnabled === 'boolean') papercraftState.tabsEnabled = state.tabsEnabled;
+  if (state.tabMode === 'count' || state.tabMode === 'spacing') papercraftState.tabMode = state.tabMode;
+  if (Number.isFinite(Number(state.tabCount))) papercraftState.tabCount = Number(state.tabCount);
+  if (Number.isFinite(Number(state.tabSpacingMM))) papercraftState.tabSpacingMM = Number(state.tabSpacingMM);
+  if (Number.isFinite(Number(state.tabWidthMM))) papercraftState.tabWidthMM = Number(state.tabWidthMM);
+  if (typeof state.tabApplyToHoles === 'boolean') papercraftState.tabApplyToHoles = state.tabApplyToHoles;
+  if (typeof state.tabShowMarkers === 'boolean') papercraftState.tabShowMarkers = state.tabShowMarkers;
+
   if (redraw && papercraftState.isOpen) {
     syncPapercraftControlsUI();
     runPapercraftGeneration();
@@ -7269,6 +7370,15 @@ function syncMainStudioBoardAndCarrierFromPapercraft() {
   state.carrierCutOuterBorder = papercraftState.carrierCutOuterBorder;
   state.carrierEngraveBoardLabels = papercraftState.carrierEngraveBoardLabels;
 
+  // Sincronizar Sujeción por presión (Micro-uniones / Holding Tabs) hacia state para que computeLoopWithHoldingTabs / viewer2d / exporters las apliquen
+  state.tabsEnabled = Boolean(papercraftState.tabsEnabled);
+  state.tabMode = papercraftState.tabMode === 'spacing' ? 'spacing' : 'count';
+  state.tabCount = Math.max(1, Math.min(32, parseInt(papercraftState.tabCount, 10) || 4));
+  state.tabSpacingMM = Math.max(5, Math.min(1000, Number(papercraftState.tabSpacingMM) || 60));
+  state.tabWidthMM = Math.max(0.15, Math.min(15, Number(papercraftState.tabWidthMM) || 1.0));
+  state.tabApplyToHoles = Boolean(papercraftState.tabApplyToHoles);
+  state.tabShowMarkers = Boolean(papercraftState.tabShowMarkers);
+
   const setElVal = (id, v) => {
     const el = document.getElementById(id);
     if (el) el.value = String(v);
@@ -7294,6 +7404,35 @@ function syncMainStudioBoardAndCarrierFromPapercraft() {
   setElChk('carrierCutBoardBordersToggle', papercraftState.carrierCutBoardBorders);
   setElChk('carrierCutOuterBorderToggle', papercraftState.carrierCutOuterBorder);
   setElChk('carrierEngraveLabelsToggle', papercraftState.carrierEngraveBoardLabels);
+
+  if (typeof syncHoldingTabsUI === 'function') {
+    syncHoldingTabsUI();
+  }
+}
+
+function setPapercraftTabMode(mode) {
+  papercraftState.tabMode = mode === 'spacing' ? 'spacing' : 'count';
+  if (papercraftState.previewMode === 'sheets2d') {
+    papercraftState.previewMode = 'laser_boards2d';
+  }
+  syncMainStudioBoardAndCarrierFromPapercraft();
+  syncPapercraftControlsUI();
+  updatePapercraftStatsAndSheetNavUI();
+  renderPapercraftPreviewCanvas();
+}
+
+function setPapercraftHoldingTabPreset(count, widthMM) {
+  papercraftState.tabsEnabled = true;
+  papercraftState.tabMode = 'count';
+  papercraftState.tabCount = Math.max(1, Math.min(32, parseInt(count, 10) || 4));
+  papercraftState.tabWidthMM = Math.max(0.15, Math.min(15, parseFloat(widthMM) || 1.0));
+  if (papercraftState.previewMode === 'sheets2d') {
+    papercraftState.previewMode = 'laser_boards2d';
+  }
+  syncMainStudioBoardAndCarrierFromPapercraft();
+  syncPapercraftControlsUI();
+  updatePapercraftStatsAndSheetNavUI();
+  renderPapercraftPreviewCanvas();
 }
 
 function setPapercraftBoardPresetMM(wMM, hMM) {
@@ -7439,6 +7578,7 @@ function updatePapercraftStatsAndSheetNavUI() {
       '📐 <strong>' + totalFolds + ' pliegues</strong> · ' +
       '📄 <strong>' + sheets.length + ' hoja(s) A4</strong> · ' +
       '🧩 <strong>' + boards.length + ' tablero(s) (' + fmtDim(papercraftState.boardWidthMM) + '×' + fmtDim(papercraftState.boardHeightMM) + 'mm)</strong>' +
+      (papercraftState.tabsEnabled ? (' · 🔗 <strong>Micro-uniones (' + getPapercraftHoldingTabsSummaryText() + ')</strong>') : '') +
       (carriers.length > 0 ? (' · 📦 <strong>' + carriers.length + ' soporte(s) (' + fmtDim(papercraftState.carrierWidthMM) + '×' + fmtDim(papercraftState.carrierHeightMM) + 'mm)</strong>') : '');
   }
 
@@ -7623,11 +7763,31 @@ function onPapercraftParamsChange(sourceControlId) {
   papercraftState.carrierCutOuterBorder = getCheck('pcCarrierCutOuterCheck', papercraftState.carrierCutOuterBorder);
   papercraftState.carrierEngraveBoardLabels = getCheck('pcCarrierEngraveLabelsCheck', papercraftState.carrierEngraveBoardLabels);
 
+  // Sujeción por presión (Micro-uniones / Holding Tabs)
+  papercraftState.tabsEnabled = getCheck('pcTabsEnabledCheck', papercraftState.tabsEnabled);
+  papercraftState.tabCount = Math.max(1, Math.min(32, Math.round(getNum('pcTabCountInput', papercraftState.tabCount || 4))));
+  papercraftState.tabSpacingMM = Math.max(5, Math.min(1000, getNum('pcTabSpacingInput', papercraftState.tabSpacingMM || 60)));
+  papercraftState.tabWidthMM = Math.max(0.15, Math.min(15, getNum('pcTabWidthInput', papercraftState.tabWidthMM || 1.0)));
+  papercraftState.tabApplyToHoles = getCheck('pcTabApplyHolesCheck', papercraftState.tabApplyToHoles);
+  papercraftState.tabShowMarkers = getCheck('pcTabShowMarkersCheck', papercraftState.tabShowMarkers);
+
+  const isHoldingTabSource = Boolean(
+    sourceControlId &&
+    [
+      'pcTabsEnabledCheck',
+      'pcTabCountInput',
+      'pcTabSpacingInput',
+      'pcTabWidthInput',
+      'pcTabApplyHolesCheck',
+      'pcTabShowMarkersCheck'
+    ].includes(sourceControlId)
+  );
+
   if (sourceControlId === 'pcCarrierEnableCheck' && papercraftState.carrierEnabled) {
     papercraftState.previewMode = 'laser_carrier2d';
   } else if (
     sourceControlId &&
-    (sourceControlId.startsWith('pcBoard') || sourceControlId.startsWith('pcNest') || sourceControlId.startsWith('pcLaser')) &&
+    (sourceControlId.startsWith('pcBoard') || sourceControlId.startsWith('pcNest') || sourceControlId.startsWith('pcLaser') || isHoldingTabSource) &&
     papercraftState.previewMode === 'sheets2d'
   ) {
     papercraftState.previewMode = 'laser_boards2d';
@@ -7800,6 +7960,46 @@ function syncPapercraftControlsUI() {
   const dashRow = document.getElementById('pcLaserDashParamsRow');
   if (dashRow) {
     dashRow.classList.toggle('hidden', papercraftState.laserFoldMode === 'score_solid');
+  }
+
+  // Sincronizar controles de Sujeción por presión (Micro-uniones / Holding Tabs)
+  setCheckVal('pcTabsEnabledCheck', papercraftState.tabsEnabled);
+  setCheckVal('pcTabApplyHolesCheck', papercraftState.tabApplyToHoles);
+  setCheckVal('pcTabShowMarkersCheck', papercraftState.tabShowMarkers);
+  setInputValIfDiff('pcTabCountInput', papercraftState.tabCount || 4);
+  setInputValIfDiff('pcTabSpacingInput', papercraftState.tabSpacingMM || 60);
+  setInputValIfDiff('pcTabWidthInput', Number(papercraftState.tabWidthMM || 1.0).toFixed(2).replace(/\.00$/, '.0').replace(/(\.\d)0$/, '$1'));
+
+  const tabsPanel = document.getElementById('pcTabsConfigPanel');
+  if (tabsPanel) {
+    tabsPanel.classList.toggle('hidden', !papercraftState.tabsEnabled);
+  }
+  const btnModeCount = document.getElementById('pcBtnTabModeCount');
+  const btnModeSpacing = document.getElementById('pcBtnTabModeSpacing');
+  const boxCount = document.getElementById('pcTabCountBox');
+  const boxSpacing = document.getElementById('pcTabSpacingBox');
+  if (btnModeCount && btnModeSpacing) {
+    if (papercraftState.tabMode === 'spacing') {
+      btnModeSpacing.className = 'py-1 px-2 rounded bg-amber-500/20 border border-amber-500 text-amber-300 text-[11px] font-semibold';
+      btnModeCount.className = 'py-1 px-2 rounded bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-semibold';
+    } else {
+      btnModeCount.className = 'py-1 px-2 rounded bg-amber-500/20 border border-amber-500 text-amber-300 text-[11px] font-semibold';
+      btnModeSpacing.className = 'py-1 px-2 rounded bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-semibold';
+    }
+  }
+  if (boxCount) boxCount.classList.toggle('hidden', papercraftState.tabMode === 'spacing');
+  if (boxSpacing) boxSpacing.classList.toggle('hidden', papercraftState.tabMode !== 'spacing');
+
+  const tabsBadge = document.getElementById('pcTabsSummaryBadge');
+  if (tabsBadge) {
+    const wVal = Number(papercraftState.tabWidthMM || 1.0).toFixed(1);
+    if (!papercraftState.tabsEnabled) {
+      tabsBadge.textContent = 'Corte continuo cerrado (sin puentes)';
+    } else if (papercraftState.tabMode === 'spacing') {
+      tabsBadge.textContent = '1 punto de ' + wVal + ' mm cada ' + Math.round(Number(papercraftState.tabSpacingMM) || 60) + ' mm de perímetro';
+    } else {
+      tabsBadge.textContent = (parseInt(papercraftState.tabCount, 10) || 4) + ' puntos de ' + wVal + ' mm por pieza (desprendimiento por presión)';
+    }
   }
 }
 
@@ -7997,6 +8197,10 @@ if (typeof window !== 'undefined') {
   window.syncMainStudioBoardAndCarrierFromPapercraft = syncMainStudioBoardAndCarrierFromPapercraft;
   window.setPapercraftBoardPresetMM = setPapercraftBoardPresetMM;
   window.setPapercraftCarrierPresetMM = setPapercraftCarrierPresetMM;
+  window.setPapercraftTabMode = setPapercraftTabMode;
+  window.setPapercraftHoldingTabPreset = setPapercraftHoldingTabPreset;
+  window.shouldSkipPapercraftHoleHoldingTabs = shouldSkipPapercraftHoleHoldingTabs;
+  window.getPapercraftHoldingTabsSummaryText = getPapercraftHoldingTabsSummaryText;
   window.generatePapercraftLaserPieceSVG = generatePapercraftLaserPieceSVG;
   window.generatePapercraftLaserPieceDXF = generatePapercraftLaserPieceDXF;
   window.generatePapercraftLaserBoardSVG = generatePapercraftLaserBoardSVG;

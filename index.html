@@ -38,18 +38,18 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
 
   <!-- Hoja de estilos principal -->
-  <link rel="stylesheet" href="css/styles.css?v=3.0.22" />
+  <link rel="stylesheet" href="css/styles.css?v=3.0.23" />
 
   <!-- Módulos de la aplicación (cargados en orden de dependencia con defer y cache-busting) -->
-  <script src="js/state.js?v=3.0.22" defer></script>
-  <script src="js/viewer3d.js?v=3.0.22" defer></script>
-  <script src="js/slicer.js?v=3.0.22" defer></script>
-  <script src="js/nesting.js?v=3.0.22" defer></script>
-  <script src="js/modals-guide.js?v=3.0.22" defer></script>
-  <script src="js/viewer2d.js?v=3.0.22" defer></script>
-  <script src="js/exporters.js?v=3.0.22" defer></script>
-  <script src="js/vectorizer2d.js?v=3.0.22" defer></script>
-  <script src="js/papercraft.js?v=3.0.22" defer></script>
+  <script src="js/state.js?v=3.0.23" defer></script>
+  <script src="js/viewer3d.js?v=3.0.23" defer></script>
+  <script src="js/slicer.js?v=3.0.23" defer></script>
+  <script src="js/nesting.js?v=3.0.23" defer></script>
+  <script src="js/modals-guide.js?v=3.0.23" defer></script>
+  <script src="js/viewer2d.js?v=3.0.23" defer></script>
+  <script src="js/exporters.js?v=3.0.23" defer></script>
+  <script src="js/vectorizer2d.js?v=3.0.23" defer></script>
+  <script src="js/papercraft.js?v=3.0.23" defer></script>
 </head>
 <body class="h-screen w-screen flex flex-col">
 
@@ -2801,6 +2801,61 @@
                 <input type="checkbox" id="pcBoardCutBorderCheck" onchange="onPapercraftParamsChange('pcBoardCutBorderCheck')" class="accent-emerald-400" />
                 <span>Incluir rectángulo de corte exterior del tablero</span>
               </label>
+            </div>
+
+            <!-- Sujeción por presión (Micro-uniones / Holding Tabs) -->
+            <div class="pt-2 border-t border-slate-700/60 space-y-2">
+              <label class="flex items-center justify-between text-xs font-semibold text-yellow-300 cursor-pointer" title="Deja pequeños puentes sin cortar en el perímetro para que la pieza recortable no se suelte sola en la cortadora láser o Cricut y pueda desprenderse del tablero haciendo presión">
+                <span>🔗 Sujeción por presión (Micro-uniones)</span>
+                <input type="checkbox" id="pcTabsEnabledCheck" onchange="onPapercraftParamsChange('pcTabsEnabledCheck')" class="accent-yellow-400 w-3.5 h-3.5 cursor-pointer" />
+              </label>
+
+              <div id="pcTabsConfigPanel" class="hidden space-y-2 bg-slate-900/80 border border-yellow-500/30 rounded-lg p-2.5">
+                <div class="grid grid-cols-2 gap-1">
+                  <button type="button" onclick="setPapercraftTabMode('count')" id="pcBtnTabModeCount" class="py-1 px-2 rounded bg-amber-500/20 border border-amber-500 text-amber-300 text-[11px] font-semibold">
+                    Por Nº Puntos
+                  </button>
+                  <button type="button" onclick="setPapercraftTabMode('spacing')" id="pcBtnTabModeSpacing" class="py-1 px-2 rounded bg-slate-800 border border-slate-700 text-slate-300 text-[11px] font-semibold">
+                    Cada X mm
+                  </button>
+                </div>
+
+                <div id="pcTabCountBox" class="flex items-center justify-between text-[11px]">
+                  <span class="text-slate-300">Puntos sin cortar / pieza:</span>
+                  <input type="number" id="pcTabCountInput" value="4" min="1" max="32" step="1" oninput="onPapercraftParamsChange('pcTabCountInput')" class="w-16 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-white font-semibold" />
+                </div>
+
+                <div id="pcTabSpacingBox" class="hidden flex items-center justify-between text-[11px]">
+                  <span class="text-slate-300">Un punto cada (mm):</span>
+                  <input type="number" id="pcTabSpacingInput" value="60" min="5" max="1000" step="5" oninput="onPapercraftParamsChange('pcTabSpacingInput')" class="w-16 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-white font-semibold" />
+                </div>
+
+                <div class="flex items-center justify-between text-[11px]">
+                  <span class="text-slate-300">Ancho de cada punto (mm):</span>
+                  <input type="number" id="pcTabWidthInput" value="1.0" min="0.15" max="15" step="0.1" oninput="onPapercraftParamsChange('pcTabWidthInput')" class="w-16 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-xs text-right text-yellow-300 font-semibold" />
+                </div>
+
+                <div class="grid grid-cols-4 gap-1">
+                  <button type="button" onclick="setPapercraftHoldingTabPreset(4, 0.5)" class="py-1 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-200" title="4 puntos de 0.5 mm (papel / cartulina / MDF fino)">4×0.5mm</button>
+                  <button type="button" onclick="setPapercraftHoldingTabPreset(4, 1.0)" class="py-1 bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500/40 rounded text-[9px] text-yellow-300 font-semibold" title="4 puntos de 1.0 mm (estándar cartón / MDF 3-5mm)">4×1.0mm</button>
+                  <button type="button" onclick="setPapercraftHoldingTabPreset(4, 1.5)" class="py-1 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-200" title="4 puntos de 1.5 mm (piezas grandes o pesadas)">4×1.5mm</button>
+                  <button type="button" onclick="setPapercraftHoldingTabPreset(6, 1.0)" class="py-1 bg-slate-950 hover:bg-slate-800 border border-slate-700 rounded text-[9px] text-slate-200" title="6 puntos de 1.0 mm (perímetros largos)">6×1.0mm</button>
+                </div>
+
+                <label class="flex items-center justify-between text-[11px] text-slate-300 cursor-pointer pt-0.5" title="Mantiene también sujetos los recortes de los agujeros interiores para que no salten durante el corte">
+                  <span>Aplicar también en huecos internos</span>
+                  <input type="checkbox" id="pcTabApplyHolesCheck" onchange="onPapercraftParamsChange('pcTabApplyHolesCheck')" class="accent-yellow-400" />
+                </label>
+
+                <label class="flex items-center justify-between text-[11px] text-slate-300 cursor-pointer" title="Dibuja pequeños anillos amarillos en el visor 2D indicando exactamente dónde quedan los puntos de sujeción">
+                  <span>Resaltar puentes en visor 2D</span>
+                  <input type="checkbox" id="pcTabShowMarkersCheck" checked onchange="onPapercraftParamsChange('pcTabShowMarkersCheck')" class="accent-yellow-400" />
+                </label>
+
+                <div id="pcTabsSummaryBadge" class="text-[10px] text-yellow-300 bg-yellow-950/40 border border-yellow-500/30 rounded p-1.5 text-center font-medium">
+                  4 puntos de 1.0 mm por pieza (desprendimiento por presión)
+                </div>
+              </div>
             </div>
 
             <div class="flex items-center justify-between bg-slate-950/80 border border-emerald-500/30 rounded-lg px-2.5 py-1.5 text-[10px]">
