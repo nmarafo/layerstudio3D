@@ -1182,6 +1182,216 @@ function extractSilhouetteLoopFromCanvas(srcCanvas, targetWMM, targetHMM, thresh
   return simplifyClosedLoopForScissors(smoothed, simplifyMM, 6, 22);
 }
 
+// Comprueba si un punto 2D (x, y) está dentro de un polígono cerrado (ray-casting)
+function isPointInPolygon2D(pt, poly) {
+  if (!pt || !poly || poly.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y;
+    const xj = poly[j].x, yj = poly[j].y;
+    const intersect = ((yi > pt.y) !== (yj > pt.y)) &&
+      (pt.x < ((xj - xi) * (pt.y - yi)) / ((yj - yi) || 1e-9) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+// Detecta huecos interiores cerrados (transparentes o del color de fondo) dentro de una imagen 2D
+function extractInternalHolesFromCanvas(srcCanvas, targetWMM, targetHMM, thresholdMode, layerFrac, simplifyMM) {
+  if (!srcCanvas) return [];
+  const gridN = 96;
+  let imgData = srcCanvas._cachedPapercraftGrid96;
+  if (!imgData) {
+    const off = document.createElement('canvas');
+    off.width = gridN;
+    off.height = gridN;
+    const ctx = off.getContext('2d');
+    ctx.drawImage(srcCanvas, 0, 0, gridN, gridN);
+    imgData = ctx.getImageData(0, 0, gridN, gridN).data;
+    srcCanvas._cachedPapercraftGrid96 = imgData;
+  }
+
+  const corners = [0, (gridN - 1) * 4, (gridN * (gridN - 1)) * 4, (gridN * gridN - 1) * 4];
+  let bgR = 0, bgG = 0, bgB = 0, transparentCorners = 0;
+  corners.forEach((idx) => {
+    bgR += imgData[idx];
+    bgG += imgData[idx + 1];
+    bgB += imgData[idx + 2];
+    if (imgData[idx + 3] < 45) transparentCorners++;
+  });
+  bgR /= 4; bgG /= 4; bgB /= 4;
+  const hasTransparency = transparentCorners >= 2;
+
+  const mask = new Uint8Array(gridN * gridN);
+  for (let y = 0; y < gridN; y++) {
+    for (let x = 0; x < gridN; x++) {
+      const idx = (y * gridN + x) * 4;
+      const r = imgData[idx], g = imgData[idx + 1], b = imgData[idx + 2], a = imgData[idx + 3];
+      let inside = hasTransparency ? (a > 60) : (Math.hypot(r - bgR, g - bgG, b - bgB) > 32 && a > 60);
+      if (inside && thresholdMode === 'multilayer' && layerFrac > 0.05) {
+        const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+        const sat = Math.max(r, g, b) - Math.min(r, g, b);
+        const normX = (x - gridN * 0.5) / (gridN * 0.5);
+        const normY = (y - gridN * 0.5) / (gridN * 0.5);
+        const radial = Math.hypot(normX, normY);
+        const score = (1.0 - radial * 0.55) + (sat / 255) * 0.35 + ((255 - luma) / 255) * 0.25;
+        if (score < layerFrac * 0.95) inside = false;
+      }
+      mask[y * gridN + x] = inside ? 1 : 0;
+    }
+  }
+
+  const visited = new Uint8Array(gridN * gridN);
+  const queue = new Int32Array(gridN * gridN);
+  let qHead = 0, qTail = 0;
+  const enqueueIfBg = (gx, gy) => {
+    const pos = gy * gridN + gx;
+    if (mask[pos] === 0 && visited[pos] === 0) {
+      visited[pos] = 1;
+      queue[qTail++] = pos;
+    }
+  };
+  for (let i = 0; i < gridN; i++) {
+    enqueueIfBg(i, 0);
+    enqueueIfBg(i, gridN - 1);
+    enqueueIfBg(0, i);
+    enqueueIfBg(gridN - 1, i);
+  }
+  while (qHead < qTail) {
+    const cur = queue[qHead++];
+    const cx = cur % gridN;
+    const cy = (cur / gridN) | 0;
+    if (cx > 0) enqueueIfBg(cx - 1, cy);
+    if (cx + 1 < gridN) enqueueIfBg(cx + 1, cy);
+    if (cy > 0) enqueueIfBg(cx, cy - 1);
+    if (cy + 1 < gridN) enqueueIfBg(cx, cy + 1);
+  }
+
+  const holePolys = [];
+  for (let y = 1; y < gridN - 1; y++) {
+    for (let x = 1; x < gridN - 1; x++) {
+      const startPos = y * gridN + x;
+      if (mask[startPos] !== 0 || visited[startPos] !== 0) continue;
+
+      const comp = [];
+      let cHead = 0;
+      visited[startPos] = 2;
+      comp.push(startPos);
+      while (cHead < comp.length) {
+        const p = comp[cHead++];
+        const px = p % gridN;
+        const py = (p / gridN) | 0;
+        const neighbors = [
+          px > 0 ? p - 1 : -1,
+          px + 1 < gridN ? p + 1 : -1,
+          py > 0 ? p - gridN : -1,
+          py + 1 < gridN ? p + gridN : -1
+        ];
+        for (let ni = 0; ni < 4; ni++) {
+          const np = neighbors[ni];
+          if (np >= 0 && mask[np] === 0 && visited[np] === 0) {
+            visited[np] = 2;
+            comp.push(np);
+          }
+        }
+      }
+
+      if (comp.length < 10) continue;
+
+      let sumX = 0, sumY = 0;
+      const compSet = new Set(comp);
+      comp.forEach((p) => {
+        sumX += p % gridN;
+        sumY += (p / gridN) | 0;
+      });
+      const hCx = sumX / comp.length;
+      const hCy = sumY / comp.length;
+
+      const numRays = 36;
+      const maxR = gridN * 0.5;
+      const rawHolePts = [];
+      for (let k = 0; k < numRays; k++) {
+        const ang = (k / numRays) * Math.PI * 2;
+        const cosA = Math.cos(ang);
+        const sinA = Math.sin(ang);
+        let bestR = 0;
+        for (let r = maxR; r >= 0.8; r -= 0.6) {
+          const gx = Math.round(hCx + cosA * r);
+          const gy = Math.round(hCy - sinA * r);
+          if (gx >= 0 && gx < gridN && gy >= 0 && gy < gridN && compSet.has(gy * gridN + gx)) {
+            bestR = r;
+            break;
+          }
+        }
+        if (bestR > 0.8) {
+          const gx = hCx + cosA * bestR;
+          const gy = hCy - sinA * bestR;
+          const nx = (gx - gridN * 0.5) / gridN;
+          const ny = (gridN * 0.5 - gy) / gridN;
+          rawHolePts.push({
+            x: nx * targetWMM,
+            y: ny * targetHMM
+          });
+        }
+      }
+
+      if (rawHolePts.length >= 4) {
+        const cleanHole = simplifyClosedLoopForScissors(rawHolePts, Math.max(0.8, simplifyMM * 0.65), 4, 20);
+        const hb = computePolygonBounds2D(cleanHole);
+        if (hb.width >= 3.0 && hb.height >= 3.0) {
+          holePolys.push(cleanHole);
+        }
+      }
+    }
+  }
+
+  return holePolys;
+}
+
+// Busca 2 posiciones sólidas dentro de la capa (fuera de cualquier hueco interior) para pegar los separadores Z
+function findSafeSpacerPositionsOnLayer(layer, spacerW, tabDepth) {
+  const b = layer.bounds || computePolygonBounds2D(layer.contourPoints);
+  const holes = layer.holePolygons || [];
+  const isSafePoint = (px, py) => {
+    if (!isPointInPolygon2D({ x: px, y: py }, layer.contourPoints)) return false;
+    for (let i = 0; i < holes.length; i++) {
+      if (isPointInPolygon2D({ x: px, y: py }, holes[i])) return false;
+    }
+    return true;
+  };
+
+  const defaultOffX = Math.min(b.width * 0.22, 24);
+  const candidates = [
+    [-defaultOffX, 0],
+    [-b.width * 0.34, 0],
+    [-b.width * 0.14, b.height * 0.26],
+    [-b.width * 0.28, -b.height * 0.24],
+    [0, b.height * 0.32]
+  ];
+
+  let leftPos = { x: b.cx - defaultOffX, y: b.cy };
+  let rightPos = { x: b.cx + defaultOffX, y: b.cy };
+
+  for (let i = 0; i < candidates.length; i++) {
+    const lx = b.cx + candidates[i][0];
+    const ly = b.cy + candidates[i][1];
+    if (isSafePoint(lx, ly)) {
+      leftPos = { x: lx, y: ly };
+      break;
+    }
+  }
+  for (let i = 0; i < candidates.length; i++) {
+    const rx = b.cx - candidates[i][0];
+    const ry = b.cy - candidates[i][1];
+    if (isSafePoint(rx, ry)) {
+      rightPos = { x: rx, y: ry };
+      break;
+    }
+  }
+
+  return [leftPos, rightPos];
+}
+
 // Crea o reutiliza en caché la ilustración recortada para una capa con imagen
 function createLayerArtworkCanvas(srcCanvas, loopPoints, wMM, hMM, layerColorObj, printStyle) {
   if (!srcCanvas || printStyle === 'blueprint') return null;
@@ -1206,6 +1416,7 @@ function createLayerArtworkCanvas(srcCanvas, loopPoints, wMM, hMM, layerColorObj
 // ============================================================================
 // EXTRACCIÓN DE LAS CAPAS BASE SEGÚN LA FUENTE ELEGIDA (3D, 1 IMAGEN O VARIAS)
 // El número de capas coincide siempre con el estipulado en 2. Sistema Constructivo
+// y preserva todos los huecos interiores (holePolygons) de cada capa 3D o imagen
 // ============================================================================
 function extractPapercraftSourceLayers() {
   const srcMode = papercraftState.sourceMode;
@@ -1254,19 +1465,28 @@ function extractPapercraftSourceLayers() {
         rawLoops = (state.slices[sIdx] && state.slices[sIdx].loops) ? state.slices[sIdx].loops : [];
       }
 
-      // Escoger el contorno exterior mayor (o envolvente de las islas exteriores)
-      const outerLoops = rawLoops.filter((l) => !l.isHole && l.points && l.points.length >= 3);
+      // 1. Contorno exterior principal de la capa 3D
+      const outerLoops = rawLoops
+        .filter((l) => !l.isHole && l.points && l.points.length >= 3)
+        .slice()
+        .sort((a, b) => Math.abs(computeSignedPolygonArea(b.points)) - Math.abs(computeSignedPolygonArea(a.points)));
+
       let chosenPts = [];
       if (outerLoops.length === 1) {
         chosenPts = outerLoops[0].points.map((p) => ({ x: p.x * scale2D, y: p.y * scale2D }));
       } else if (outerLoops.length > 1) {
-        const allPts = [];
-        outerLoops.forEach((l) => {
-          l.points.forEach((p) => allPts.push({ x: p.x * scale2D, y: p.y * scale2D }));
-        });
-        chosenPts = computeConvexHullLoop(allPts);
+        const area0 = Math.abs(computeSignedPolygonArea(outerLoops[0].points));
+        const totalOuterArea = outerLoops.reduce((acc, l) => acc + Math.abs(computeSignedPolygonArea(l.points)), 0);
+        if (area0 >= totalOuterArea * 0.65) {
+          chosenPts = outerLoops[0].points.map((p) => ({ x: p.x * scale2D, y: p.y * scale2D }));
+        } else {
+          const allPts = [];
+          outerLoops.forEach((l) => {
+            l.points.forEach((p) => allPts.push({ x: p.x * scale2D, y: p.y * scale2D }));
+          });
+          chosenPts = computeConvexHullLoop(allPts);
+        }
       } else {
-        // Fallback geométrico si la cota extrema no corta triángulos
         const r = Math.max(14, (wMM * 0.42) * (1 - (k / Math.max(1, nLayers)) * 0.55));
         for (let a = 0; a < 8; a++) {
           const ang = (a / 8) * Math.PI * 2;
@@ -1275,19 +1495,32 @@ function extractPapercraftSourceLayers() {
       }
 
       const maxVerts = papercraftState.cutoutType === 'stacked_platforms' && papercraftState.platformUnfoldMode === 'attached_flaps'
-        ? 10
-        : 22;
-      let cleanLoop = simplifyClosedLoopForScissors(chosenPts, simplifyMM, 4, maxVerts);
-      if (papercraftState.cutoutType === 'stacked_platforms' && papercraftState.platformUnfoldMode === 'attached_flaps') {
-        cleanLoop = simplifyClosedLoopForScissors(computeConvexHullLoop(cleanLoop), Math.max(simplifyMM, 4.0), 4, 8);
-      }
+        ? 12
+        : 28;
+      const cleanLoop = simplifyClosedLoopForScissors(chosenPts, simplifyMM, 4, maxVerts);
+
+      // 2. Huecos interiores (isHole === true) presentes en esta capa 3D
+      const rawHoleLoops = rawLoops.filter((l) => l.isHole && l.points && l.points.length >= 3);
+      const holePolygons = [];
+      rawHoleLoops.forEach((hl) => {
+        if (typeof state !== 'undefined' && state.fillInternalHoles && typeof shouldFillInternalHole === 'function' && shouldFillInternalHole(hl)) {
+          return;
+        }
+        const scaledHole = hl.points.map((p) => ({ x: p.x * scale2D, y: p.y * scale2D }));
+        const cleanHole = simplifyClosedLoopForScissors(scaledHole, Math.max(0.7, simplifyMM * 0.65), 4, 24);
+        const hb = computePolygonBounds2D(cleanHole);
+        if (cleanHole.length >= 3 && hb.width >= 2.2 && hb.height >= 2.2) {
+          holePolygons.push(cleanHole);
+        }
+      });
 
       const colObj = PAPERCRAFT_LAYER_COLORS[k % PAPERCRAFT_LAYER_COLORS.length];
       layers.push({
         layerIndex: k,
-        title: 'Capa #' + (k + 1) + ' (' + axis.toUpperCase() + '=' + coord.toFixed(0) + 'mm)',
+        title: 'Capa #' + (k + 1) + ' (' + axis.toUpperCase() + '=' + coord.toFixed(0) + 'mm)' + (holePolygons.length > 0 ? (' · ' + holePolygons.length + ' hueco(s)') : ''),
         shortCode: 'C' + (k + 1),
         contourPoints: cleanLoop,
+        holePolygons,
         bounds: computePolygonBounds2D(cleanLoop),
         colorObj: colObj,
         artworkCanvas: null,
@@ -1313,32 +1546,38 @@ function extractPapercraftSourceLayers() {
         ? presetTierCanvases[tierIdx]
         : papercraftState.singleImageCanvas;
 
+      const threshMode = isPresetMultiCapable ? 'silhouette' : 'multilayer';
       let loopPts = extractSilhouetteLoopFromCanvas(
         layerCanvas,
         wMM,
         hMM,
-        isPresetMultiCapable ? 'silhouette' : 'multilayer',
+        threshMode,
         frac,
         marginMM,
         simplifyMM
       );
+      let holePolygons = extractInternalHolesFromCanvas(
+        layerCanvas,
+        wMM,
+        hMM,
+        threshMode,
+        frac,
+        simplifyMM
+      );
 
-      // Si hay más de 4 capas en un preset de 4 niveles, escalar progresivamente dentro del sub-nivel para dar relieve escalonado
       if (isPresetMultiCapable && nLayers > 4) {
         const subScale = Math.max(0.55, 1.0 - (frac * 0.22));
         loopPts = loopPts.map((p) => ({ x: p.x * subScale, y: p.y * subScale }));
-      }
-
-      if (papercraftState.cutoutType === 'stacked_platforms' && papercraftState.platformUnfoldMode === 'attached_flaps') {
-        loopPts = simplifyClosedLoopForScissors(computeConvexHullLoop(loopPts), Math.max(simplifyMM, 4.0), 4, 8);
+        holePolygons = holePolygons.map((hp) => hp.map((p) => ({ x: p.x * subScale, y: p.y * subScale })));
       }
 
       const colObj = PAPERCRAFT_LAYER_COLORS[k % PAPERCRAFT_LAYER_COLORS.length];
       layers.push({
         layerIndex: k,
-        title: 'Capa #' + (k + 1) + ' — ' + (papercraftState.singleImageName || 'Imagen'),
+        title: 'Capa #' + (k + 1) + ' — ' + (papercraftState.singleImageName || 'Imagen') + (holePolygons.length > 0 ? (' · ' + holePolygons.length + ' hueco(s)') : ''),
         shortCode: 'C' + (k + 1),
         contourPoints: loopPts,
+        holePolygons,
         bounds: computePolygonBounds2D(loopPts),
         colorObj: colObj,
         artworkCanvas: createLayerArtworkCanvas(layerCanvas, loopPts, wMM, hMM, colObj, papercraftState.printStyle),
@@ -1368,19 +1607,26 @@ function extractPapercraftSourceLayers() {
       marginMM,
       simplifyMM
     );
+    let holePolygons = extractInternalHolesFromCanvas(
+      item.canvas,
+      wMM,
+      hMM,
+      'silhouette',
+      frac,
+      simplifyMM
+    );
     if (nLayers > imgList.length && frac > 0) {
       const subScale = Math.max(0.65, 1.0 - frac * 0.45);
       loopPts = loopPts.map((p) => ({ x: p.x * subScale, y: p.y * subScale }));
-    }
-    if (papercraftState.cutoutType === 'stacked_platforms' && papercraftState.platformUnfoldMode === 'attached_flaps') {
-      loopPts = simplifyClosedLoopForScissors(computeConvexHullLoop(loopPts), Math.max(simplifyMM, 4.0), 4, 8);
+      holePolygons = holePolygons.map((hp) => hp.map((p) => ({ x: p.x * subScale, y: p.y * subScale })));
     }
     const colObj = PAPERCRAFT_LAYER_COLORS[k % PAPERCRAFT_LAYER_COLORS.length];
     layers.push({
       layerIndex: k,
-      title: 'Capa #' + (k + 1) + ' — ' + (item.name || ('Imagen ' + (imgIdx + 1))),
+      title: 'Capa #' + (k + 1) + ' — ' + (item.name || ('Imagen ' + (imgIdx + 1))) + (holePolygons.length > 0 ? (' · ' + holePolygons.length + ' hueco(s)') : ''),
       shortCode: 'C' + (k + 1),
       contourPoints: loopPts,
+      holePolygons,
       bounds: computePolygonBounds2D(loopPts),
       colorObj: colObj,
       artworkCanvas: createLayerArtworkCanvas(item.canvas, loopPts, wMM, hMM, colObj, papercraftState.printStyle),
@@ -1413,13 +1659,15 @@ function buildPapercraftPieces() {
     baseLayers.forEach((layer, idx) => {
       const nextLayer = idx + 1 < baseLayers.length ? baseLayers[idx + 1] : null;
       const pts = ensureCounterClockwiseLoop(layer.contourPoints);
+      const layerHoles = (layer.holePolygons || []).map((hp) => hp.map((p) => ({ x: p.x, y: p.y })));
       const n = pts.length;
 
-      // Zona guía superior donde se pega la plataforma siguiente (#k+1)
+      // Zona guía superior donde se pega la plataforma siguiente (#k+1), respetando sus huecos interiores
       const glueTargetZones = [];
       if (nextLayer && nextLayer.contourPoints && nextLayer.contourPoints.length >= 3) {
         glueTargetZones.push({
           polygon: nextLayer.contourPoints.map((p) => ({ x: p.x, y: p.y })),
+          holePolygons: (nextLayer.holePolygons || []).map((hp) => hp.map((p) => ({ x: p.x, y: p.y }))),
           label: 'PEGAR AQUÍ PLATAFORMA #' + (idx + 2)
         });
       }
@@ -1496,10 +1744,11 @@ function buildPapercraftPieces() {
         pieces.push({
           pieceId: 'plat_' + (idx + 1),
           layerIndex: idx,
-          title: 'Plataforma Apilable #' + (idx + 1) + (idx === 0 ? ' (Base Inferior)' : (' (Pegar sobre #' + idx + ')')),
-          subtitle: 'Doblar paredes ' + effWallH + ' mm a 90° y pegar pestañas con pegamento escolar',
+          title: 'Plataforma Apilable #' + (idx + 1) + (idx === 0 ? ' (Base Inferior)' : (' (Pegar sobre #' + idx + ')')) + (layerHoles.length > 0 ? (' [' + layerHoles.length + ' hueco(s)]') : ''),
+          subtitle: 'Doblar paredes ' + effWallH + ' mm a 90°' + (layerHoles.length > 0 ? ', vaciar hueco(s) interior(es) ✂' : '') + ' y pegar pestañas con pegamento escolar',
           shortCode: 'P' + (idx + 1),
           bodyPolygon: pts,
+          holePolygons: layerHoles,
           outerCutPoints,
           foldLines,
           glueTabs,
@@ -1524,10 +1773,11 @@ function buildPapercraftPieces() {
         pieces.push({
           pieceId: 'plat_cap_' + (idx + 1),
           layerIndex: idx,
-          title: 'Plataforma #' + (idx + 1) + ' (A) — Tapa Superior',
-          subtitle: 'Recortar silueta y pegar debajo los dientes superiores de la Banda Lateral #' + (idx + 1),
+          title: 'Plataforma #' + (idx + 1) + ' (A) — Tapa Superior' + (layerHoles.length > 0 ? (' [' + layerHoles.length + ' hueco(s)]') : ''),
+          subtitle: 'Recortar silueta' + (layerHoles.length > 0 ? ' y hueco(s) interior(es) ✂' : '') + ' y pegar debajo los dientes superiores de la Banda Lateral #' + (idx + 1),
           shortCode: 'P' + (idx + 1) + '-TAPA',
           bodyPolygon: pts,
+          holePolygons: layerHoles,
           outerCutPoints: pts.slice(),
           foldLines: [],
           glueTabs: [],
@@ -1630,6 +1880,7 @@ function buildPapercraftPieces() {
             subtitle: 'Largo: ' + segLen.toFixed(0) + ' mm × Alto: ' + effWallH + ' mm · Dientes plegables para curvar alrededor de Tapa #' + (idx + 1),
             shortCode: 'BANDA-P' + (idx + 1) + (numSegments > 1 ? ('-' + (s + 1)) : ''),
             bodyPolygon: bodyRect,
+            holePolygons: [],
             outerCutPoints: stripCut,
             foldLines: stripFolds,
             glueTabs: stripTabs,
@@ -1680,11 +1931,13 @@ function buildPapercraftPieces() {
       const tabRes = layerTabResults[idx];
       const nextLayer = idx + 1 < baseLayers.length ? baseLayers[idx + 1] : null;
       const nextTabRes = idx + 1 < layerTabResults.length ? layerTabResults[idx + 1] : null;
+      const layerHoles = (layer.holePolygons || []).map((hp) => hp.map((p) => ({ x: p.x, y: p.y })));
 
       const glueTargetZones = [];
       if (nextLayer) {
         glueTargetZones.push({
           polygon: nextLayer.contourPoints.map((p) => ({ x: p.x, y: p.y })),
+          holePolygons: (nextLayer.holePolygons || []).map((hp) => hp.map((p) => ({ x: p.x, y: p.y }))),
           label: 'SILUETA CAPA #' + (idx + 2) + ' (ENCIMA)'
         });
       }
@@ -1703,10 +1956,11 @@ function buildPapercraftPieces() {
         layerIndex: idx,
         title: layer.title + (idx === 0 ? ' [Base Fondo]' : (' [Superponer sobre Capa #' + idx + ']')),
         subtitle: idx === 0
-          ? 'Capa base inferior: recorta por la línea exterior y pega encima las pestañas de la Capa #2'
-          : ('Recorta con las ' + tabRes.glueTabs.length + ' pestañas' + (stepH > 0 ? (' (escalón ' + stepH + ' mm)') : '') + ' y pégalas en la Capa #' + idx),
+          ? 'Capa base inferior: recorta por la línea exterior' + (layerHoles.length > 0 ? ', vacía sus huecos interiores ✂' : '') + ' y pega encima las pestañas de la Capa #2'
+          : ('Recorta con las ' + tabRes.glueTabs.length + ' pestañas' + (layerHoles.length > 0 ? ' y huecos interiores ✂' : '') + (stepH > 0 ? (' (escalón ' + stepH + ' mm)') : '') + ' y pégalas en la Capa #' + idx),
         shortCode: 'CAPA-' + (idx + 1),
         bodyPolygon: layer.contourPoints,
+        holePolygons: layerHoles,
         outerCutPoints: tabRes.outerCutPoints,
         foldLines: tabRes.foldLines,
         glueTabs: tabRes.glueTabs,
@@ -1732,21 +1986,19 @@ function buildPapercraftPieces() {
 
     baseLayers.forEach((layer, idx) => {
       const nextLayer = idx + 1 < baseLayers.length ? baseLayers[idx + 1] : null;
-      const b = layer.bounds;
+      const layerHoles = (layer.holePolygons || []).map((hp) => hp.map((p) => ({ x: p.x, y: p.y })));
       const glueTargetZones = [];
 
-      // Dos casillas de pegado de separador en cada capa (izquierda y derecha del centroide)
-      const offX = Math.min(b.width * 0.22, 24);
-      [-offX, offX].forEach((dx, sIdx) => {
-        const sx = b.cx + dx;
-        const sy = b.cy;
+      // Dos casillas de pegado de separador en cada capa, evitando cualquier hueco interior
+      const safePositions = findSafeSpacerPositionsOnLayer(layer, spacerW, tabDepth);
+      safePositions.forEach((pos, sIdx) => {
         const hw = spacerW * 0.5;
         const hh = tabDepth * 0.5;
         const boxPoly = [
-          { x: sx - hw, y: sy - hh },
-          { x: sx + hw, y: sy - hh },
-          { x: sx + hw, y: sy + hh },
-          { x: sx - hw, y: sy + hh }
+          { x: pos.x - hw, y: pos.y - hh },
+          { x: pos.x + hw, y: pos.y - hh },
+          { x: pos.x + hw, y: pos.y + hh },
+          { x: pos.x - hw, y: pos.y + hh }
         ];
         if (nextLayer) {
           glueTargetZones.push({
@@ -1760,6 +2012,7 @@ function buildPapercraftPieces() {
       if (nextLayer) {
         glueTargetZones.push({
           polygon: nextLayer.contourPoints.map((p) => ({ x: p.x, y: p.y })),
+          holePolygons: (nextLayer.holePolygons || []).map((hp) => hp.map((p) => ({ x: p.x, y: p.y }))),
           label: 'GUÍA CAPA #' + (idx + 2)
         });
       }
@@ -1769,10 +2022,11 @@ function buildPapercraftPieces() {
         layerIndex: idx,
         title: layer.title + ' (Recortable en Capas con Separador Z)',
         subtitle: nextLayer
-          ? ('Recortar silueta y pegar los 2 separadores S' + (idx + 1) + '.1 y S' + (idx + 1) + '.2 en las casillas marcadas')
+          ? ('Recortar silueta' + (layerHoles.length > 0 ? ' y hueco(s) interior(es) ✂' : '') + ' y pegar los 2 separadores S' + (idx + 1) + '.1 y S' + (idx + 1) + '.2 en las casillas marcadas')
           : 'Capa frontal superior: pegar sobre los separadores de la capa anterior',
         shortCode: 'CAPA-' + (idx + 1),
         bodyPolygon: layer.contourPoints,
+        holePolygons: layerHoles,
         outerCutPoints: layer.contourPoints.slice(),
         foldLines: [],
         glueTabs: [],
@@ -1839,6 +2093,7 @@ function buildPapercraftPieces() {
           subtitle: 'Doblar en acordeón (Z) y pegar pestañas en las casillas ' + code,
           shortCode: 'SEP-' + code,
           bodyPolygon: bodyPoly,
+          holePolygons: [],
           outerCutPoints: outerCut,
           foldLines,
           glueTabs: [topTab, botTab],
@@ -1926,6 +2181,7 @@ function buildPapercraftPieces() {
       subtitle: 'Recortar, doblar los 4 faldones laterales hacia abajo y pegar en las franjas superiores cada figura a 90°',
       shortCode: 'PEANA-BASE',
       bodyPolygon: peanaBody,
+      holePolygons: [],
       outerCutPoints: pCut,
       foldLines: pFolds,
       glueTabs: pTabs,
@@ -1944,6 +2200,7 @@ function buildPapercraftPieces() {
       const footW = Math.max(28, b.width * 0.68);
       const footY = b.minY;
       const halfFoot = footW * 0.5;
+      const layerHoles = (layer.holePolygons || []).map((hp) => hp.map((p) => ({ x: p.x, y: p.y })));
 
       // Construir silueta de la figura que apoje limpiamente sobre el segmento base [-halfFoot, footY] -> [halfFoot, footY]
       const upperArch = layer.contourPoints.filter((p) => p.y > footY + b.height * 0.12);
@@ -2022,9 +2279,10 @@ function buildPapercraftPieces() {
         layerIndex: idx,
         isStandeeFigure: true,
         title: 'Figura Recortable #' + (idx + 1) + ' — ' + layer.title,
-        subtitle: 'Recortar silueta exterior, doblar la pestaña inferior a 90° y pegar con pegamento escolar en la Peana',
+        subtitle: 'Recortar silueta exterior' + (layerHoles.length > 0 ? ' y huecos interiores ✂' : '') + ', doblar la pestaña inferior a 90° y pegar en la Peana',
         shortCode: 'FIG-' + (idx + 1),
         bodyPolygon: ccwStandee,
+        holePolygons: layerHoles,
         outerCutPoints: outCut,
         foldLines: folds,
         glueTabs: tabs,
@@ -2054,6 +2312,16 @@ function buildPapercraftPieces() {
     const hd = rawD * 0.5;
     const h = Math.min(28, prismH);
     const td = Math.min(tabDepth, h * 0.45, rawW * 0.28);
+
+    // Mapear proporcionalmente los huecos interiores de la capa a la cara superior [-hw..hw, -hd..hd]
+    const sxHole = rawW / Math.max(10, layer.bounds.width);
+    const syHole = rawD / Math.max(10, layer.bounds.height);
+    const prismHoles = (layer.holePolygons || []).map((hp) =>
+      hp.map((p) => ({
+        x: (p.x - layer.bounds.cx) * sxHole,
+        y: (p.y - layer.bounds.cy) * syHole
+      }))
+    );
 
     // Cara central = Tapa Superior [-hw..hw, -hd..hd]
     const topFace = [
@@ -2140,9 +2408,10 @@ function buildPapercraftPieces() {
       layerIndex: idx,
       isPrismNet: true,
       title: 'Red Desplegable 3D — Bloque #' + (idx + 1) + ' (' + rawW.toFixed(0) + '×' + rawD.toFixed(0) + '×' + h.toFixed(0) + ' mm)',
-      subtitle: 'Recortar la cruz por la línea continua exterior, doblar las aristas a 90° y cerrar las 7 pestañas con pegamento escolar',
+      subtitle: 'Recortar la cruz por la línea continua exterior' + (prismHoles.length > 0 ? ', vaciar huecos ✂' : '') + ', doblar las aristas a 90° y cerrar las 7 pestañas',
       shortCode: 'RED-B' + (idx + 1),
       bodyPolygon: topFace,
+      holePolygons: prismHoles,
       outerCutPoints: netCut,
       foldLines: folds,
       glueTabs: tabs,
@@ -2342,13 +2611,20 @@ function computeSheetModelProgressLayout(sheet) {
     const ry = baseLineY - (k + 1) * barH;
     const rh = Math.max(0.35, barH);
     const status = activeSet.has(k) ? 'current' : (k < minActive ? 'done' : 'pending');
-    return { k, rx, ry, rw, rh, status };
+    const holeSpans = (l.holePolygons || []).map((hp) => {
+      const hb = computePolygonBounds2D(hp);
+      return {
+        hx: elevPlotX + ((hb.minX - gMinX) / spanX) * elevPlotW,
+        hw: Math.max(0.7, (hb.width / spanX) * elevPlotW)
+      };
+    });
+    return { k, rx, ry, rw, rh, status, holeSpans };
   });
 
   const midActiveK = (minActive + maxActive + 1) * 0.5;
   const markerY = baseLineY - midActiveK * barH;
 
-  // 2. Geometría de MODELO 3D ISOMÉTRICO CON PROGRESO (Siluetas 3D de todas las capas del modelo)
+  // 2. Geometría de MODELO 3D ISOMÉTRICO CON PROGRESO (Siluetas 3D + Huecos de todas las capas del modelo)
   const yaw = -0.62;
   const pitch = 0.58;
   const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
@@ -2429,12 +2705,16 @@ function computeSheetModelProgressLayout(sheet) {
     const zBot = k * dz;
     const topPoly = pts.map((pt) => toIsoSheet(pt.x, pt.y, zTop));
     const botPoly = isCurr ? pts.map((pt) => toIsoSheet(pt.x, pt.y, zBot)) : null;
+    const holeTopPolys = (l.holePolygons || [])
+      .filter((hp) => hp && hp.length >= 3)
+      .map((hp) => hp.map((pt) => toIsoSheet(pt.x, pt.y, zTop)));
     const status = isCurr ? 'current' : (k < minActive ? 'done' : 'pending');
     isoLayers.push({
       k,
       status,
       topPoly,
       botPoly,
+      holeTopPolys,
       centerPt: toIsoSheet((l.bounds && l.bounds.cx) || centerX, (l.bounds && l.bounds.cy) || centerY, zTop)
     });
   }
@@ -2606,7 +2886,7 @@ function drawPapercraftSheetToContext(ctx, sheet, pxPerMM, offsetX = 0, offsetY 
     ctx.lineTo((prog.elevPlotX + prog.elevPlotW + 1.0) * pxPerMM, prog.baseLineY * pxPerMM);
     ctx.stroke();
 
-    // Capas apiladas de abajo hacia arriba
+    // Capas apiladas de abajo hacia arriba (mostrando también vanos / huecos interiores)
     prog.elevBars.forEach((bar) => {
       ctx.save();
       if (bar.status === 'done') {
@@ -2626,6 +2906,12 @@ function drawPapercraftSheetToContext(ctx, sheet, pxPerMM, offsetX = 0, offsetY 
         ctx.lineWidth = Math.max(0.5, 0.18 * pxPerMM);
         ctx.setLineDash([1.2 * pxPerMM * 0.35, 1.0 * pxPerMM * 0.35]);
         ctx.strokeRect(bar.rx * pxPerMM, bar.ry * pxPerMM, bar.rw * pxPerMM, bar.rh * pxPerMM);
+      }
+      if (bar.holeSpans && bar.holeSpans.length > 0 && bar.status !== 'pending') {
+        ctx.fillStyle = '#ffffff';
+        bar.holeSpans.forEach((hs) => {
+          ctx.fillRect(hs.hx * pxPerMM, (bar.ry + 0.12) * pxPerMM, hs.hw * pxPerMM, Math.max(0.2, bar.rh - 0.24) * pxPerMM);
+        });
       }
       ctx.restore();
     });
@@ -2654,7 +2940,7 @@ function drawPapercraftSheetToContext(ctx, sheet, pxPerMM, offsetX = 0, offsetY 
     ctx.restore();
 
     // ------------------------------------------------------------------------
-    // PANEL DERECHO 2: DIBUJO 3D DEL MODELO CON EL PROGRESO
+    // PANEL DERECHO 2: DIBUJO 3D DEL MODELO CON EL PROGRESO (Y HUECOS)
     // ------------------------------------------------------------------------
     const ib = prog.isoBox;
     ctx.save();
@@ -2691,7 +2977,7 @@ function drawPapercraftSheetToContext(ctx, sheet, pxPerMM, offsetX = 0, offsetY 
       ctx.restore();
     }
 
-    // Dibujar capas del modelo 3D de abajo hacia arriba
+    // Dibujar capas del modelo 3D de abajo hacia arriba (con huecos perforados mediante evenodd)
     prog.isoLayers.forEach((il) => {
       ctx.save();
       if (il.status === 'current' && il.botPoly && il.botPoly.length === il.topPoly.length) {
@@ -2717,18 +3003,26 @@ function drawPapercraftSheetToContext(ctx, sheet, pxPerMM, offsetX = 0, offsetY 
         else ctx.lineTo(pt.x * pxPerMM, pt.y * pxPerMM);
       });
       ctx.closePath();
+      (il.holeTopPolys || []).forEach((hp) => {
+        if (!hp || hp.length < 3) return;
+        hp.forEach((pt, idx) => {
+          if (idx === 0) ctx.moveTo(pt.x * pxPerMM, pt.y * pxPerMM);
+          else ctx.lineTo(pt.x * pxPerMM, pt.y * pxPerMM);
+        });
+        ctx.closePath();
+      });
 
       if (il.status === 'done') {
         ctx.fillStyle = 'rgba(16, 185, 129, 0.45)';
         ctx.strokeStyle = '#059669';
         ctx.lineWidth = Math.max(0.6, 0.22 * pxPerMM);
-        ctx.fill();
+        ctx.fill('evenodd');
         ctx.stroke();
       } else if (il.status === 'current') {
         ctx.fillStyle = 'rgba(245, 158, 11, 0.88)';
         ctx.strokeStyle = '#b45309';
         ctx.lineWidth = Math.max(1.0, 0.35 * pxPerMM);
-        ctx.fill();
+        ctx.fill('evenodd');
         ctx.stroke();
       } else {
         ctx.strokeStyle = '#94a3b8';
@@ -2833,7 +3127,7 @@ function drawPapercraftSheetToContext(ctx, sheet, pxPerMM, offsetX = 0, offsetY 
       ctx.restore();
     });
 
-    // 3. Cuerpo principal de la pieza + Ilustración recortada en su interior
+    // 3. Cuerpo principal de la pieza + Huecos interiores perforados ('evenodd') + Ilustración recortada
     if (piece.bodyPolygon && piece.bodyPolygon.length >= 3) {
       ctx.save();
       ctx.beginPath();
@@ -2842,17 +3136,25 @@ function drawPapercraftSheetToContext(ctx, sheet, pxPerMM, offsetX = 0, offsetY 
         else ctx.lineTo(toX(pt.x), toY(pt.y));
       });
       ctx.closePath();
+      (piece.holePolygons || []).forEach((hp) => {
+        if (!hp || hp.length < 3) return;
+        hp.forEach((pt, idx) => {
+          if (idx === 0) ctx.moveTo(toX(pt.x), toY(pt.y));
+          else ctx.lineTo(toX(pt.x), toY(pt.y));
+        });
+        ctx.closePath();
+      });
 
       if (papercraftState.printStyle === 'color') {
         ctx.fillStyle = piece.colorObj ? piece.colorObj.light : '#e0f2fe';
-        ctx.fill();
+        ctx.fill('evenodd');
       } else {
         ctx.fillStyle = '#ffffff';
-        ctx.fill();
+        ctx.fill('evenodd');
       }
 
       if (piece.artworkCanvas && papercraftState.printStyle !== 'blueprint') {
-        ctx.clip();
+        ctx.clip('evenodd');
         const ab = piece.artworkBounds || computePolygonBounds2D(piece.bodyPolygon);
         const ax = toX(ab.minX);
         const ay = toY(ab.maxY);
@@ -2865,7 +3167,7 @@ function drawPapercraftSheetToContext(ctx, sheet, pxPerMM, offsetX = 0, offsetY 
       ctx.restore();
     }
 
-    // 4. Zonas Guía de Pegado donde va pegada la siguiente capa o pestaña (glueTargetZones)
+    // 4. Zonas Guía de Pegado donde va pegada la siguiente capa o pestaña (respetando huecos interiores)
     (piece.glueTargetZones || []).forEach((gz) => {
       if (!gz.polygon || gz.polygon.length < 3) return;
       ctx.save();
@@ -2875,8 +3177,16 @@ function drawPapercraftSheetToContext(ctx, sheet, pxPerMM, offsetX = 0, offsetY 
         else ctx.lineTo(toX(pt.x), toY(pt.y));
       });
       ctx.closePath();
+      (gz.holePolygons || []).forEach((hp) => {
+        if (!hp || hp.length < 3) return;
+        hp.forEach((pt, idx) => {
+          if (idx === 0) ctx.moveTo(toX(pt.x), toY(pt.y));
+          else ctx.lineTo(toX(pt.x), toY(pt.y));
+        });
+        ctx.closePath();
+      });
       ctx.fillStyle = gz.isTabLanding ? 'rgba(251, 191, 36, 0.25)' : 'rgba(16, 185, 129, 0.12)';
-      ctx.fill();
+      ctx.fill('evenodd');
       ctx.strokeStyle = gz.isTabLanding ? '#d97706' : '#059669';
       ctx.lineWidth = Math.max(1.0, 0.32 * pxPerMM);
       ctx.setLineDash([2.2 * pxPerMM * 0.4, 1.8 * pxPerMM * 0.4]);
@@ -2918,7 +3228,57 @@ function drawPapercraftSheetToContext(ctx, sheet, pxPerMM, offsetX = 0, offsetY 
       });
     }
 
-    // 6. Contorno Exterior de Corte con Tijeras (Línea continua gruesa + Iconos ✂)
+    // 6. Contornos Interiores de Huecos para Vaciar con Tijeras (holePolygons)
+    if (piece.holePolygons && piece.holePolygons.length > 0) {
+      piece.holePolygons.forEach((hp) => {
+        if (!hp || hp.length < 3) return;
+        ctx.save();
+        // Sombreado sutil de vaciado interior
+        ctx.beginPath();
+        hp.forEach((pt, idx) => {
+          if (idx === 0) ctx.moveTo(toX(pt.x), toY(pt.y));
+          else ctx.lineTo(toX(pt.x), toY(pt.y));
+        });
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(241, 245, 249, 0.72)';
+        ctx.fill();
+
+        // Línea de corte interior continua en carmesí (#dc2626) para distinguir el vaciado
+        ctx.strokeStyle = '#dc2626';
+        ctx.lineWidth = Math.max(1.4, 0.46 * pxPerMM);
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        ctx.stroke();
+
+        // Marca escolar de pellizco central (┄✂┄) + etiqueta '✂ HUECO' si el hueco tiene tamaño suficiente
+        const hb = computePolygonBounds2D(hp);
+        const hwMM = hb.width * pl.scaleFit;
+        const hhMM = hb.height * pl.scaleFit;
+        if (hwMM >= 8 && hhMM >= 6) {
+          const snipHalf = Math.min(hwMM * 0.25, 4.5) * pxPerMM;
+          const hcx = toX(hb.cx);
+          const hcy = toY(hb.cy);
+          ctx.strokeStyle = '#dc2626';
+          ctx.lineWidth = Math.max(0.8, 0.25 * pxPerMM);
+          ctx.setLineDash([1.5 * pxPerMM * 0.35, 1.0 * pxPerMM * 0.35]);
+          ctx.beginPath();
+          ctx.moveTo(hcx - snipHalf, hcy);
+          ctx.lineTo(hcx + snipHalf, hcy);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          ctx.fillStyle = '#b91c1c';
+          const fSz = Math.max(6.0, Math.min(2.1 * pxPerMM, hwMM * pxPerMM * 0.16));
+          ctx.font = 'bold ' + fSz.toFixed(1) + 'px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('✂ HUECO', hcx, hcy);
+        }
+        ctx.restore();
+      });
+    }
+
+    // 7. Contorno Exterior de Corte con Tijeras (Línea continua gruesa + Iconos ✂)
     if (piece.outerCutPoints && piece.outerCutPoints.length >= 3) {
       ctx.save();
       ctx.strokeStyle = '#0f172a';
@@ -3081,7 +3441,7 @@ function renderPapercraft3DPreviewOnCanvas(canvas) {
       ctx.stroke();
       ctx.restore();
 
-      // Silueta de la figura abatiéndose desde el plano horizontal hasta 90° vertical
+      // Silueta de la figura abatiéndose desde el plano horizontal hasta 90° vertical (con huecos perforados)
       const figProj = layer.contourPoints.map((pt) => {
         const localH = Math.max(0, pt.y - b.minY);
         const y3d = yPos + localH * Math.cos(foldAngle);
@@ -3093,10 +3453,22 @@ function renderPapercraft3DPreviewOnCanvas(canvas) {
       ctx.beginPath();
       figProj.forEach((pt, i) => (i === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y)));
       ctx.closePath();
+      (layer.holePolygons || []).forEach((hp) => {
+        if (!hp || hp.length < 3) return;
+        hp.forEach((pt, i) => {
+          const localH = Math.max(0, pt.y - b.minY);
+          const y3d = yPos + localH * Math.cos(foldAngle);
+          const z3d = peanaZ + localH * Math.sin(foldAngle);
+          const p3 = project3D(pt.x, y3d, z3d);
+          if (i === 0) ctx.moveTo(p3.x, p3.y);
+          else ctx.lineTo(p3.x, p3.y);
+        });
+        ctx.closePath();
+      });
       ctx.fillStyle = layer.colorObj ? layer.colorObj.fill + 'cc' : 'rgba(56, 189, 248, 0.8)';
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 2;
-      ctx.fill();
+      ctx.fill('evenodd');
       ctx.stroke();
       ctx.restore();
     }
@@ -3181,20 +3553,57 @@ function renderPapercraft3DPreviewOnCanvas(canvas) {
         ctx.restore();
       });
 
-      // 2. Cara superior de la plataforma / capa en zTop
+      // 1b. Paredes interiores de los huecos (holePolygons) en zTop..zBot
+      (layer.holePolygons || []).forEach((hp) => {
+        if (!hp || hp.length < 3) return;
+        for (let i = 0; i < hp.length; i++) {
+          const hp1 = hp[i];
+          const hp2 = hp[(i + 1) % hp.length];
+          const hwProj = [
+            project3D(hp1.x, hp1.y, zTop),
+            project3D(hp1.x, hp1.y, zBot),
+            project3D(hp2.x, hp2.y, zBot),
+            project3D(hp2.x, hp2.y, zTop)
+          ];
+          ctx.save();
+          ctx.beginPath();
+          hwProj.forEach((pt, idx2) => (idx2 === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y)));
+          ctx.closePath();
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.65)';
+          ctx.strokeStyle = 'rgba(248, 113, 113, 0.65)';
+          ctx.lineWidth = 1.0;
+          ctx.fill();
+          ctx.stroke();
+          ctx.restore();
+        }
+      });
+
+      // 2. Cara superior de la plataforma / capa en zTop (con huecos perforados mediante 'evenodd')
       const topProj = pts.map((pt) => project3D(pt.x, pt.y, zTop));
       ctx.save();
       ctx.beginPath();
       topProj.forEach((pt, i) => (i === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y)));
       ctx.closePath();
+      (layer.holePolygons || []).forEach((hp) => {
+        if (!hp || hp.length < 3) return;
+        hp.forEach((pt, i) => {
+          const p3 = project3D(pt.x, pt.y, zTop);
+          if (i === 0) ctx.moveTo(p3.x, p3.y);
+          else ctx.lineTo(p3.x, p3.y);
+        });
+        ctx.closePath();
+      });
       ctx.fillStyle = layer.colorObj ? layer.colorObj.fill + 'd8' : 'rgba(56, 189, 248, 0.85)';
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 2.0;
-      ctx.fill();
+      ctx.fill('evenodd');
       ctx.stroke();
 
-      // Etiqueta de la capa en el centro
-      const cProj = project3D(layer.bounds.cx, layer.bounds.cy, zTop);
+      // Etiqueta de la capa en un punto sólido (o en el borde si el centro cae dentro de un hueco)
+      const labelPt2D = (layer.holePolygons && layer.holePolygons.some((hp) => isPointInPolygon2D({ x: layer.bounds.cx, y: layer.bounds.cy }, hp)))
+        ? pts[0]
+        : { x: layer.bounds.cx, y: layer.bounds.cy };
+      const cProj = project3D(labelPt2D.x, labelPt2D.y, zTop);
       ctx.fillStyle = '#0f172a';
       ctx.font = 'bold 11px sans-serif';
       ctx.textAlign = 'center';
@@ -3340,6 +3749,11 @@ function generatePapercraftSheetSVG(sheet) {
       } else {
         lines.push('      <rect x="' + bar.rx.toFixed(2) + '" y="' + bar.ry.toFixed(2) + '" width="' + bar.rw.toFixed(2) + '" height="' + bar.rh.toFixed(2) + '" fill="none" stroke="#94a3b8" stroke-width="0.18" stroke-dasharray="0.9,0.7" />');
       }
+      if (bar.holeSpans && bar.holeSpans.length > 0 && bar.status !== 'pending') {
+        bar.holeSpans.forEach((hs) => {
+          lines.push('      <rect x="' + hs.hx.toFixed(2) + '" y="' + (bar.ry + 0.12).toFixed(2) + '" width="' + hs.hw.toFixed(2) + '" height="' + Math.max(0.2, bar.rh - 0.24).toFixed(2) + '" fill="#ffffff" stroke="none" />');
+        });
+      }
     });
 
     lines.push('      <line x1="' + prog.elevPlotX.toFixed(2) + '" y1="' + prog.markerY.toFixed(2) + '" x2="' + (eb.x + eb.w - 1.2).toFixed(2) + '" y2="' + prog.markerY.toFixed(2) + '" stroke="#d97706" stroke-width="0.25" stroke-dasharray="1.1,0.7" />');
@@ -3348,7 +3762,7 @@ function generatePapercraftSheetSVG(sheet) {
     lines.push('    </g>');
 
     // ------------------------------------------------------------------------
-    // PANEL DERECHO 2 (SVG): DIBUJO 3D DEL MODELO CON EL PROGRESO
+    // PANEL DERECHO 2 (SVG): DIBUJO 3D DEL MODELO CON EL PROGRESO (Y HUECOS)
     // ------------------------------------------------------------------------
     const ib = prog.isoBox;
     lines.push('    <g id="DIAGRAMA_MODELO_3D_PROGRESO">');
@@ -3371,11 +3785,15 @@ function generatePapercraftSheetSVG(sheet) {
           lines.push('      <path d="' + dWall + '" fill="#d97706" fill-opacity="0.55" stroke="none" />');
         }
       }
-      const dTop = 'M ' + il.topPoly.map((p) => p.x.toFixed(2) + ' ' + p.y.toFixed(2)).join(' L ') + ' Z';
+      let dTop = 'M ' + il.topPoly.map((p) => p.x.toFixed(2) + ' ' + p.y.toFixed(2)).join(' L ') + ' Z';
+      (il.holeTopPolys || []).forEach((hp) => {
+        if (!hp || hp.length < 3) return;
+        dTop += ' M ' + hp.map((p) => p.x.toFixed(2) + ' ' + p.y.toFixed(2)).join(' L ') + ' Z';
+      });
       if (il.status === 'done') {
-        lines.push('      <path d="' + dTop + '" fill="#10b981" fill-opacity="0.45" stroke="#059669" stroke-width="0.22" />');
+        lines.push('      <path d="' + dTop + '" fill-rule="evenodd" fill="#10b981" fill-opacity="0.45" stroke="#059669" stroke-width="0.22" />');
       } else if (il.status === 'current') {
-        lines.push('      <path d="' + dTop + '" fill="#f59e0b" fill-opacity="0.88" stroke="#b45309" stroke-width="0.35" />');
+        lines.push('      <path d="' + dTop + '" fill-rule="evenodd" fill="#f59e0b" fill-opacity="0.88" stroke="#b45309" stroke-width="0.35" />');
       } else {
         lines.push('      <path d="' + dTop + '" fill="none" stroke="#94a3b8" stroke-width="0.18" stroke-dasharray="0.9,0.7" />');
       }
@@ -3414,11 +3832,15 @@ function generatePapercraftSheetSVG(sheet) {
       lines.push('    </g>');
     }
 
-    // 2. Cuerpo e ilustración recortada
+    // 2. Cuerpo e ilustración recortada (con huecos interiores perforados mediante fill-rule/clip-rule="evenodd")
     if (piece.bodyPolygon && piece.bodyPolygon.length >= 3) {
-      const dBody = 'M ' + piece.bodyPolygon.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z';
+      let dBody = 'M ' + piece.bodyPolygon.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z';
+      (piece.holePolygons || []).forEach((hp) => {
+        if (!hp || hp.length < 3) return;
+        dBody += ' M ' + hp.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z';
+      });
       const fillBody = papercraftState.printStyle === 'color' && piece.colorObj ? piece.colorObj.light : '#ffffff';
-      lines.push('    <path d="' + dBody + '" fill="' + fillBody + '" stroke="none" />');
+      lines.push('    <path d="' + dBody + '" fill-rule="evenodd" fill="' + fillBody + '" stroke="none" />');
 
       if (piece.artworkCanvas && papercraftState.printStyle !== 'blueprint') {
         const ab = piece.artworkBounds || computePolygonBounds2D(piece.bodyPolygon);
@@ -3427,20 +3849,24 @@ function generatePapercraftSheetSVG(sheet) {
         const aw = (ab.width * pl.scaleFit).toFixed(3);
         const ah = (ab.height * pl.scaleFit).toFixed(3);
         const dataUrl = piece.artworkCanvas.toDataURL('image/png');
-        lines.push('    <clipPath id="' + clipId + '"><path d="' + dBody + '" /></clipPath>');
+        lines.push('    <clipPath id="' + clipId + '"><path d="' + dBody + '" clip-rule="evenodd" /></clipPath>');
         lines.push('    <image x="' + ax + '" y="' + ay + '" width="' + aw + '" height="' + ah + '" href="' + dataUrl + '" clip-path="url(#' + clipId + ')" opacity="0.9" />');
       }
     }
 
-    // 3. Zonas guía de recepción de pegamento
+    // 3. Zonas guía de recepción de pegamento (respetando huecos interiores)
     if (piece.glueTargetZones && piece.glueTargetZones.length > 0) {
       lines.push('    <g id="ZONAS_PEGADO_' + (pIdx + 1) + '">');
       piece.glueTargetZones.forEach((gz) => {
         if (!gz.polygon || gz.polygon.length < 3) return;
-        const dZone = 'M ' + gz.polygon.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z';
+        let dZone = 'M ' + gz.polygon.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z';
+        (gz.holePolygons || []).forEach((hp) => {
+          if (!hp || hp.length < 3) return;
+          dZone += ' M ' + hp.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z';
+        });
         const strokeCol = gz.isTabLanding ? '#d97706' : '#059669';
         const fillCol = gz.isTabLanding ? '#fef3c7' : '#d1fae5';
-        lines.push('      <path d="' + dZone + '" fill="' + fillCol + '" fill-opacity="0.45" stroke="' + strokeCol + '" stroke-width="0.32" stroke-dasharray="1.8,1.4" />');
+        lines.push('      <path d="' + dZone + '" fill-rule="evenodd" fill="' + fillCol + '" fill-opacity="0.45" stroke="' + strokeCol + '" stroke-width="0.32" stroke-dasharray="1.8,1.4" />');
         if (papercraftState.showGlueLabels && gz.label) {
           const zb = computePolygonBounds2D(gz.polygon);
           lines.push('      <text x="' + toX(zb.cx) + '" y="' + toY(zb.cy) + '" font-family="sans-serif" font-size="2.2" font-weight="bold" fill="' + strokeCol + '" text-anchor="middle" dominant-baseline="central">🧴 ' + escapeXml(gz.label) + '</text>');
@@ -3461,7 +3887,28 @@ function generatePapercraftSheetSVG(sheet) {
       lines.push('    </g>');
     }
 
-    // 5. Línea exterior de corte con tijeras (#0f172a) + símbolos ✂
+    // 5. Contornos interiores de huecos para vaciar con tijeras (#dc2626) + guía de pellizco central
+    if (piece.holePolygons && piece.holePolygons.length > 0) {
+      lines.push('    <g id="CORTE_HUECOS_INTERIORES_' + (pIdx + 1) + '">');
+      piece.holePolygons.forEach((hp) => {
+        if (!hp || hp.length < 3) return;
+        const dHole = 'M ' + hp.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z';
+        lines.push('      <path d="' + dHole + '" fill="#f1f5f9" fill-opacity="0.72" stroke="#dc2626" stroke-width="0.46" stroke-linejoin="round" stroke-linecap="round" />');
+        const hb = computePolygonBounds2D(hp);
+        const hwMM = hb.width * pl.scaleFit;
+        const hhMM = hb.height * pl.scaleFit;
+        if (hwMM >= 8 && hhMM >= 6) {
+          const snipHalf = Math.min(hwMM * 0.25, 4.5);
+          const hcx = pl.toSheetX(hb.cx);
+          const hcy = pl.toSheetY(hb.cy);
+          lines.push('      <line x1="' + (hcx - snipHalf).toFixed(3) + '" y1="' + hcy.toFixed(3) + '" x2="' + (hcx + snipHalf).toFixed(3) + '" y2="' + hcy.toFixed(3) + '" stroke="#dc2626" stroke-width="0.25" stroke-dasharray="1.0,0.7" />');
+          lines.push('      <text x="' + hcx.toFixed(3) + '" y="' + hcy.toFixed(3) + '" font-family="sans-serif" font-size="2.0" font-weight="bold" fill="#b91c1c" text-anchor="middle" dominant-baseline="central">✂ HUECO</text>');
+        }
+      });
+      lines.push('    </g>');
+    }
+
+    // 6. Línea exterior de corte con tijeras (#0f172a) + símbolos ✂
     if (piece.outerCutPoints && piece.outerCutPoints.length >= 3) {
       const dCut = 'M ' + piece.outerCutPoints.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z';
       lines.push('    <path id="CORTE_TIJERAS_' + (pIdx + 1) + '" d="' + dCut + '" fill="none" stroke="#0f172a" stroke-width="0.52" stroke-linejoin="round" stroke-linecap="round" />');
@@ -3634,6 +4081,20 @@ function applyPapercraftToMainStudio() {
       isHole: false
     };
 
+    // Incluir los huecos interiores de cada capa 3D / imagen como lazos con isHole: true para extrusión 3D y corte en el estudio principal
+    const holeLoops = (piece.holePolygons || [])
+      .filter((hp) => hp && hp.length >= 3)
+      .map((hp) => {
+        const hArea = Math.abs(computeSignedPolygonArea(hp));
+        return {
+          points: hp.map((pt) => ({ x: pt.x, y: pt.y })),
+          absArea: hArea,
+          signedArea: -hArea,
+          isHole: true
+        };
+      });
+    const allCutLoops = [cutLoop, ...holeLoops];
+
     // Incluir también las líneas de pliegue y zonas de pegamento como vectores grabados para compatibilidad total con Nesting y DXF
     const engraveLoops = [];
     (piece.glueTabs || []).forEach((gt) => {
@@ -3652,10 +4113,10 @@ function applyPapercraftToMainStudio() {
       sliceAxis: targetAxis,
       puzzleCode: piece.shortCode,
       selected: true,
-      rawLoops: [cutLoop],
-      modelLoops: [cutLoop],
-      unsplitLoops: [cutLoop],
-      loops: [cutLoop],
+      rawLoops: allCutLoops,
+      modelLoops: allCutLoops,
+      unsplitLoops: allCutLoops,
+      loops: allCutLoops,
       baseEngraveLoops: engraveLoops,
       engraveLoops,
       fineEdgeLoops: [],
@@ -3667,6 +4128,7 @@ function applyPapercraftToMainStudio() {
         subtitle: piece.subtitle,
         shortCode: piece.shortCode,
         bodyPolygon: piece.bodyPolygon,
+        holePolygons: piece.holePolygons || [],
         foldLines: piece.foldLines || [],
         glueTabs: piece.glueTabs || [],
         wallPanels: piece.wallPanels || [],

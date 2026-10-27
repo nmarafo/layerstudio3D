@@ -1322,7 +1322,7 @@ function render2DSlice() {
       ctx.restore();
     });
 
-    // 2. Ilustración interior de la pieza recortable
+    // 2. Ilustración interior de la pieza recortable (respetando huecos interiores mediante evenodd)
     if (pm.artworkCanvas && pm.bodyPolygon && pm.bodyPolygon.length >= 3) {
       ctx.save();
       ctx.beginPath();
@@ -1331,7 +1331,15 @@ function render2DSlice() {
         else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
       });
       ctx.closePath();
-      ctx.clip();
+      (pm.holePolygons || []).forEach((hp) => {
+        if (!hp || hp.length < 3) return;
+        hp.forEach((pt, i) => {
+          if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+          else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+        });
+        ctx.closePath();
+      });
+      ctx.clip('evenodd');
       const ab = pm.artworkBounds || getSliceBounds2D(slice);
       ctx.globalAlpha = 0.72;
       ctx.drawImage(
@@ -1344,7 +1352,7 @@ function render2DSlice() {
       ctx.restore();
     }
 
-    // 3. Zonas guía de recepción de pegamento
+    // 3. Zonas guía de recepción de pegamento (respetando huecos interiores)
     (pm.glueTargetZones || []).forEach((gz) => {
       if (!gz.polygon || gz.polygon.length < 3) return;
       ctx.save();
@@ -1354,8 +1362,16 @@ function render2DSlice() {
         else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
       });
       ctx.closePath();
+      (gz.holePolygons || []).forEach((hp) => {
+        if (!hp || hp.length < 3) return;
+        hp.forEach((pt, i) => {
+          if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+          else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+        });
+        ctx.closePath();
+      });
       ctx.fillStyle = 'rgba(16, 185, 129, 0.18)';
-      ctx.fill();
+      ctx.fill('evenodd');
       ctx.strokeStyle = '#34d399';
       ctx.setLineDash([5, 4]);
       ctx.lineWidth = 1.4;

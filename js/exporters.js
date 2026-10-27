@@ -458,8 +458,12 @@ function generateSliceSVG(slice, idx) {
       lines.push('  <g id="ZONAS_PEGADO_RECORTABLE">');
       pm.glueTargetZones.forEach((gz, zIdx) => {
         if (!gz.polygon || gz.polygon.length < 3) return;
-        const dZ = 'M ' + gz.polygon.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z';
-        lines.push('    <path id="zona_pegado_' + (zIdx + 1) + '" d="' + dZ + '" fill="#d1fae5" fill-opacity="0.35" stroke="#059669" stroke-width="' + strokeMm + '" stroke-dasharray="1.8,1.4" />');
+        let dZ = 'M ' + gz.polygon.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z';
+        (gz.holePolygons || []).forEach((hp) => {
+          if (!hp || hp.length < 3) return;
+          dZ += ' M ' + hp.map((p) => toX(p.x) + ' ' + toY(p.y)).join(' L ') + ' Z';
+        });
+        lines.push('    <path id="zona_pegado_' + (zIdx + 1) + '" d="' + dZ + '" fill-rule="evenodd" fill="#d1fae5" fill-opacity="0.35" stroke="#059669" stroke-width="' + strokeMm + '" stroke-dasharray="1.8,1.4" />');
       });
       lines.push('  </g>');
     }
