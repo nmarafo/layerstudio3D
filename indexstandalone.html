@@ -24502,6 +24502,7 @@ function extractPapercraftSourceLayers() {
 // ============================================================================
 function buildPapercraftPieces() {
   const baseLayers = extractPapercraftSourceLayers();
+  papercraftState.baseLayers = baseLayers;
   const type = papercraftState.cutoutType;
   const tabDepth = Math.max(4, Number(papercraftState.tabDepthMM) || 10);
   const wallH = Math.max(0, Number(papercraftState.wallHeightMM) || 14);
@@ -25279,7 +25280,8 @@ function packPapercraftPiecesIntoSheets(pieces) {
   const sheetW = sheetSpec.widthMM;
   const sheetH = sheetSpec.heightMM;
   const margin = 10;
-  const headerH = papercraftState.includeSchoolHeader ? 24 : 10;
+  // Reservamos 38 mm superiores en cada A4 para el cajetín escolar + el dibujo del modelo con el progreso (estilo Guía Ilustrada)
+  const headerH = 38;
   const usableW = sheetW - margin * 2;
   const usableH = sheetH - margin * 2 - headerH;
   const gapMM = 7;
@@ -25363,6 +25365,210 @@ function packPapercraftPiecesIntoSheets(pieces) {
 }
 
 // ============================================================================
+// CÁLCULO GEOMÉTRICO DEL DIAGRAMA DEL MODELO CON EL PROGRESO EN CADA HOJA A4
+// (Estilo Guía Ilustrada: Alzado Apilado + Vista 3D del Modelo con Progreso)
+// ============================================================================
+function computeSheetModelProgressLayout(sheet) {
+  const baseLayers = (papercraftState.baseLayers && papercraftState.baseLayers.length > 0)
+    ? papercraftState.baseLayers
+    : extractPapercraftSourceLayers();
+  const totalLayers = Math.max(1, baseLayers.length);
+
+  const activeSet = new Set();
+  const pieceCodes = [];
+  (sheet.placements || []).forEach((pl) => {
+    if (!pl || !pl.piece) return;
+    if (pl.piece.shortCode) pieceCodes.push(pl.piece.shortCode);
+    const lIdx = typeof pl.piece.layerIndex === 'number' ? pl.piece.layerIndex : -1;
+    if (lIdx >= 0 && lIdx < totalLayers) {
+      activeSet.add(lIdx);
+    }
+  });
+  if (activeSet.size === 0) {
+    activeSet.add(0);
+  }
+
+  const activeIndices = Array.from(activeSet).sort((a, b) => a - b);
+  const minActive = activeIndices[0];
+  const maxActive = activeIndices[activeIndices.length - 1];
+  const rangeLabel = minActive === maxActive
+    ? ('#' + (minActive + 1))
+    : ('#' + (minActive + 1) + '..#' + (maxActive + 1));
+  const progressPct = Math.round(((maxActive + 1) / totalLayers) * 100);
+  const layerT = Math.max(2, Number(papercraftState.wallHeightMM) || 14);
+  const accumHeightMM = ((maxActive + 1) * layerT).toFixed(0);
+  const axisLabel = (papercraftState.sliceAxis || 'z').toUpperCase();
+
+  const sw = sheet.widthMM;
+  const m = sheet.marginMM;
+  const innerW = sw - m * 2;
+  const hBoxH = (sheet.headerHMM || 38) - 3; // 35 mm de alto
+
+  // Dividir la banda superior en: Columna Izquierda (Datos y Leyenda) + Columna Derecha (2 Diagramas de Progreso del Modelo)
+  const diagTotalW = Math.min(118, Math.max(88, innerW * 0.465));
+  const infoW = innerW - diagTotalW - 2.2;
+  const diagX = m + innerW - diagTotalW;
+  const diagY = m + 1.2;
+  const diagH = hBoxH - 2.4;
+  const subGap = 1.6;
+  const subW = (diagTotalW - subGap) * 0.5;
+
+  const elevBox = { x: diagX, y: diagY, w: subW, h: diagH };
+  const isoBox = { x: diagX + subW + subGap, y: diagY, w: subW, h: diagH };
+
+  // Global bounds de todas las capas del modelo
+  let gMinX = Infinity, gMaxX = -Infinity, gMinY = Infinity, gMaxY = -Infinity;
+  baseLayers.forEach((l) => {
+    const b = l.bounds || computePolygonBounds2D(l.contourPoints);
+    if (b.minX < gMinX) gMinX = b.minX;
+    if (b.maxX > gMaxX) gMaxX = b.maxX;
+    if (b.minY < gMinY) gMinY = b.minY;
+    if (b.maxY > gMaxY) gMaxY = b.maxY;
+  });
+  if (!Number.isFinite(gMinX)) {
+    gMinX = -50; gMaxX = 50; gMinY = -50; gMaxY = 50;
+  }
+  const spanX = Math.max(10, gMaxX - gMinX);
+  const spanY = Math.max(10, gMaxY - gMinY);
+  const centerX = (gMinX + gMaxX) * 0.5;
+  const centerY = (gMinY + gMaxY) * 0.5;
+
+  // 1. Geometría de ALZADO APILADO CON PROGRESO (idéntico a Guía Ilustrada generateStepStackElevationSVG)
+  const elevPlotX = elevBox.x + 2.4;
+  const elevPlotW = Math.max(12, elevBox.w - 13.8);
+  const elevPlotY = elevBox.y + 4.6;
+  const elevPlotH = Math.max(10, elevBox.h - 8.4);
+  const baseLineY = elevPlotY + elevPlotH;
+  const barH = elevPlotH / totalLayers;
+
+  const elevBars = baseLayers.map((l, k) => {
+    const b = l.bounds || computePolygonBounds2D(l.contourPoints);
+    const rx = elevPlotX + ((b.minX - gMinX) / spanX) * elevPlotW;
+    const rw = Math.max(1.4, (b.width / spanX) * elevPlotW);
+    const ry = baseLineY - (k + 1) * barH;
+    const rh = Math.max(0.35, barH);
+    const status = activeSet.has(k) ? 'current' : (k < minActive ? 'done' : 'pending');
+    return { k, rx, ry, rw, rh, status };
+  });
+
+  const midActiveK = (minActive + maxActive + 1) * 0.5;
+  const markerY = baseLineY - midActiveK * barH;
+
+  // 2. Geometría de MODELO 3D ISOMÉTRICO CON PROGRESO (Siluetas 3D de todas las capas del modelo)
+  const yaw = -0.62;
+  const pitch = 0.58;
+  const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
+  const cosP = Math.cos(pitch), sinP = Math.sin(pitch);
+  const visualStackH = Math.max(spanX, spanY) * 0.62;
+  const dz = visualStackH / totalLayers;
+
+  const rawProj = (x, y, z) => {
+    const dx = x - centerX;
+    const dy = y - centerY;
+    const rx = dx * cosY - dy * sinY;
+    const ry = dx * sinY + dy * cosY;
+    return {
+      ux: rx,
+      uy: -(ry * sinP + z * cosP)
+    };
+  };
+
+  let uMinX = Infinity, uMaxX = -Infinity, uMinY = Infinity, uMaxY = -Infinity;
+  baseLayers.forEach((l, k) => {
+    const zTop = (k + 1) * dz;
+    const zBot = k * dz;
+    (l.contourPoints || []).forEach((pt) => {
+      const pT = rawProj(pt.x, pt.y, zTop);
+      const pB = rawProj(pt.x, pt.y, zBot);
+      if (pT.ux < uMinX) uMinX = pT.ux;
+      if (pT.ux > uMaxX) uMaxX = pT.ux;
+      if (pT.uy < uMinY) uMinY = pT.uy;
+      if (pT.uy > uMaxY) uMaxY = pT.uy;
+      if (pB.uy > uMaxY) uMaxY = pB.uy;
+    });
+  });
+  if (!Number.isFinite(uMinX)) {
+    uMinX = -50; uMaxX = 50; uMinY = -50; uMaxY = 50;
+  }
+
+  const isoPlotX = isoBox.x + 2.0;
+  const isoPlotY = isoBox.y + 4.6;
+  const isoPlotW = Math.max(12, isoBox.w - 4.0);
+  const isoPlotH = Math.max(10, isoBox.h - 8.4);
+  const uSpanX = Math.max(1, uMaxX - uMinX);
+  const uSpanY = Math.max(1, uMaxY - uMinY);
+  const isoScale = Math.min(isoPlotW / uSpanX, isoPlotH / uSpanY);
+  const uMidX = (uMinX + uMaxX) * 0.5;
+  const uMidY = (uMinY + uMaxY) * 0.5;
+  const isoCx = isoPlotX + isoPlotW * 0.5;
+  const isoCy = isoPlotY + isoPlotH * 0.5;
+
+  const toIsoSheet = (x, y, z) => {
+    const p = rawProj(x, y, z);
+    return {
+      x: isoCx + (p.ux - uMidX) * isoScale,
+      y: isoCy + (p.uy - uMidY) * isoScale
+    };
+  };
+
+  // Placa base de referencia en Z = 0
+  const hw = spanX * 0.52;
+  const hh = spanY * 0.52;
+  const isoBaseQuad = [
+    toIsoSheet(centerX - hw, centerY - hh, 0),
+    toIsoSheet(centerX + hw, centerY - hh, 0),
+    toIsoSheet(centerX + hw, centerY + hh, 0),
+    toIsoSheet(centerX - hw, centerY + hh, 0)
+  ];
+
+  // Si hay muchísimas capas (> 36), muestreamos las no activas para mantener el SVG ligero pero incluimos siempre todas las capas activas de esta hoja
+  const maxInactiveSample = 32;
+  const stride = totalLayers > maxInactiveSample ? Math.ceil(totalLayers / maxInactiveSample) : 1;
+  const isoLayers = [];
+  for (let k = 0; k < totalLayers; k++) {
+    const isCurr = activeSet.has(k);
+    if (!isCurr && k !== 0 && k !== totalLayers - 1 && (k % stride !== 0)) continue;
+    const l = baseLayers[k];
+    const pts = l.contourPoints || [];
+    if (pts.length < 3) continue;
+    const zTop = (k + 1) * dz;
+    const zBot = k * dz;
+    const topPoly = pts.map((pt) => toIsoSheet(pt.x, pt.y, zTop));
+    const botPoly = isCurr ? pts.map((pt) => toIsoSheet(pt.x, pt.y, zBot)) : null;
+    const status = isCurr ? 'current' : (k < minActive ? 'done' : 'pending');
+    isoLayers.push({
+      k,
+      status,
+      topPoly,
+      botPoly,
+      centerPt: toIsoSheet((l.bounds && l.bounds.cx) || centerX, (l.bounds && l.bounds.cy) || centerY, zTop)
+    });
+  }
+
+  return {
+    totalLayers,
+    minActive,
+    maxActive,
+    rangeLabel,
+    progressPct,
+    accumHeightMM,
+    axisLabel,
+    pieceCodes,
+    hBoxH,
+    infoW,
+    elevBox,
+    elevPlotX,
+    elevPlotW,
+    baseLineY,
+    markerY,
+    elevBars,
+    isoBox,
+    isoBaseQuad,
+    isoLayers
+  };
+}
+
+// ============================================================================
 // RENDERIZADO 2D DE LA HOJA IMPRIMIBLE DIN A4 CON TIJERAS Y PESTAÑAS
 // ============================================================================
 function drawPapercraftSheetToContext(ctx, sheet, pxPerMM, offsetX = 0, offsetY = 0) {
@@ -25388,9 +25594,10 @@ function drawPapercraftSheetToContext(ctx, sheet, pxPerMM, offsetX = 0, offsetY 
   ctx.strokeRect(m, m, sw - m * 2, sh - m * 2);
   ctx.restore();
 
-  // Cajetín escolar superior
-  if (papercraftState.includeSchoolHeader) {
-    const hBoxH = (sheet.headerHMM - 3) * pxPerMM;
+  // Cabecera escolar + Dibujo del modelo con el progreso (estilo Guía Ilustrada) en cada A4
+  const prog = computeSheetModelProgressLayout(sheet);
+  {
+    const hBoxH = prog.hBoxH * pxPerMM;
     ctx.save();
     ctx.fillStyle = '#f8fafc';
     ctx.strokeStyle = '#334155';
@@ -25398,12 +25605,9 @@ function drawPapercraftSheetToContext(ctx, sheet, pxPerMM, offsetX = 0, offsetY 
     ctx.fillRect(m, m, sw - m * 2, hBoxH);
     ctx.strokeRect(m, m, sw - m * 2, hBoxH);
 
-    const titleFont = Math.max(9, 3.6 * pxPerMM);
-    const subFont = Math.max(7.5, 2.55 * pxPerMM);
-    ctx.fillStyle = '#0f172a';
-    ctx.font = 'bold ' + titleFont.toFixed(1) + 'px sans-serif';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
+    const titleFont = Math.max(8.5, 3.1 * pxPerMM);
+    const subFont = Math.max(6.8, 2.25 * pxPerMM);
+    const tinyFont = Math.max(6.0, 2.0 * pxPerMM);
 
     const typeNames = {
       stacked_platforms: 'Plataformas 3D para Apilar',
@@ -25413,28 +25617,240 @@ function drawPapercraftSheetToContext(ctx, sheet, pxPerMM, offsetX = 0, offsetY 
       prism_net: 'Red Poliédrica 3D Desplegable'
     };
     const typeLabel = typeNames[papercraftState.cutoutType] || 'Recortable Escolar';
-    ctx.fillText(
-      '✂️ RECORTABLE ESCOLAR: ' + typeLabel.toUpperCase() + '  (Hoja ' + (sheet.sheetIndex + 1) + ' de ' + Math.max(1, papercraftState.packedSheets.length) + ')',
-      m + 3 * pxPerMM,
-      m + 2.2 * pxPerMM
-    );
+    const totalSheets = Math.max(1, (papercraftState.packedSheets && papercraftState.packedSheets.length) || 1);
 
-    ctx.fillStyle = '#334155';
-    ctx.font = subFont.toFixed(1) + 'px sans-serif';
-    ctx.fillText(
-      'Alumno/a: ____________________________________   Curso/Grupo: __________   Fecha: ___________',
-      m + 3 * pxPerMM,
-      m + 8.0 * pxPerMM
-    );
-
-    // Leyenda visual de símbolos de recortable
     ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold ' + titleFont.toFixed(1) + 'px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(
+      '✂️ HOJA ' + (sheet.sheetIndex + 1) + '/' + totalSheets + ' — ' + typeLabel.toUpperCase(),
+      m + 2.5 * pxPerMM,
+      m + 2.0 * pxPerMM
+    );
+
+    ctx.fillStyle = '#0369a1';
     ctx.font = 'bold ' + subFont.toFixed(1) + 'px sans-serif';
     ctx.fillText(
-      'LEYENDA:   ━━✂━━ Cortar con tijeras     — — — Doblar hacia abajo (Montaña)     — · — Doblar solapa (Valle)     🧴 Aplicar pegamento escolar',
-      m + 3 * pxPerMM,
-      m + 14.2 * pxPerMM
+      'Progreso en esta hoja: Capas ' + prog.rangeLabel + ' de ' + prog.totalLayers + ' (' + prog.progressPct + '% completado · Eje ' + prog.axisLabel + ')',
+      m + 2.5 * pxPerMM,
+      m + 7.2 * pxPerMM
     );
+
+    if (papercraftState.includeSchoolHeader) {
+      ctx.fillStyle = '#334155';
+      ctx.font = subFont.toFixed(1) + 'px sans-serif';
+      ctx.fillText(
+        'Alumno/a: __________________________  Curso: ________  Fecha: ________',
+        m + 2.5 * pxPerMM,
+        m + 12.6 * pxPerMM
+      );
+    }
+
+    ctx.fillStyle = '#0f172a';
+    ctx.font = 'bold ' + tinyFont.toFixed(1) + 'px sans-serif';
+    ctx.fillText(
+      '━━✂━━ Cortar tijeras   — — — Doblar (Montaña)   — · — Doblar (Valle)   🧴 Pegamento',
+      m + 2.5 * pxPerMM,
+      m + 18.2 * pxPerMM
+    );
+
+    // Barra visual de progreso + Leyenda de colores de la Guía Ilustrada
+    const barX = m + 2.5 * pxPerMM;
+    const barY = m + 23.6 * pxPerMM;
+    const barW = Math.max(30 * pxPerMM, (prog.infoW - 5) * pxPerMM);
+    const barH = 2.8 * pxPerMM;
+    ctx.fillStyle = '#e2e8f0';
+    ctx.fillRect(barX, barY, barW, barH);
+    const doneFrac = prog.minActive / prog.totalLayers;
+    const currFrac = (prog.maxActive - prog.minActive + 1) / prog.totalLayers;
+    if (doneFrac > 0) {
+      ctx.fillStyle = '#10b981';
+      ctx.fillRect(barX, barY, barW * doneFrac, barH);
+    }
+    ctx.fillStyle = '#f59e0b';
+    ctx.fillRect(barX + barW * doneFrac, barY, Math.max(3, barW * currFrac), barH);
+    ctx.strokeStyle = '#64748b';
+    ctx.lineWidth = Math.max(0.6, 0.2 * pxPerMM);
+    ctx.strokeRect(barX, barY, barW, barH);
+
+    ctx.fillStyle = '#334155';
+    ctx.font = 'bold ' + tinyFont.toFixed(1) + 'px sans-serif';
+    ctx.fillText(
+      '🟢 Montadas (#' + (prog.minActive > 0 ? ('1..#' + prog.minActive) : '—') + ')   🟠 En esta hoja (' + prog.rangeLabel + ')   ⚪ Pendientes (' + (prog.maxActive + 1 < prog.totalLayers ? ('#' + (prog.maxActive + 2) + '..#' + prog.totalLayers) : 'Fin') + ')',
+      m + 2.5 * pxPerMM,
+      m + 28.0 * pxPerMM
+    );
+
+    // ------------------------------------------------------------------------
+    // PANEL DERECHO 1: ALZADO APILADO CON PROGRESO (Idéntico a Guía Ilustrada)
+    // ------------------------------------------------------------------------
+    const eb = prog.elevBox;
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = Math.max(0.8, 0.28 * pxPerMM);
+    ctx.fillRect(eb.x * pxPerMM, eb.y * pxPerMM, eb.w * pxPerMM, eb.h * pxPerMM);
+    ctx.strokeRect(eb.x * pxPerMM, eb.y * pxPerMM, eb.w * pxPerMM, eb.h * pxPerMM);
+
+    const hdrFont = Math.max(5.5, 1.75 * pxPerMM);
+    ctx.fillStyle = '#334155';
+    ctx.font = 'bold ' + hdrFont.toFixed(1) + 'px monospace, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(
+      'ALZADO: ' + prog.rangeLabel + '/' + prog.totalLayers + ' (EJE ' + prog.axisLabel + ')',
+      (eb.x + eb.w * 0.5) * pxPerMM,
+      (eb.y + 2.2) * pxPerMM
+    );
+
+    // Línea de mesa / base inferior
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = Math.max(1.0, 0.35 * pxPerMM);
+    ctx.beginPath();
+    ctx.moveTo((prog.elevPlotX - 1.0) * pxPerMM, prog.baseLineY * pxPerMM);
+    ctx.lineTo((prog.elevPlotX + prog.elevPlotW + 1.0) * pxPerMM, prog.baseLineY * pxPerMM);
+    ctx.stroke();
+
+    // Capas apiladas de abajo hacia arriba
+    prog.elevBars.forEach((bar) => {
+      ctx.save();
+      if (bar.status === 'done') {
+        ctx.fillStyle = 'rgba(16, 185, 129, 0.58)';
+        ctx.strokeStyle = '#059669';
+        ctx.lineWidth = Math.max(0.6, 0.2 * pxPerMM);
+        ctx.fillRect(bar.rx * pxPerMM, bar.ry * pxPerMM, bar.rw * pxPerMM, bar.rh * pxPerMM);
+        ctx.strokeRect(bar.rx * pxPerMM, bar.ry * pxPerMM, bar.rw * pxPerMM, bar.rh * pxPerMM);
+      } else if (bar.status === 'current') {
+        ctx.fillStyle = 'rgba(245, 158, 11, 0.94)';
+        ctx.strokeStyle = '#b45309';
+        ctx.lineWidth = Math.max(1.0, 0.32 * pxPerMM);
+        ctx.fillRect(bar.rx * pxPerMM, bar.ry * pxPerMM, bar.rw * pxPerMM, bar.rh * pxPerMM);
+        ctx.strokeRect(bar.rx * pxPerMM, bar.ry * pxPerMM, bar.rw * pxPerMM, bar.rh * pxPerMM);
+      } else {
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = Math.max(0.5, 0.18 * pxPerMM);
+        ctx.setLineDash([1.2 * pxPerMM * 0.35, 1.0 * pxPerMM * 0.35]);
+        ctx.strokeRect(bar.rx * pxPerMM, bar.ry * pxPerMM, bar.rw * pxPerMM, bar.rh * pxPerMM);
+      }
+      ctx.restore();
+    });
+
+    // Línea indicadora de nivel activo + etiqueta ◀ #A..#B
+    ctx.save();
+    ctx.strokeStyle = '#d97706';
+    ctx.lineWidth = Math.max(0.8, 0.25 * pxPerMM);
+    ctx.setLineDash([1.6 * pxPerMM * 0.35, 1.0 * pxPerMM * 0.35]);
+    ctx.beginPath();
+    ctx.moveTo(prog.elevPlotX * pxPerMM, prog.markerY * pxPerMM);
+    ctx.lineTo((eb.x + eb.w - 1.2) * pxPerMM, prog.markerY * pxPerMM);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#b45309';
+    ctx.font = 'bold ' + hdrFont.toFixed(1) + 'px monospace, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('◀' + prog.rangeLabel, (eb.x + eb.w - 0.8) * pxPerMM, prog.markerY * pxPerMM);
+    ctx.restore();
+
+    ctx.fillStyle = '#475569';
+    ctx.font = hdrFont.toFixed(1) + 'px monospace, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('▲ BASE #1 (' + prog.accumHeightMM + ' mm)', (eb.x + eb.w * 0.5) * pxPerMM, (eb.y + eb.h - 1.7) * pxPerMM);
+    ctx.restore();
+
+    // ------------------------------------------------------------------------
+    // PANEL DERECHO 2: DIBUJO 3D DEL MODELO CON EL PROGRESO
+    // ------------------------------------------------------------------------
+    const ib = prog.isoBox;
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = Math.max(0.8, 0.28 * pxPerMM);
+    ctx.fillRect(ib.x * pxPerMM, ib.y * pxPerMM, ib.w * pxPerMM, ib.h * pxPerMM);
+    ctx.strokeRect(ib.x * pxPerMM, ib.y * pxPerMM, ib.w * pxPerMM, ib.h * pxPerMM);
+
+    ctx.fillStyle = '#334155';
+    ctx.font = 'bold ' + hdrFont.toFixed(1) + 'px monospace, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(
+      'MODELO 3D (' + prog.progressPct + '%)',
+      (ib.x + ib.w * 0.5) * pxPerMM,
+      (ib.y + 2.2) * pxPerMM
+    );
+
+    // Base isométrica Z=0
+    if (prog.isoBaseQuad && prog.isoBaseQuad.length === 4) {
+      ctx.save();
+      ctx.beginPath();
+      prog.isoBaseQuad.forEach((pt, idx) => {
+        if (idx === 0) ctx.moveTo(pt.x * pxPerMM, pt.y * pxPerMM);
+        else ctx.lineTo(pt.x * pxPerMM, pt.y * pxPerMM);
+      });
+      ctx.closePath();
+      ctx.fillStyle = '#f1f5f9';
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = Math.max(0.5, 0.18 * pxPerMM);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Dibujar capas del modelo 3D de abajo hacia arriba
+    prog.isoLayers.forEach((il) => {
+      ctx.save();
+      if (il.status === 'current' && il.botPoly && il.botPoly.length === il.topPoly.length) {
+        // Paredes laterales 3D de las capas activas en esta hoja
+        ctx.fillStyle = 'rgba(217, 119, 6, 0.55)';
+        ctx.strokeStyle = 'rgba(180, 83, 9, 0.65)';
+        ctx.lineWidth = Math.max(0.4, 0.15 * pxPerMM);
+        for (let i = 0; i < il.topPoly.length; i++) {
+          const j = (i + 1) % il.topPoly.length;
+          ctx.beginPath();
+          ctx.moveTo(il.topPoly[i].x * pxPerMM, il.topPoly[i].y * pxPerMM);
+          ctx.lineTo(il.topPoly[j].x * pxPerMM, il.topPoly[j].y * pxPerMM);
+          ctx.lineTo(il.botPoly[j].x * pxPerMM, il.botPoly[j].y * pxPerMM);
+          ctx.lineTo(il.botPoly[i].x * pxPerMM, il.botPoly[i].y * pxPerMM);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+
+      ctx.beginPath();
+      il.topPoly.forEach((pt, idx) => {
+        if (idx === 0) ctx.moveTo(pt.x * pxPerMM, pt.y * pxPerMM);
+        else ctx.lineTo(pt.x * pxPerMM, pt.y * pxPerMM);
+      });
+      ctx.closePath();
+
+      if (il.status === 'done') {
+        ctx.fillStyle = 'rgba(16, 185, 129, 0.45)';
+        ctx.strokeStyle = '#059669';
+        ctx.lineWidth = Math.max(0.6, 0.22 * pxPerMM);
+        ctx.fill();
+        ctx.stroke();
+      } else if (il.status === 'current') {
+        ctx.fillStyle = 'rgba(245, 158, 11, 0.88)';
+        ctx.strokeStyle = '#b45309';
+        ctx.lineWidth = Math.max(1.0, 0.35 * pxPerMM);
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = Math.max(0.5, 0.18 * pxPerMM);
+        ctx.setLineDash([1.2 * pxPerMM * 0.35, 1.0 * pxPerMM * 0.35]);
+        ctx.stroke();
+      }
+      ctx.restore();
+    });
+
+    ctx.fillStyle = '#b45309';
+    ctx.font = 'bold ' + hdrFont.toFixed(1) + 'px monospace, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Hoja ' + (sheet.sheetIndex + 1) + ': Capas ' + prog.rangeLabel, (ib.x + ib.w * 0.5) * pxPerMM, (ib.y + ib.h - 1.7) * pxPerMM);
+    ctx.restore();
+
     ctx.restore();
   }
 
@@ -25972,13 +26388,107 @@ function generatePapercraftSheetSVG(sheet) {
     '  <rect x="0" y="0" width="' + sw.toFixed(3) + '" height="' + sh.toFixed(3) + '" fill="#ffffff" />'
   ];
 
-  if (papercraftState.includeSchoolHeader) {
-    const hBoxH = sheet.headerHMM - 3;
-    lines.push('  <g id="CAJETIN_ESCOLAR">');
-    lines.push('    <rect x="' + m + '" y="' + m + '" width="' + (sw - m * 2).toFixed(2) + '" height="' + hBoxH.toFixed(2) + '" fill="#f8fafc" stroke="#334155" stroke-width="0.35" />');
-    lines.push('    <text x="' + (m + 3) + '" y="' + (m + 5.2) + '" font-family="sans-serif" font-size="3.6" font-weight="bold" fill="#0f172a">✂️ RECORTABLE ESCOLAR — HOJA ' + (sheet.sheetIndex + 1) + ' DE ' + Math.max(1, papercraftState.packedSheets.length) + '</text>');
-    lines.push('    <text x="' + (m + 3) + '" y="' + (m + 10.5) + '" font-family="sans-serif" font-size="2.6" fill="#334155">Alumno/a: _____________________________________   Curso/Grupo: ___________   Fecha: ___________</text>');
-    lines.push('    <text x="' + (m + 3) + '" y="' + (m + 16.2) + '" font-family="sans-serif" font-size="2.5" font-weight="bold" fill="#0f172a">LEYENDA:  ━━✂━━ Cortar con tijeras    — — — Doblar hacia abajo (Montaña)    — · — Doblar solapa (Valle)    🧴 Aplicar pegamento escolar</text>');
+  // Cabecera escolar + Dibujo del modelo con el progreso (estilo Guía Ilustrada) en cada A4
+  const prog = computeSheetModelProgressLayout(sheet);
+  {
+    const hBoxH = prog.hBoxH;
+    const totalSheets = Math.max(1, (papercraftState.packedSheets && papercraftState.packedSheets.length) || 1);
+    const typeNames = {
+      stacked_platforms: 'Plataformas 3D para Apilar',
+      layered_tabs: 'Recortable en Capas Superpuestas',
+      accordion_spacers: 'Recortable en Capas con Separadores Z',
+      standee_peana: 'Figuras Troqueladas con Peana 3D',
+      prism_net: 'Red Poliédrica 3D Desplegable'
+    };
+    const typeLabel = typeNames[papercraftState.cutoutType] || 'Recortable Escolar';
+
+    lines.push('  <g id="CAJETIN_Y_PROGRESO_MODELO">');
+    lines.push('    <rect x="' + m.toFixed(2) + '" y="' + m.toFixed(2) + '" width="' + (sw - m * 2).toFixed(2) + '" height="' + hBoxH.toFixed(2) + '" fill="#f8fafc" stroke="#334155" stroke-width="0.35" />');
+    lines.push('    <text x="' + (m + 2.5).toFixed(2) + '" y="' + (m + 4.8).toFixed(2) + '" font-family="sans-serif" font-size="3.1" font-weight="bold" fill="#0f172a">' + escapeXml('✂️ HOJA ' + (sheet.sheetIndex + 1) + '/' + totalSheets + ' — ' + typeLabel.toUpperCase()) + '</text>');
+    lines.push('    <text x="' + (m + 2.5).toFixed(2) + '" y="' + (m + 9.6).toFixed(2) + '" font-family="sans-serif" font-size="2.3" font-weight="bold" fill="#0369a1">' + escapeXml('Progreso en esta hoja: Capas ' + prog.rangeLabel + ' de ' + prog.totalLayers + ' (' + prog.progressPct + '% completado · Eje ' + prog.axisLabel + ')') + '</text>');
+    if (papercraftState.includeSchoolHeader) {
+      lines.push('    <text x="' + (m + 2.5).toFixed(2) + '" y="' + (m + 14.8).toFixed(2) + '" font-family="sans-serif" font-size="2.2" fill="#334155">Alumno/a: __________________________  Curso: ________  Fecha: ________</text>');
+    }
+    lines.push('    <text x="' + (m + 2.5).toFixed(2) + '" y="' + (m + 20.2).toFixed(2) + '" font-family="sans-serif" font-size="2.0" font-weight="bold" fill="#0f172a">━━✂━━ Cortar tijeras   — — — Doblar (Montaña)   — · — Doblar (Valle)   🧴 Pegamento</text>');
+
+    // Barra visual de progreso
+    const barX = m + 2.5;
+    const barY = m + 23.6;
+    const barW = Math.max(30, prog.infoW - 5);
+    const barH = 2.8;
+    const doneFrac = prog.minActive / prog.totalLayers;
+    const currFrac = (prog.maxActive - prog.minActive + 1) / prog.totalLayers;
+    lines.push('    <rect x="' + barX.toFixed(2) + '" y="' + barY.toFixed(2) + '" width="' + barW.toFixed(2) + '" height="' + barH.toFixed(2) + '" fill="#e2e8f0" stroke="none" />');
+    if (doneFrac > 0) {
+      lines.push('    <rect x="' + barX.toFixed(2) + '" y="' + barY.toFixed(2) + '" width="' + (barW * doneFrac).toFixed(2) + '" height="' + barH.toFixed(2) + '" fill="#10b981" stroke="none" />');
+    }
+    lines.push('    <rect x="' + (barX + barW * doneFrac).toFixed(2) + '" y="' + barY.toFixed(2) + '" width="' + Math.max(1.2, barW * currFrac).toFixed(2) + '" height="' + barH.toFixed(2) + '" fill="#f59e0b" stroke="none" />');
+    lines.push('    <rect x="' + barX.toFixed(2) + '" y="' + barY.toFixed(2) + '" width="' + barW.toFixed(2) + '" height="' + barH.toFixed(2) + '" fill="none" stroke="#64748b" stroke-width="0.22" />');
+
+    const pendLabel = prog.maxActive + 1 < prog.totalLayers ? ('#' + (prog.maxActive + 2) + '..#' + prog.totalLayers) : 'Fin';
+    const doneLabel = prog.minActive > 0 ? ('#1..#' + prog.minActive) : '—';
+    lines.push('    <text x="' + (m + 2.5).toFixed(2) + '" y="' + (m + 30.2).toFixed(2) + '" font-family="sans-serif" font-size="2.0" font-weight="bold" fill="#334155">' + escapeXml('🟢 Montadas (' + doneLabel + ')   🟠 En esta hoja (' + prog.rangeLabel + ')   ⚪ Pendientes (' + pendLabel + ')') + '</text>');
+
+    // ------------------------------------------------------------------------
+    // PANEL DERECHO 1 (SVG): ALZADO APILADO CON PROGRESO (Estilo Guía Ilustrada)
+    // ------------------------------------------------------------------------
+    const eb = prog.elevBox;
+    lines.push('    <g id="DIAGRAMA_ALZADO_PROGRESO">');
+    lines.push('      <rect x="' + eb.x.toFixed(2) + '" y="' + eb.y.toFixed(2) + '" width="' + eb.w.toFixed(2) + '" height="' + eb.h.toFixed(2) + '" fill="#ffffff" stroke="#94a3b8" stroke-width="0.28" rx="0.8" />');
+    lines.push('      <text x="' + (eb.x + eb.w * 0.5).toFixed(2) + '" y="' + (eb.y + 2.4).toFixed(2) + '" font-family="monospace, sans-serif" font-size="1.75" font-weight="bold" fill="#334155" text-anchor="middle" dominant-baseline="central">' + escapeXml('ALZADO: ' + prog.rangeLabel + '/' + prog.totalLayers + ' (EJE ' + prog.axisLabel + ')') + '</text>');
+    lines.push('      <line x1="' + (prog.elevPlotX - 1.0).toFixed(2) + '" y1="' + prog.baseLineY.toFixed(2) + '" x2="' + (prog.elevPlotX + prog.elevPlotW + 1.0).toFixed(2) + '" y2="' + prog.baseLineY.toFixed(2) + '" stroke="#475569" stroke-width="0.35" />');
+
+    prog.elevBars.forEach((bar) => {
+      if (bar.status === 'done') {
+        lines.push('      <rect x="' + bar.rx.toFixed(2) + '" y="' + bar.ry.toFixed(2) + '" width="' + bar.rw.toFixed(2) + '" height="' + bar.rh.toFixed(2) + '" fill="#10b981" fill-opacity="0.58" stroke="#059669" stroke-width="0.2" />');
+      } else if (bar.status === 'current') {
+        lines.push('      <rect x="' + bar.rx.toFixed(2) + '" y="' + bar.ry.toFixed(2) + '" width="' + bar.rw.toFixed(2) + '" height="' + bar.rh.toFixed(2) + '" fill="#f59e0b" fill-opacity="0.94" stroke="#b45309" stroke-width="0.32" />');
+      } else {
+        lines.push('      <rect x="' + bar.rx.toFixed(2) + '" y="' + bar.ry.toFixed(2) + '" width="' + bar.rw.toFixed(2) + '" height="' + bar.rh.toFixed(2) + '" fill="none" stroke="#94a3b8" stroke-width="0.18" stroke-dasharray="0.9,0.7" />');
+      }
+    });
+
+    lines.push('      <line x1="' + prog.elevPlotX.toFixed(2) + '" y1="' + prog.markerY.toFixed(2) + '" x2="' + (eb.x + eb.w - 1.2).toFixed(2) + '" y2="' + prog.markerY.toFixed(2) + '" stroke="#d97706" stroke-width="0.25" stroke-dasharray="1.1,0.7" />');
+    lines.push('      <text x="' + (eb.x + eb.w - 0.8).toFixed(2) + '" y="' + prog.markerY.toFixed(2) + '" font-family="monospace, sans-serif" font-size="1.75" font-weight="bold" fill="#b45309" text-anchor="end" dominant-baseline="central">' + escapeXml('◀' + prog.rangeLabel) + '</text>');
+    lines.push('      <text x="' + (eb.x + eb.w * 0.5).toFixed(2) + '" y="' + (eb.y + eb.h - 1.6).toFixed(2) + '" font-family="monospace, sans-serif" font-size="1.7" fill="#475569" text-anchor="middle" dominant-baseline="central">' + escapeXml('▲ BASE #1 (' + prog.accumHeightMM + ' mm)') + '</text>');
+    lines.push('    </g>');
+
+    // ------------------------------------------------------------------------
+    // PANEL DERECHO 2 (SVG): DIBUJO 3D DEL MODELO CON EL PROGRESO
+    // ------------------------------------------------------------------------
+    const ib = prog.isoBox;
+    lines.push('    <g id="DIAGRAMA_MODELO_3D_PROGRESO">');
+    lines.push('      <rect x="' + ib.x.toFixed(2) + '" y="' + ib.y.toFixed(2) + '" width="' + ib.w.toFixed(2) + '" height="' + ib.h.toFixed(2) + '" fill="#ffffff" stroke="#94a3b8" stroke-width="0.28" rx="0.8" />');
+    lines.push('      <text x="' + (ib.x + ib.w * 0.5).toFixed(2) + '" y="' + (ib.y + 2.4).toFixed(2) + '" font-family="monospace, sans-serif" font-size="1.75" font-weight="bold" fill="#334155" text-anchor="middle" dominant-baseline="central">' + escapeXml('MODELO 3D (' + prog.progressPct + '%)') + '</text>');
+
+    if (prog.isoBaseQuad && prog.isoBaseQuad.length === 4) {
+      const dBase = 'M ' + prog.isoBaseQuad.map((p) => p.x.toFixed(2) + ' ' + p.y.toFixed(2)).join(' L ') + ' Z';
+      lines.push('      <path d="' + dBase + '" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="0.18" />');
+    }
+
+    prog.isoLayers.forEach((il) => {
+      if (il.status === 'current' && il.botPoly && il.botPoly.length === il.topPoly.length) {
+        for (let i = 0; i < il.topPoly.length; i++) {
+          const j = (i + 1) % il.topPoly.length;
+          const dWall = 'M ' + il.topPoly[i].x.toFixed(2) + ' ' + il.topPoly[i].y.toFixed(2) +
+            ' L ' + il.topPoly[j].x.toFixed(2) + ' ' + il.topPoly[j].y.toFixed(2) +
+            ' L ' + il.botPoly[j].x.toFixed(2) + ' ' + il.botPoly[j].y.toFixed(2) +
+            ' L ' + il.botPoly[i].x.toFixed(2) + ' ' + il.botPoly[i].y.toFixed(2) + ' Z';
+          lines.push('      <path d="' + dWall + '" fill="#d97706" fill-opacity="0.55" stroke="none" />');
+        }
+      }
+      const dTop = 'M ' + il.topPoly.map((p) => p.x.toFixed(2) + ' ' + p.y.toFixed(2)).join(' L ') + ' Z';
+      if (il.status === 'done') {
+        lines.push('      <path d="' + dTop + '" fill="#10b981" fill-opacity="0.45" stroke="#059669" stroke-width="0.22" />');
+      } else if (il.status === 'current') {
+        lines.push('      <path d="' + dTop + '" fill="#f59e0b" fill-opacity="0.88" stroke="#b45309" stroke-width="0.35" />');
+      } else {
+        lines.push('      <path d="' + dTop + '" fill="none" stroke="#94a3b8" stroke-width="0.18" stroke-dasharray="0.9,0.7" />');
+      }
+    });
+
+    lines.push('      <text x="' + (ib.x + ib.w * 0.5).toFixed(2) + '" y="' + (ib.y + ib.h - 1.6).toFixed(2) + '" font-family="monospace, sans-serif" font-size="1.7" font-weight="bold" fill="#b45309" text-anchor="middle" dominant-baseline="central">' + escapeXml('Hoja ' + (sheet.sheetIndex + 1) + ': Capas ' + prog.rangeLabel) + '</text>');
+    lines.push('    </g>');
     lines.push('  </g>');
   }
 
@@ -26823,6 +27333,7 @@ if (typeof window !== 'undefined') {
   window.downloadPapercraftBookletHTML = downloadPapercraftBookletHTML;
   window.downloadPapercraftSheetsSVG = downloadPapercraftSheetsSVG;
   window.generatePapercraftSheetSVG = generatePapercraftSheetSVG;
+  window.computeSheetModelProgressLayout = computeSheetModelProgressLayout;
   window.buildPapercraftPrintableHTMLDocument = buildPapercraftPrintableHTMLDocument;
   window.applyPapercraftToMainStudio = applyPapercraftToMainStudio;
 
