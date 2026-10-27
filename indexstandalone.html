@@ -2583,6 +2583,11 @@ input[type="range"] {
                 <div class="text-[11px] font-bold">📦 5. Red Poliédrica 3D Desplegable (Bloques en Cruz)</div>
                 <div class="text-[10px] text-slate-400">Despliegue completo de cada bloque en una sola pieza (tapa + 4 paredes + base + 7 pestañas trapezoidales biseladas).</div>
               </button>
+
+              <button type="button" id="pcTypeBtn_origami_3d" onclick="setPapercraftCutoutType('origami_3d')" class="p-2 rounded-lg bg-slate-950/80 hover:bg-slate-800 border border-slate-800 text-slate-300 text-left transition">
+                <div class="text-[11px] font-bold">🦢 6. Origami / Kirigami 3D (Plegado sin Apilar)</div>
+                <div class="text-[10px] text-slate-400">Origami Facetado Low-Poly (gajos plegables Pepakura), Origami Arquitectónico Pop-Up 90° (1 sola hoja sin pegamento) o Fuelle Zig-Zag.</div>
+              </button>
             </div>
 
             <!-- Sub-opciones según el tipo de recortable elegido -->
@@ -2600,6 +2605,21 @@ input[type="range"] {
                 <option value="double_fold" selected>🔄 Con Solapa Superior de Refuerzo + Pestaña Base 90°</option>
                 <option value="single_tab">📐 Simple con Pestaña Inferior Trapezoidal a 90°</option>
               </select>
+            </div>
+
+            <div id="pcOrigamiStyleRow" class="hidden pt-1.5 border-t border-slate-700/60 flex flex-col gap-1.5 text-[11px]">
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-slate-300 shrink-0">Estilo de Origami:</span>
+                <select id="pcOrigamiStyleSelect" onchange="onPapercraftParamsChange()" class="w-full bg-slate-950 border border-amber-500/50 rounded px-2 py-1 text-[10px] text-amber-300 font-semibold outline-none">
+                  <option value="lowpoly_pepakura" selected>🦢 Origami Facetado Low-Poly (Gajos Plegables Pepakura)</option>
+                  <option value="kirigami_popup">🏛️ Origami Arquitectónico Pop-Up 90° (1 Sola Hoja · 0% Pegamento)</option>
+                  <option value="accordion_concertina">🪗 Origami en Fuelle Continuo Zig-Zag (Concertina 3D)</option>
+                </select>
+              </div>
+              <div id="pcOrigamiSidesRow" class="flex items-center justify-between gap-2">
+                <span class="text-slate-300">Gajos / Facetas perimetrales Low-Poly (4..16):</span>
+                <input type="number" id="pcOrigamiSidesInput" value="8" min="4" max="16" step="1" oninput="onPapercraftParamsChange('pcOrigamiSidesInput')" class="w-16 bg-slate-950 border border-slate-700 rounded px-2 py-0.5 text-right text-amber-300 font-bold" />
+              </div>
             </div>
 
             <div id="pcTabsPerLayerRow" class="hidden pt-1.5 border-t border-slate-700/60 flex items-center justify-between text-[11px]">
@@ -23839,9 +23859,11 @@ if (typeof window !== 'undefined') {
 const papercraftState = {
   isOpen: false,
   sourceMode: 'model3d',            // 'model3d' | 'single_image' | 'multi_images'
-  cutoutType: 'stacked_platforms',  // 'stacked_platforms' | 'layered_tabs' | 'accordion_spacers' | 'standee_peana' | 'prism_net'
+  cutoutType: 'stacked_platforms',  // 'stacked_platforms' | 'layered_tabs' | 'accordion_spacers' | 'standee_peana' | 'prism_net' | 'origami_3d'
   platformUnfoldMode: 'attached_flaps', // 'attached_flaps' (Faldones directos en lados) | 'collar_strip' (Tapa + tira lateral dentada)
   standeeFoldMode: 'double_fold',   // 'double_fold' (Doble cara plegable en T invertida) | 'single_tab' (1 cara con pestaña a 90°)
+  origamiFoldStyle: 'lowpoly_pepakura', // 'lowpoly_pepakura' (Origami Facetado Low-Poly) | 'kirigami_popup' (Pop-Up 90° 1 sola hoja) | 'accordion_concertina' (Fuelle continuo Zig-Zag)
+  origamiSidesCount: 8,             // Nº de gajos/facetas perimetrales en modo Origami Low-Poly (4..16)
   sliceAxis: typeof state !== 'undefined' && state.axis ? state.axis : 'z', // 'z' | 'y' | 'x' (sincronizado con 2. Sistema Constructivo)
   layersCount: typeof state !== 'undefined' && state.sliceCount ? state.sliceCount : 24, // Nº de capas estipulado en 2. Sistema Constructivo (2..300)
   widthMM: typeof state !== 'undefined' && state.dimsMM ? state.dimsMM.x : 120,      // Ancho del conjunto recortable en mm (= 1. Dimensiones)
@@ -26284,6 +26306,579 @@ function buildPapercraftPieces() {
   }
 
   // --------------------------------------------------------------------------
+  // TIPO 6: ORIGAMI / KIRIGAMI 3D (PLEGADO CONTINUO SIN APILAR CAPAS)
+  //   - 'lowpoly_pepakura'    : Escultura Origami Facetada Low-Poly (Gajos Meridionales con pliegues Montaña/Valle)
+  //   - 'kirigami_popup'      : Origami Arquitectónico Pop-Up 90° (1 Sola Hoja Continua sin Pegamento)
+  //   - 'accordion_concertina': Origami en Fuelle Continuo Zig-Zag (Concertina de 1 pieza con puentes plegables)
+  // --------------------------------------------------------------------------
+  if (type === 'origami_3d') {
+    const origamiStyle = papercraftState.origamiFoldStyle || 'lowpoly_pepakura';
+    const wTotal = Math.max(20, Number(papercraftState.widthMM) || 120);
+    const dTotal = Math.max(20, Number(papercraftState.heightMM) || 120);
+    const zTotal = Math.max(10, totalSpanMM);
+
+    // Función auxiliar: muestrea el alcance radial del contorno de una capa en la dirección angleRad
+    const sampleLayerRadiusAtAngle = (layer, angleRad) => {
+      const pts = layer.contourPoints || [];
+      const cx = layer.bounds ? layer.bounds.cx : 0;
+      const cy = layer.bounds ? layer.bounds.cy : 0;
+      const dx = Math.cos(angleRad);
+      const dy = Math.sin(angleRad);
+      let bestR = 0;
+      // Intersección rayo desde (cx, cy) con cada segmento del polígono
+      for (let i = 0; i < pts.length; i++) {
+        const p1 = pts[i];
+        const p2 = pts[(i + 1) % pts.length];
+        const x1 = p1.x - cx;
+        const y1 = p1.y - cy;
+        const x2 = p2.x - cx;
+        const y2 = p2.y - cy;
+        const sx = x2 - x1;
+        const sy = y2 - y1;
+        const denom = dx * sy - dy * sx;
+        if (Math.abs(denom) > 1e-6) {
+          const t = (x1 * sy - y1 * sx) / denom;
+          const u = (x1 * dy - y1 * dx) / denom;
+          if (t > 0 && u >= -1e-4 && u <= 1 + 1e-4) {
+            if (t > bestR) bestR = t;
+          }
+        }
+      }
+      if (bestR > 1.5) return bestR;
+      const b = layer.bounds || { width: wTotal * 0.5, height: dTotal * 0.5 };
+      const rx = Math.max(4, b.width * 0.5);
+      const ry = Math.max(4, b.height * 0.5);
+      return (rx * ry) / Math.max(1, Math.hypot(ry * dx, rx * dy));
+    };
+
+    // ========================================================================
+    // VARIANTE 6A: ORIGAMI FACETADO LOW-POLY (ESTILO PEPAKURA / GAJOS PLEGABLES)
+    // ========================================================================
+    if (origamiStyle === 'lowpoly_pepakura') {
+      const nSides = Math.max(4, Math.min(16, Math.round(Number(papercraftState.origamiSidesCount) || 8)));
+      // Si hay muchas capas de corte, submuestreamos a entre 4 y 10 anillos de pliegue para que las facetas de origami sean limpias y plegables a mano
+      const maxRings = Math.max(3, Math.min(10, baseLayers.length));
+      const ringLayers = [];
+      for (let r = 0; r < maxRings; r++) {
+        const srcIdx = maxRings === 1 ? 0 : Math.min(baseLayers.length - 1, Math.round((r / (maxRings - 1)) * (baseLayers.length - 1)));
+        ringLayers.push({
+          layer: baseLayers[srcIdx],
+          zMM: (r / Math.max(1, maxRings - 1)) * zTotal
+        });
+      }
+
+      // Matriz de vértices 3D por anillo y sector: rings3D[r][s] = { x, y, z, rDist }
+      const rings3D = ringLayers.map((rl) => {
+        const ringPts = [];
+        for (let s = 0; s < nSides; s++) {
+          const ang = (s / nSides) * Math.PI * 2;
+          const rad = Math.max(4, sampleLayerRadiusAtAngle(rl.layer, ang));
+          ringPts.push({
+            x: rad * Math.cos(ang),
+            y: rad * Math.sin(ang),
+            z: rl.zMM,
+            rDist: rad
+          });
+        }
+        return ringPts;
+      });
+
+      // 1. Pieza Base Poligonal de Origami (con zonas guía de pegado en el perímetro)
+      const basePoly = rings3D[0].map((p) => ({ x: p.x, y: p.y }));
+      const baseGlueZones = [];
+      for (let s = 0; s < nSides; s++) {
+        const pA = basePoly[s];
+        const pB = basePoly[(s + 1) % nSides];
+        const inA = { x: pA.x * 0.78, y: pA.y * 0.78 };
+        const inB = { x: pB.x * 0.78, y: pB.y * 0.78 };
+        baseGlueZones.push({
+          polygon: [pA, pB, inB, inA],
+          center: { x: (pA.x + pB.x + inA.x + inB.x) * 0.25, y: (pA.y + pB.y + inA.y + inB.y) * 0.25 },
+          label: 'PEGAR BASE GAJO #' + (s + 1)
+        });
+      }
+
+      pieces.push({
+        pieceId: 'origami_base_poly',
+        layerIndex: 0,
+        isPeanaBase: true,
+        isOrigamiPiece: true,
+        title: 'Base Poligonal Origami (' + nSides + ' caras · ' + wTotal.toFixed(0) + '×' + dTotal.toFixed(0) + ' mm)',
+        subtitle: 'Recortar el polígono base por la línea exterior ✂ y pegar en sus bordes las pestañas inferiores de los ' + nSides + ' gajos plegados',
+        shortCode: 'ORI-BASE',
+        bodyPolygon: basePoly,
+        holePolygons: [],
+        outerCutPoints: basePoly,
+        foldLines: [],
+        glueTabs: [],
+        wallPanels: [],
+        glueTargetZones: baseGlueZones,
+        colorObj: PAPERCRAFT_LAYER_COLORS[0],
+        artworkCanvas: ringLayers[0].layer.artworkCanvas,
+        artworkBounds: computePolygonBounds2D(basePoly),
+        bounds: computePolygonBounds2D(basePoly),
+        height3DMM: 2
+      });
+
+      // 2. Generar cada Gajo Meridional Desplegado (ORI-G1 .. ORI-GN) con pliegues Montaña/Valle y pestañas numeradas
+      for (let s = 0; s < nSides; s++) {
+        const sNext = (s + 1) % nSides;
+        const stripWidths = [];
+        const stripY = [0];
+        const stripSlantH = [];
+
+        for (let r = 0; r < maxRings; r++) {
+          const vA = rings3D[r][s];
+          const vB = rings3D[r][sNext];
+          const chordW = Math.max(4, Math.hypot(vB.x - vA.x, vB.y - vA.y));
+          stripWidths.push(chordW);
+          if (r > 0) {
+            const prevA = rings3D[r - 1][s];
+            const prevB = rings3D[r - 1][sNext];
+            const midPrev = { x: (prevA.x + prevB.x) * 0.5, y: (prevA.y + prevB.y) * 0.5, z: prevA.z };
+            const midCurr = { x: (vA.x + vB.x) * 0.5, y: (vA.y + vB.y) * 0.5, z: vA.z };
+            const slantH = Math.max(4, Math.hypot(midCurr.x - midPrev.x, midCurr.y - midPrev.y, midCurr.z - midPrev.z));
+            stripSlantH.push(slantH);
+            stripY.push(stripY[stripY.length - 1] + slantH);
+          }
+        }
+
+        // Añadir triángulo superior de cierre de cúspide (tapa superior del gajo)
+        const topRingA = rings3D[maxRings - 1][s];
+        const topRingB = rings3D[maxRings - 1][sNext];
+        const topCapSlant = Math.max(5, Math.hypot((topRingA.x + topRingB.x) * 0.5, (topRingA.y + topRingB.y) * 0.5));
+        const yApex = stripY[stripY.length - 1] + topCapSlant;
+
+        const leftPts = [];
+        const rightPts = [];
+        for (let r = 0; r < maxRings; r++) {
+          const hw = stripWidths[r] * 0.5;
+          const yVal = stripY[r];
+          leftPts.push({ x: -hw, y: yVal });
+          rightPts.push({ x: hw, y: yVal });
+        }
+        const apexPt = { x: 0, y: yApex };
+
+        const bodyPoly = [
+          ...rightPts,
+          apexPt,
+          ...leftPts.slice().reverse()
+        ];
+
+        const folds = [];
+        const tabs = [];
+        const td = Math.min(tabDepth, Math.max(4.5, stripWidths[0] * 0.22));
+
+        // Pliegues horizontales entre anillos (Montaña si cierra hacia adentro, Valle si abre hacia afuera) y diagonales de triangulación Low-Poly
+        for (let r = 0; r < maxRings; r++) {
+          if (r > 0) {
+            const drPrev = r >= 2 ? (stripWidths[r - 1] - stripWidths[r - 2]) : 0;
+            const drCurr = stripWidths[r] - stripWidths[r - 1];
+            const foldType = drCurr <= drPrev + 0.5 ? 'mountain' : 'valley';
+            folds.push({
+              points: [leftPts[r], rightPts[r]],
+              type: foldType,
+              label: foldType === 'mountain' ? 'Pliegue Montaña' : 'Pliegue Valle'
+            });
+          }
+          // Diagonal de faceta triangular Low-Poly para rigidez geométrica
+          if (r < maxRings - 1) {
+            folds.push({
+              points: [leftPts[r], rightPts[r + 1]],
+              type: 'mountain',
+              label: 'Arista Faceta'
+            });
+          }
+        }
+
+        // Construir contorno exterior CCW con pestaña inferior de base y pestañas laterales derechas de unión con el Gajo #(s+2)
+        const outCut = [];
+        // 1. Borde inferior (de leftPts[0] a rightPts[0]): lleva pestaña hacia abajo (normal 0, -1) para pegar en ORI-BASE
+        const baseTab = createGlueTabGeometryOnSegment(
+          leftPts[0],
+          rightPts[0],
+          td,
+          bevelDeg,
+          'PEGAR BASE #' + (s + 1),
+          { x: 0, y: -1 }
+        );
+        outCut.push(leftPts[0]);
+        if (baseTab) {
+          folds.push({ points: [leftPts[0], rightPts[0]], type: 'mountain', label: 'Doblar Base' });
+          outCut.push(baseTab.tipP1, baseTab.tipP2);
+          tabs.push(baseTab);
+        }
+        outCut.push(rightPts[0]);
+
+        // 2. Borde lateral derecho (de rightPts[0] a rightPts[maxRings-1] y hasta apexPt): lleva pestañas hacia afuera para unir con Gajo siguiente
+        for (let r = 0; r < maxRings - 1; r++) {
+          const pA = rightPts[r];
+          const pB = rightPts[r + 1];
+          const segDx = pB.x - pA.x;
+          const segDy = pB.y - pA.y;
+          const segLen = Math.hypot(segDx, segDy) || 1;
+          const outNormal = { x: segDy / segLen, y: -segDx / segLen };
+          const sideTab = createGlueTabGeometryOnSegment(
+            pA,
+            pB,
+            Math.min(td, segLen * 0.32),
+            bevelDeg,
+            'UNIR G' + (sNext + 1) + '-N' + (r + 1),
+            outNormal
+          );
+          if (sideTab) {
+            folds.push({ points: [pA, pB], type: 'mountain', label: 'Pestaña lateral' });
+            outCut.push(sideTab.tipP1, sideTab.tipP2);
+            tabs.push(sideTab);
+          }
+          outCut.push(pB);
+        }
+
+        // Tramo superior derecho (rightPts[maxRings-1] -> apexPt) con pestaña de cúspide
+        {
+          const pA = rightPts[maxRings - 1];
+          const pB = apexPt;
+          const segDx = pB.x - pA.x;
+          const segDy = pB.y - pA.y;
+          const segLen = Math.hypot(segDx, segDy) || 1;
+          const outNormal = { x: segDy / segLen, y: -segDx / segLen };
+          const capTab = createGlueTabGeometryOnSegment(
+            pA,
+            pB,
+            Math.min(td * 0.85, segLen * 0.28),
+            bevelDeg,
+            'CÚSPIDE G' + (sNext + 1),
+            outNormal
+          );
+          if (capTab) {
+            folds.push({ points: [pA, pB], type: 'mountain', label: 'Solapa cúspide' });
+            outCut.push(capTab.tipP1, capTab.tipP2);
+            tabs.push(capTab);
+          }
+          outCut.push(apexPt);
+        }
+
+        // 3. Borde lateral izquierdo (de apexPt bajando por leftPts hasta leftPts[0]): corte limpio donde se pega el gajo anterior
+        for (let r = maxRings - 1; r >= 1; r--) {
+          outCut.push(leftPts[r]);
+        }
+
+        // Centrar la pieza alrededor de (0, 0) para maquetación óptima en hojas A4 y tableros láser/Cricut
+        const rawB = computePolygonBounds2D(outCut);
+        const shiftPt = (p) => ({ x: p.x - rawB.cx, y: p.y - rawB.cy });
+        const centeredBody = bodyPoly.map(shiftPt);
+        const centeredOut = outCut.map(shiftPt);
+        const centeredFolds = folds.map((fl) => ({
+          type: fl.type,
+          label: fl.label,
+          points: fl.points.map(shiftPt)
+        }));
+        const centeredTabs = tabs.map((gt) => ({
+          ...gt,
+          foldLine: gt.foldLine.map(shiftPt),
+          polygon: gt.polygon.map(shiftPt),
+          center: shiftPt(gt.center),
+          tipP1: shiftPt(gt.tipP1),
+          tipP2: shiftPt(gt.tipP2)
+        }));
+
+        const colObj = PAPERCRAFT_LAYER_COLORS[s % PAPERCRAFT_LAYER_COLORS.length];
+        pieces.push({
+          pieceId: 'origami_gore_' + (s + 1),
+          layerIndex: s,
+          isOrigamiPiece: true,
+          title: 'Gajo Origami Low-Poly #' + (s + 1) + ' de ' + nSides + ' (Unir con Gajo #' + (sNext + 1) + ')',
+          subtitle: 'Recortar contorno ✂, doblar pliegues Montaña (---) y Valle (-·-) y pegar pestañas laterales con el Gajo #' + (sNext + 1),
+          shortCode: 'ORI-G' + (s + 1),
+          bodyPolygon: centeredBody,
+          holePolygons: [],
+          outerCutPoints: centeredOut,
+          foldLines: centeredFolds,
+          glueTabs: centeredTabs,
+          wallPanels: [],
+          glueTargetZones: [],
+          colorObj: colObj,
+          artworkCanvas: ringLayers[Math.min(ringLayers.length - 1, s % ringLayers.length)].layer.artworkCanvas,
+          artworkBounds: computePolygonBounds2D(centeredBody),
+          bounds: computePolygonBounds2D(centeredOut),
+          height3DMM: zTotal
+        });
+      }
+
+      return pieces;
+    }
+
+    // ========================================================================
+    // VARIANTE 6B: ORIGAMI ARQUITECTÓNICO POP-UP 90° (1 SOLA HOJA SIN PEGAMENTO)
+    // ========================================================================
+    if (origamiStyle === 'kirigami_popup') {
+      const nSteps = Math.max(2, Math.min(12, baseLayers.length));
+      const marginFrame = 12;
+      const cardW = wTotal + marginFrame * 2;
+      const halfCardW = cardW * 0.5;
+      const backH = Math.max(25, zTotal + marginFrame);
+      const baseD = Math.max(25, dTotal * 0.65 + marginFrame);
+
+      // Contorno exterior de la tarjeta Pop-Up de 1 sola pieza
+      const cardOuter = [
+        { x: -halfCardW, y: -baseD },
+        { x: halfCardW, y: -baseD },
+        { x: halfCardW, y: backH },
+        { x: -halfCardW, y: backH }
+      ];
+
+      const folds = [];
+      const holeSlits = [];
+      const kerfHalf = 0.35; // Ranura fina de corte vertical para Láser / Cricut / Cúter
+
+      // Pliegues de Valle laterales del marco base en y = 0
+      const maxLayerHalfW = Math.min(halfCardW - marginFrame, wTotal * 0.48);
+      folds.push({
+        points: [{ x: -halfCardW, y: 0 }, { x: -maxLayerHalfW, y: 0 }],
+        type: 'valley',
+        label: 'Pliegue Central 90° (Valle)'
+      });
+      folds.push({
+        points: [{ x: maxLayerHalfW, y: 0 }, { x: halfCardW, y: 0 }],
+        type: 'valley',
+        label: 'Pliegue Central 90° (Valle)'
+      });
+
+      // Generar los escalones Kirigami / Pop-Up 90° a partir de las capas del modelo
+      for (let k = 0; k < nSteps; k++) {
+        const srcIdx = nSteps === 1 ? 0 : Math.min(baseLayers.length - 1, Math.round((k / (nSteps - 1)) * (baseLayers.length - 1)));
+        const layer = baseLayers[srcIdx];
+        const b = layer.bounds || { width: wTotal * 0.6, height: dTotal * 0.6 };
+
+        // Fracción de altura vertical (hStep) y profundidad emergente hacia adelante (dStep)
+        const frac = (k + 1) / nSteps;
+        const hStep = Math.max(6, Math.min(backH - 6, frac * zTotal * 0.88));
+        const dStep = Math.max(5, Math.min(baseD - 6, (1.0 - frac * 0.68) * (dTotal * 0.48)));
+        const stepHalfW = Math.max(8, Math.min(maxLayerHalfW - k * 1.8, b.width * 0.46));
+
+        const xL = -stepHalfW;
+        const xR = stepHalfW;
+        const yTopValley = hStep;
+        const yMidMountain = hStep - dStep;
+        const yBotValley = -dStep;
+
+        // 1. Pliegue en Valle superior (unión con el respaldo vertical)
+        folds.push({
+          points: [{ x: xL, y: yTopValley }, { x: xR, y: yTopValley }],
+          type: 'valley',
+          label: 'Valle Sup. #' + (k + 1)
+        });
+        // 2. Pliegue en Montaña frontal (arista saliente 3D del escalón Pop-Up)
+        folds.push({
+          points: [{ x: xL, y: yMidMountain }, { x: xR, y: yMidMountain }],
+          type: 'mountain',
+          label: 'Montaña 3D #' + (k + 1)
+        });
+        // 3. Pliegue en Valle inferior (apoyo sobre la base horizontal)
+        folds.push({
+          points: [{ x: xL, y: yBotValley }, { x: xR, y: yBotValley }],
+          type: 'valley',
+          label: 'Valle Base #' + (k + 1)
+        });
+
+        // 4. Cortes verticales laterales del escalón Kirigami (como huecos de corte interior para Láser / Cricut)
+        holeSlits.push([
+          { x: xL - kerfHalf, y: yBotValley },
+          { x: xL + kerfHalf, y: yBotValley },
+          { x: xL + kerfHalf, y: yTopValley },
+          { x: xL - kerfHalf, y: yTopValley }
+        ]);
+        holeSlits.push([
+          { x: xR - kerfHalf, y: yBotValley },
+          { x: xR + kerfHalf, y: yBotValley },
+          { x: xR + kerfHalf, y: yTopValley },
+          { x: xR - kerfHalf, y: yTopValley }
+        ]);
+      }
+
+      // Centrar en torno a (0,0)
+      const rawB = computePolygonBounds2D(cardOuter);
+      const shiftPt = (p) => ({ x: p.x - rawB.cx, y: p.y - rawB.cy });
+      const centeredOuter = cardOuter.map(shiftPt);
+      const centeredHoles = holeSlits.map((hp) => hp.map(shiftPt));
+      const centeredFolds = folds.map((fl) => ({
+        type: fl.type,
+        label: fl.label,
+        points: fl.points.map(shiftPt)
+      }));
+
+      pieces.push({
+        pieceId: 'origami_kirigami_popup_1',
+        layerIndex: 0,
+        isOrigamiPiece: true,
+        title: 'Origami Arquitectónico Pop-Up 90° — 1 Sola Hoja sin Pegamento (' + cardW.toFixed(0) + '×' + (backH + baseD).toFixed(0) + ' mm)',
+        subtitle: 'Cortar ranuras verticales interiores (azul) y borde exterior (rojo) ✂ · Doblar pliegues Montaña (---) hacia adelante y Valle (-·-) a 90° (0% pegamento)',
+        shortCode: 'ORI-POPUP',
+        bodyPolygon: centeredOuter,
+        holePolygons: centeredHoles,
+        outerCutPoints: centeredOuter,
+        foldLines: centeredFolds,
+        glueTabs: [],
+        wallPanels: [],
+        glueTargetZones: [],
+        colorObj: PAPERCRAFT_LAYER_COLORS[1],
+        artworkCanvas: baseLayers[Math.floor(baseLayers.length * 0.5)].artworkCanvas,
+        artworkBounds: computePolygonBounds2D(centeredOuter),
+        bounds: computePolygonBounds2D(centeredOuter),
+        height3DMM: zTotal
+      });
+
+      return pieces;
+    }
+
+    // ========================================================================
+    // VARIANTE 6C: ORIGAMI EN FUELLE CONTINUO ZIG-ZAG (CONCERTINA 3D)
+    // ========================================================================
+    const panelsPerStrip = 3; // Agrupar de 3 en 3 paneles conectados en zig-zag para que quepan en tableros de 30x25cm y hojas A4
+    const stepZ = Math.max(4, exactLayerStepMM);
+    const bridgeH = Math.max(14, dTotal * 0.34);
+    const totalStrips = Math.ceil(baseLayers.length / panelsPerStrip);
+
+    for (let sIdx = 0; sIdx < totalStrips; sIdx++) {
+      const startL = sIdx * panelsPerStrip;
+      const endL = Math.min(baseLayers.length, startL + panelsPerStrip);
+      const stripLayers = baseLayers.slice(startL, endL);
+
+      const folds = [];
+      const tabs = [];
+      const stripHoles = [];
+      const topChain = [];
+      const botChain = [];
+
+      let cursorX = 0;
+      stripLayers.forEach((layer, localIdx) => {
+        const globalIdx = startL + localIdx;
+        const isOddFold = (globalIdx % 2) === 1;
+        const b = layer.bounds || { minX: -wTotal * 0.4, maxX: wTotal * 0.4, minY: -dTotal * 0.4, maxY: dTotal * 0.4, width: wTotal * 0.8, height: dTotal * 0.8, cx: 0, cy: 0 };
+        const panelW = Math.max(16, b.width);
+        const panelHalfH = Math.max(12, b.height * 0.5);
+        const panelCenterX = cursorX + panelW * 0.5;
+
+        // Añadir perfil superior e inferior del panel (invirtiendo X en los paneles impares para que al plegar en zig-zag 180° coincidan todas las siluetas)
+        topChain.push(
+          { x: cursorX, y: bridgeH * 0.5 },
+          { x: cursorX + panelW * 0.18, y: panelHalfH },
+          { x: cursorX + panelW * 0.82, y: panelHalfH },
+          { x: cursorX + panelW, y: bridgeH * 0.5 }
+        );
+        botChain.push(
+          { x: cursorX, y: -bridgeH * 0.5 },
+          { x: cursorX + panelW * 0.18, y: -panelHalfH },
+          { x: cursorX + panelW * 0.82, y: -panelHalfH },
+          { x: cursorX + panelW, y: -bridgeH * 0.5 }
+        );
+
+        // Vaciar la silueta o los huecos interiores de cada capa dentro del panel del fuelle
+        const layerHoles = (layer.holePolygons && layer.holePolygons.length > 0)
+          ? layer.holePolygons
+          : [layer.contourPoints.map((p) => ({ x: (p.x - b.cx) * 0.65, y: (p.y - b.cy) * 0.65 }))];
+        layerHoles.forEach((hp) => {
+          if (!hp || hp.length < 3) return;
+          stripHoles.push(
+            hp.map((p) => ({
+              x: panelCenterX + (isOddFold ? -(p.x - b.cx) : (p.x - b.cx)),
+              y: p.y - b.cy
+            }))
+          );
+        });
+
+        // Si hay otro panel a continuación en la misma tira, añadir el puente de fuelle con pliegues Montaña y Valle
+        if (localIdx < stripLayers.length - 1) {
+          const xFold1 = cursorX + panelW;
+          const xFold2 = xFold1 + stepZ;
+          const fold1Type = (globalIdx % 2 === 0) ? 'mountain' : 'valley';
+          const fold2Type = (globalIdx % 2 === 0) ? 'valley' : 'mountain';
+
+          folds.push({
+            points: [{ x: xFold1, y: -bridgeH * 0.5 }, { x: xFold1, y: bridgeH * 0.5 }],
+            type: fold1Type,
+            label: fold1Type === 'mountain' ? 'Montaña 90°' : 'Valle 90°'
+          });
+          folds.push({
+            points: [{ x: xFold2, y: -bridgeH * 0.5 }, { x: xFold2, y: bridgeH * 0.5 }],
+            type: fold2Type,
+            label: fold2Type === 'mountain' ? 'Montaña 90°' : 'Valle 90°'
+          });
+          cursorX = xFold2;
+        } else {
+          cursorX += panelW;
+        }
+      });
+
+      // Construir contorno exterior continuo CCW de la tira en acordeón
+      const stripOuter = [
+        ...botChain,
+        ...topChain.slice().reverse()
+      ];
+
+      // Si hay más tiras después de esta, añadir una pestaña de empalme en el extremo derecho
+      if (sIdx < totalStrips - 1) {
+        const pBotRight = { x: cursorX, y: -bridgeH * 0.5 };
+        const pTopRight = { x: cursorX, y: bridgeH * 0.5 };
+        const joinTab = createGlueTabGeometryOnSegment(
+          pBotRight,
+          pTopRight,
+          Math.min(tabDepth, stepZ),
+          bevelDeg,
+          'UNIR FUELLE #' + (sIdx + 2),
+          { x: 1, y: 0 }
+        );
+        if (joinTab) {
+          folds.push({ points: [pBotRight, pTopRight], type: 'mountain', label: 'Empalme Fuelle' });
+          tabs.push(joinTab);
+          stripOuter.splice(botChain.length, 0, joinTab.tipP1, joinTab.tipP2);
+        }
+      }
+
+      const rawB = computePolygonBounds2D(stripOuter);
+      const shiftPt = (p) => ({ x: p.x - rawB.cx, y: p.y - rawB.cy });
+      const centeredOuter = stripOuter.map(shiftPt);
+      const centeredHoles = stripHoles.map((hp) => hp.map(shiftPt));
+      const centeredFolds = folds.map((fl) => ({
+        type: fl.type,
+        label: fl.label,
+        points: fl.points.map(shiftPt)
+      }));
+      const centeredTabs = tabs.map((gt) => ({
+        ...gt,
+        foldLine: gt.foldLine.map(shiftPt),
+        polygon: gt.polygon.map(shiftPt),
+        center: shiftPt(gt.center),
+        tipP1: shiftPt(gt.tipP1),
+        tipP2: shiftPt(gt.tipP2)
+      }));
+
+      pieces.push({
+        pieceId: 'origami_concertina_' + (sIdx + 1),
+        layerIndex: startL,
+        isOrigamiPiece: true,
+        title: 'Origami Fuelle Zig-Zag #' + (sIdx + 1) + ' — Capas #' + (startL + 1) + ' a #' + endL,
+        subtitle: 'Recortar la tira continua y sus calados interiores ✂ · Plegar en acordeón alternando Montaña (---) y Valle (-·-)',
+        shortCode: 'ORI-ZZ' + (sIdx + 1),
+        bodyPolygon: centeredOuter,
+        holePolygons: centeredHoles,
+        outerCutPoints: centeredOuter,
+        foldLines: centeredFolds,
+        glueTabs: centeredTabs,
+        wallPanels: [],
+        glueTargetZones: [],
+        colorObj: PAPERCRAFT_LAYER_COLORS[sIdx % PAPERCRAFT_LAYER_COLORS.length],
+        artworkCanvas: stripLayers[0].artworkCanvas,
+        artworkBounds: computePolygonBounds2D(centeredOuter),
+        bounds: computePolygonBounds2D(centeredOuter),
+        height3DMM: stripLayers.length * stepZ
+      });
+    }
+
+    return pieces;
+  }
+
+  // --------------------------------------------------------------------------
   // TIPO 5: RED POLIÉDRICA 3D DESPLEGABLE (BLOQUES / PRISMAS DE 1 PIEZA)
   // --------------------------------------------------------------------------
   const prismH = Math.max(2, exactLayerStepMM);
@@ -26472,7 +27067,8 @@ function getPapercraftHeaderTextConfig(sheet, prog) {
     layered_tabs: 'Recortable en Capas Superpuestas',
     accordion_spacers: 'Recortable en Capas con Separadores Z',
     standee_peana: 'Figuras Troqueladas con Peana 3D',
-    prism_net: 'Red Poliédrica 3D Desplegable'
+    prism_net: 'Red Poliédrica 3D Desplegable',
+    origami_3d: 'Origami / Kirigami 3D Plegable'
   };
   const typeLabel = typeNames[papercraftState.cutoutType] || 'Recortable Escolar';
   const totalSheets = Math.max(1, (papercraftState.packedSheets && papercraftState.packedSheets.length) || 1);
@@ -27971,7 +28567,236 @@ function renderPapercraft3DPreviewOnCanvas(canvas) {
   const type = papercraftState.cutoutType;
   const foldAngle = foldFrac * (Math.PI * 0.5); // 0 rad (plano) -> 90° (vertical)
 
-  if (type === 'standee_peana') {
+  if (type === 'origami_3d') {
+    const origamiStyle = papercraftState.origamiFoldStyle || 'lowpoly_pepakura';
+
+    if (origamiStyle === 'kirigami_popup') {
+      // Origami Arquitectónico Pop-Up 90°: Tarjeta abriéndose de 0° (plano) a 90° con los escalones 3D emergiendo hacia adelante
+      const hw = wMM * 0.5;
+      const hd = hMM * 0.5;
+      const cardAng = foldAngle; // 0 = plano, PI/2 = 90° vertical
+
+      // Base horizontal de la tarjeta Pop-Up
+      const baseCorners = [
+        project3D(-hw, -hd, 0),
+        project3D(hw, -hd, 0),
+        project3D(hw, 0, 0),
+        project3D(-hw, 0, 0)
+      ];
+      ctx.save();
+      ctx.beginPath();
+      baseCorners.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(30, 41, 59, 0.85)';
+      ctx.strokeStyle = '#34d399';
+      ctx.lineWidth = 2;
+      ctx.fill();
+      ctx.stroke();
+
+      // Respaldo abatiéndose hasta 90°
+      const backY = totalSpanMM * Math.cos(cardAng);
+      const backZ = totalSpanMM * Math.sin(cardAng);
+      const backCorners = [
+        project3D(-hw, 0, 0),
+        project3D(hw, 0, 0),
+        project3D(hw, backY, backZ),
+        project3D(-hw, backY, backZ)
+      ];
+      ctx.beginPath();
+      backCorners.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2;
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+
+      // Escalones Kirigami emergiendo en 3D según foldFrac
+      const nSteps = Math.max(2, Math.min(12, baseLayers.length));
+      for (let k = 0; k < nSteps; k++) {
+        const srcIdx = nSteps === 1 ? 0 : Math.min(baseLayers.length - 1, Math.round((k / (nSteps - 1)) * (baseLayers.length - 1)));
+        const layer = baseLayers[srcIdx];
+        const frac = (k + 1) / nSteps;
+        const hStep = frac * totalSpanMM * 0.88 * Math.sin(cardAng);
+        const dStep = (1.0 - frac * 0.68) * (hMM * 0.48) * Math.sin(cardAng) + k * explodeFrac * 3;
+        const stepHalfW = Math.max(10, Math.min(hw * 0.9, (layer.bounds ? layer.bounds.width : wMM * 0.6) * 0.46));
+
+        // Cara frontal vertical del escalón Pop-Up
+        const frontFace = [
+          project3D(-stepHalfW, -dStep, 0),
+          project3D(stepHalfW, -dStep, 0),
+          project3D(stepHalfW, -dStep, hStep),
+          project3D(-stepHalfW, -dStep, hStep)
+        ];
+        // Cara superior horizontal del escalón Pop-Up
+        const topFace = [
+          project3D(-stepHalfW, -dStep, hStep),
+          project3D(stepHalfW, -dStep, hStep),
+          project3D(stepHalfW, 0, hStep),
+          project3D(-stepHalfW, 0, hStep)
+        ];
+
+        ctx.save();
+        ctx.beginPath();
+        frontFace.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+        ctx.closePath();
+        ctx.fillStyle = layer.colorObj ? layer.colorObj.stroke + 'cc' : 'rgba(14, 165, 233, 0.8)';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.beginPath();
+        topFace.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+        ctx.closePath();
+        ctx.fillStyle = layer.colorObj ? layer.colorObj.fill + 'dd' : 'rgba(56, 189, 248, 0.85)';
+        ctx.strokeStyle = '#fde047';
+        ctx.lineWidth = 1.6;
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
+    } else if (origamiStyle === 'accordion_concertina') {
+      // Origami Fuelle Continuo Zig-Zag: Capas conectadas alternando bisagras a izquierda y derecha
+      const stepZ = Math.max(4, (totalSpanMM / Math.max(1, baseLayers.length)) * Math.sin(foldAngle) + explodeFrac * 14);
+      const flatSpreadX = (1.0 - foldFrac) * (wMM * 0.85);
+
+      baseLayers.forEach((layer, idx) => {
+        const zPos = idx * stepZ + 4;
+        const xOffset = (idx - (baseLayers.length - 1) * 0.5) * flatSpreadX;
+        const pts = ensureCounterClockwiseLoop(layer.contourPoints);
+        const b = layer.bounds || { minX: -wMM * 0.4, maxX: wMM * 0.4, minY: -hMM * 0.4, maxY: hMM * 0.4 };
+
+        // Si hay capa siguiente, dibujar el puente de fuelle lateral (alternando derecha en pares, izquierda en impares)
+        if (idx < baseLayers.length - 1) {
+          const isRightHinge = (idx % 2) === 0;
+          const xHinge = xOffset + (isRightHinge ? b.maxX : b.minX);
+          const nextXOffset = (idx + 1 - (baseLayers.length - 1) * 0.5) * flatSpreadX;
+          const nextXHinge = nextXOffset + (isRightHinge ? b.maxX : b.minX);
+          const hBridge = Math.max(12, hMM * 0.22);
+          const bridgeProj = [
+            project3D(xHinge, -hBridge, zPos),
+            project3D(xHinge, hBridge, zPos),
+            project3D(nextXHinge, hBridge, zPos + stepZ),
+            project3D(nextXHinge, -hBridge, zPos + stepZ)
+          ];
+          ctx.save();
+          ctx.beginPath();
+          bridgeProj.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+          ctx.closePath();
+          ctx.fillStyle = isRightHinge ? 'rgba(34, 197, 94, 0.65)' : 'rgba(168, 85, 247, 0.65)';
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.4;
+          ctx.fill();
+          ctx.stroke();
+          ctx.restore();
+        }
+
+        // Dibujar el panel de la capa en el fuelle
+        const panelProj = pts.map((pt) => project3D(pt.x + xOffset, pt.y, zPos));
+        ctx.save();
+        ctx.beginPath();
+        panelProj.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+        ctx.closePath();
+        (layer.holePolygons || []).forEach((hp) => {
+          if (!hp || hp.length < 3) return;
+          hp.forEach((pt, i) => {
+            const p3 = project3D(pt.x + xOffset, pt.y, zPos);
+            if (i === 0) ctx.moveTo(p3.x, p3.y);
+            else ctx.lineTo(p3.x, p3.y);
+          });
+          ctx.closePath();
+        });
+        ctx.fillStyle = layer.colorObj ? layer.colorObj.fill + 'd0' : 'rgba(56, 189, 248, 0.82)';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.8;
+        ctx.fill('evenodd');
+        ctx.stroke();
+        ctx.restore();
+      });
+    } else {
+      // Origami Facetado Low-Poly (Estilo Pepakura): Gajos meridionales cerrándose desde estrella plana (0%) hasta escultura facetada 3D (100%)
+      const nSides = Math.max(4, Math.min(16, Math.round(Number(papercraftState.origamiSidesCount) || 8)));
+      const maxRings = Math.max(3, Math.min(10, baseLayers.length));
+      const ringLayers = [];
+      for (let r = 0; r < maxRings; r++) {
+        const srcIdx = maxRings === 1 ? 0 : Math.min(baseLayers.length - 1, Math.round((r / (maxRings - 1)) * (baseLayers.length - 1)));
+        ringLayers.push({
+          layer: baseLayers[srcIdx],
+          zMM: (r / Math.max(1, maxRings - 1)) * totalSpanMM
+        });
+      }
+
+      const facets3D = [];
+      for (let s = 0; s < nSides; s++) {
+        const angA = (s / nSides) * Math.PI * 2;
+        const angB = ((s + 1) / nSides) * Math.PI * 2;
+        const midAng = (angA + angB) * 0.5;
+        const radialExplode = explodeFrac * 24 + (1.0 - foldFrac) * 45;
+        const ox = Math.cos(midAng) * radialExplode;
+        const oy = Math.sin(midAng) * radialExplode;
+        const colObj = PAPERCRAFT_LAYER_COLORS[s % PAPERCRAFT_LAYER_COLORS.length];
+
+        for (let r = 0; r < maxRings - 1; r++) {
+          const b0 = ringLayers[r].layer.bounds || { width: wMM * 0.6, height: hMM * 0.6 };
+          const b1 = ringLayers[r + 1].layer.bounds || { width: wMM * 0.6, height: hMM * 0.6 };
+          const rad0A = Math.max(6, (b0.width * 0.5 * Math.abs(Math.cos(angA)) + b0.height * 0.5 * Math.abs(Math.sin(angA))));
+          const rad0B = Math.max(6, (b0.width * 0.5 * Math.abs(Math.cos(angB)) + b0.height * 0.5 * Math.abs(Math.sin(angB))));
+          const rad1A = Math.max(6, (b1.width * 0.5 * Math.abs(Math.cos(angA)) + b1.height * 0.5 * Math.abs(Math.sin(angA))));
+          const rad1B = Math.max(6, (b1.width * 0.5 * Math.abs(Math.cos(angB)) + b1.height * 0.5 * Math.abs(Math.sin(angB))));
+
+          // Interpolar entre gajo abierto en estrella (foldFrac = 0) y escultura 3D cerrada (foldFrac = 1)
+          const z0 = ringLayers[r].zMM * Math.sin(foldAngle);
+          const z1 = ringLayers[r + 1].zMM * Math.sin(foldAngle);
+          const flatOut0 = ringLayers[r].zMM * Math.cos(foldAngle) * 0.65;
+          const flatOut1 = ringLayers[r + 1].zMM * Math.cos(foldAngle) * 0.65;
+
+          const p00 = { x: ox + (rad0A + flatOut0) * Math.cos(angA), y: oy + (rad0A + flatOut0) * Math.sin(angA), z: z0 };
+          const p01 = { x: ox + (rad0B + flatOut0) * Math.cos(angB), y: oy + (rad0B + flatOut0) * Math.sin(angB), z: z0 };
+          const p11 = { x: ox + (rad1B + flatOut1) * Math.cos(angB), y: oy + (rad1B + flatOut1) * Math.sin(angB), z: z1 };
+          const p10 = { x: ox + (rad1A + flatOut1) * Math.cos(angA), y: oy + (rad1A + flatOut1) * Math.sin(angA), z: z1 };
+
+          const cxF = (p00.x + p01.x + p11.x + p10.x) * 0.25;
+          const cyF = (p00.y + p01.y + p11.y + p10.y) * 0.25;
+          const czF = (p00.z + p01.z + p11.z + p10.z) * 0.25;
+
+          facets3D.push({
+            pts: [p00, p01, p11, p10],
+            diag: [p00, p11],
+            colObj,
+            depth: project3D(cxF, cyF, czF).depth
+          });
+        }
+      }
+
+      facets3D.sort((a, b) => b.depth - a.depth);
+      facets3D.forEach((f) => {
+        const proj = f.pts.map((p) => project3D(p.x, p.y, p.z));
+        ctx.save();
+        ctx.beginPath();
+        proj.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+        ctx.closePath();
+        ctx.fillStyle = f.colObj ? f.colObj.fill + 'd2' : 'rgba(56, 189, 248, 0.82)';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.4;
+        ctx.fill();
+        ctx.stroke();
+
+        // Arista diagonal de faceta Low-Poly
+        const d0 = project3D(f.diag[0].x, f.diag[0].y, f.diag[0].z);
+        const d1 = project3D(f.diag[1].x, f.diag[1].y, f.diag[1].z);
+        ctx.setLineDash([3, 3]);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+        ctx.lineWidth = 1.0;
+        ctx.beginPath();
+        ctx.moveTo(d0.x, d0.y);
+        ctx.lineTo(d1.x, d1.y);
+        ctx.stroke();
+        ctx.restore();
+      });
+    }
+  } else if (type === 'standee_peana') {
     // Dibujar Peana Base en Z = 0..peanaH y las Figuras levantándose hasta 90° según foldFrac
     const peanaW = wMM;
     const peanaD = hMM;
@@ -30574,6 +31399,8 @@ function onPapercraftParamsChange(sourceControlId) {
 
   papercraftState.platformUnfoldMode = getVal('pcPlatformUnfoldSelect', papercraftState.platformUnfoldMode);
   papercraftState.standeeFoldMode = getVal('pcStandeeFoldSelect', papercraftState.standeeFoldMode);
+  papercraftState.origamiFoldStyle = getVal('pcOrigamiStyleSelect', papercraftState.origamiFoldStyle || 'lowpoly_pepakura');
+  papercraftState.origamiSidesCount = Math.max(4, Math.min(16, Math.round(getNum('pcOrigamiSidesInput', papercraftState.origamiSidesCount || 8))));
   papercraftState.widthMM = Math.max(10, Math.min(2000, getNum('pcWidthMMInput', papercraftState.widthMM)));
   papercraftState.heightMM = Math.max(10, Math.min(2000, getNum('pcHeightMMInput', papercraftState.heightMM)));
   papercraftState.totalHeightMM = Math.max(4, Math.min(2000, getNum('pcTotalHeightMMInput', papercraftState.totalHeightMM)));
@@ -30667,7 +31494,7 @@ function syncPapercraftControlsUI() {
   });
 
   // Botones de tipo de recortable
-  ['stacked_platforms', 'layered_tabs', 'accordion_spacers', 'standee_peana', 'prism_net'].forEach((t) => {
+  ['stacked_platforms', 'layered_tabs', 'accordion_spacers', 'standee_peana', 'prism_net', 'origami_3d'].forEach((t) => {
     const btn = document.getElementById('pcTypeBtn_' + t);
     if (btn) {
       btn.className = papercraftState.cutoutType === t
@@ -30681,6 +31508,17 @@ function syncPapercraftControlsUI() {
 
   const standeeRow = document.getElementById('pcStandeeFoldRow');
   if (standeeRow) standeeRow.classList.toggle('hidden', papercraftState.cutoutType !== 'standee_peana');
+
+  const origamiRow = document.getElementById('pcOrigamiStyleRow');
+  if (origamiRow) origamiRow.classList.toggle('hidden', papercraftState.cutoutType !== 'origami_3d');
+
+  const origamiSidesRow = document.getElementById('pcOrigamiSidesRow');
+  if (origamiSidesRow) {
+    origamiSidesRow.classList.toggle(
+      'hidden',
+      papercraftState.cutoutType !== 'origami_3d' || papercraftState.origamiFoldStyle !== 'lowpoly_pepakura'
+    );
+  }
 
   const tabsPerLayerRow = document.getElementById('pcTabsPerLayerRow');
   if (tabsPerLayerRow) tabsPerLayerRow.classList.toggle('hidden', papercraftState.cutoutType !== 'layered_tabs');
@@ -30761,6 +31599,8 @@ function syncPapercraftControlsUI() {
   setInputValIfDiff('pcCustomNoteInput', papercraftState.customSubtitleNote || '');
   setInputValIfDiff('pcCustomPiecePrefixInput', papercraftState.customPiecePrefix || '');
   setInputValIfDiff('pcCustomGlueWordInput', papercraftState.customGlueWord || 'PEGAR');
+  setInputValIfDiff('pcOrigamiStyleSelect', papercraftState.origamiFoldStyle || 'lowpoly_pepakura');
+  setInputValIfDiff('pcOrigamiSidesInput', papercraftState.origamiSidesCount || 8);
 
   // Sincronizar controles de Corte Láser / Cricut (Apartado 6) y Soporte Mayor (Apartado 7)
   setInputValIfDiff('pcLaserFoldModeSelect', papercraftState.laserFoldMode || 'dashed_cut');

@@ -38,18 +38,18 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" defer></script>
 
   <!-- Hoja de estilos principal -->
-  <link rel="stylesheet" href="css/styles.css?v=3.0.21" />
+  <link rel="stylesheet" href="css/styles.css?v=3.0.22" />
 
   <!-- Módulos de la aplicación (cargados en orden de dependencia con defer y cache-busting) -->
-  <script src="js/state.js?v=3.0.21" defer></script>
-  <script src="js/viewer3d.js?v=3.0.21" defer></script>
-  <script src="js/slicer.js?v=3.0.21" defer></script>
-  <script src="js/nesting.js?v=3.0.21" defer></script>
-  <script src="js/modals-guide.js?v=3.0.21" defer></script>
-  <script src="js/viewer2d.js?v=3.0.21" defer></script>
-  <script src="js/exporters.js?v=3.0.21" defer></script>
-  <script src="js/vectorizer2d.js?v=3.0.21" defer></script>
-  <script src="js/papercraft.js?v=3.0.21" defer></script>
+  <script src="js/state.js?v=3.0.22" defer></script>
+  <script src="js/viewer3d.js?v=3.0.22" defer></script>
+  <script src="js/slicer.js?v=3.0.22" defer></script>
+  <script src="js/nesting.js?v=3.0.22" defer></script>
+  <script src="js/modals-guide.js?v=3.0.22" defer></script>
+  <script src="js/viewer2d.js?v=3.0.22" defer></script>
+  <script src="js/exporters.js?v=3.0.22" defer></script>
+  <script src="js/vectorizer2d.js?v=3.0.22" defer></script>
+  <script src="js/papercraft.js?v=3.0.22" defer></script>
 </head>
 <body class="h-screen w-screen flex flex-col">
 
@@ -2527,6 +2527,11 @@
                 <div class="text-[11px] font-bold">📦 5. Red Poliédrica 3D Desplegable (Bloques en Cruz)</div>
                 <div class="text-[10px] text-slate-400">Despliegue completo de cada bloque en una sola pieza (tapa + 4 paredes + base + 7 pestañas trapezoidales biseladas).</div>
               </button>
+
+              <button type="button" id="pcTypeBtn_origami_3d" onclick="setPapercraftCutoutType('origami_3d')" class="p-2 rounded-lg bg-slate-950/80 hover:bg-slate-800 border border-slate-800 text-slate-300 text-left transition">
+                <div class="text-[11px] font-bold">🦢 6. Origami / Kirigami 3D (Plegado sin Apilar)</div>
+                <div class="text-[10px] text-slate-400">Origami Facetado Low-Poly (gajos plegables Pepakura), Origami Arquitectónico Pop-Up 90° (1 sola hoja sin pegamento) o Fuelle Zig-Zag.</div>
+              </button>
             </div>
 
             <!-- Sub-opciones según el tipo de recortable elegido -->
@@ -2544,6 +2549,21 @@
                 <option value="double_fold" selected>🔄 Con Solapa Superior de Refuerzo + Pestaña Base 90°</option>
                 <option value="single_tab">📐 Simple con Pestaña Inferior Trapezoidal a 90°</option>
               </select>
+            </div>
+
+            <div id="pcOrigamiStyleRow" class="hidden pt-1.5 border-t border-slate-700/60 flex flex-col gap-1.5 text-[11px]">
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-slate-300 shrink-0">Estilo de Origami:</span>
+                <select id="pcOrigamiStyleSelect" onchange="onPapercraftParamsChange()" class="w-full bg-slate-950 border border-amber-500/50 rounded px-2 py-1 text-[10px] text-amber-300 font-semibold outline-none">
+                  <option value="lowpoly_pepakura" selected>🦢 Origami Facetado Low-Poly (Gajos Plegables Pepakura)</option>
+                  <option value="kirigami_popup">🏛️ Origami Arquitectónico Pop-Up 90° (1 Sola Hoja · 0% Pegamento)</option>
+                  <option value="accordion_concertina">🪗 Origami en Fuelle Continuo Zig-Zag (Concertina 3D)</option>
+                </select>
+              </div>
+              <div id="pcOrigamiSidesRow" class="flex items-center justify-between gap-2">
+                <span class="text-slate-300">Gajos / Facetas perimetrales Low-Poly (4..16):</span>
+                <input type="number" id="pcOrigamiSidesInput" value="8" min="4" max="16" step="1" oninput="onPapercraftParamsChange('pcOrigamiSidesInput')" class="w-16 bg-slate-950 border border-slate-700 rounded px-2 py-0.5 text-right text-amber-300 font-bold" />
+              </div>
             </div>
 
             <div id="pcTabsPerLayerRow" class="hidden pt-1.5 border-t border-slate-700/60 flex items-center justify-between text-[11px]">
