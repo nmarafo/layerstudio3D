@@ -83,7 +83,7 @@ const papercraftState = {
   nestMarginMM: typeof state !== 'undefined' && state.nestMarginMM != null ? state.nestMarginMM : 5,
   nestAllowRotate: typeof state !== 'undefined' && state.nestAllowRotate != null ? Boolean(state.nestAllowRotate) : true,
   nestUseInnerHoles: typeof state !== 'undefined' && state.nestUseInnerHoles != null ? Boolean(state.nestUseInnerHoles) : true,
-  nestClipOversized: typeof state !== 'undefined' && state.nestClipOversized != null ? Boolean(state.nestClipOversized) : true,
+  nestClipOversized: true, // En recortables, auto-ajustar piezas desplegadas que superen el tablero está activo por defecto
   carrierEnabled: typeof state !== 'undefined' && state.carrierEnabled != null ? Boolean(state.carrierEnabled) : false,
   carrierWidthMM: typeof state !== 'undefined' && state.carrierWidthMM ? state.carrierWidthMM : 1220,
   carrierHeightMM: typeof state !== 'undefined' && state.carrierHeightMM ? state.carrierHeightMM : 800,
@@ -7336,7 +7336,7 @@ function syncPapercraftBoardAndCarrierFromMainStudio(redraw = false) {
   if (Number.isFinite(Number(state.nestMarginMM))) papercraftState.nestMarginMM = Number(state.nestMarginMM);
   if (typeof state.nestAllowRotate === 'boolean') papercraftState.nestAllowRotate = state.nestAllowRotate;
   if (typeof state.nestUseInnerHoles === 'boolean') papercraftState.nestUseInnerHoles = state.nestUseInnerHoles;
-  if (typeof state.nestClipOversized === 'boolean') papercraftState.nestClipOversized = state.nestClipOversized;
+  if (state.nestClipOversized === true) papercraftState.nestClipOversized = true;
 
   if (typeof state.carrierEnabled === 'boolean') papercraftState.carrierEnabled = state.carrierEnabled;
   if (Number.isFinite(Number(state.carrierWidthMM))) papercraftState.carrierWidthMM = Number(state.carrierWidthMM);
