@@ -3566,6 +3566,9 @@ function rebuildGhostAndSlices() {
 
   applyModelSplitToExistingSlices(false);
   syncSlicerFrameUI();
+  if (typeof syncPapercraftWithConstructiveSystem === 'function') {
+    syncPapercraftWithConstructiveSystem(true);
+  }
 
   if (state.activeSliceIndex >= state.slices.length) {
     state.activeSliceIndex = Math.max(0, state.slices.length - 1);
@@ -3724,6 +3727,9 @@ function applyIslandFilterToExistingSlices() {
 
   applyModelSplitToExistingSlices(false);
   syncSlicerFrameUI();
+  if (typeof syncPapercraftWithConstructiveSystem === 'function') {
+    syncPapercraftWithConstructiveSystem(true);
+  }
 
   state.filteredIslandsCount = totalRemoved;
   state.filledHolesCount = totalFilledHoles;
