@@ -1,0 +1,1933 @@
+/**
+ * LayerStudio 3D - 2D Interactive Canvas Inspector & Slice Strip
+ * Visor 2D con zoom/pan, selección interactiva de islas, reproductor de capas y galería inferior.
+ *
+ * Copyright (C) 2026 Norberto Martín Afonso
+ * Repository: https://github.com/nmarafo/layerstudio3D
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Under Section 7(b) of the GNU Affero General Public License, any redistribution
+ * or derivative work must preserve this copyright notice and author attribution
+ * to Norberto Martín Afonso in the source code, documentation, and visible
+ * application notices.
+ */
+// Controles de Zoom y Desplazamiento (Pan) en el visor 2D
+function updateZoom2DBadge() {
+  const badge = document.getElementById('zoom2DBadgeBtn');
+  if (badge) {
+    badge.textContent = Math.round(state.view2D.zoom * 100) + '%';
+  }
+}
+
+function reset2DView(redraw = true) {
+  state.view2D.zoom = 1;
+  state.view2D.panX = 0;
+  state.view2D.panY = 0;
+  updateZoom2DBadge();
+  if (redraw) render2DSlice();
+}
+
+function zoom2DBy(factor, pivotScreenX, pivotScreenY) {
+  const canvas = document.getElementById('canvas2D');
+  const oldZoom = state.view2D.zoom;
+  const newZoom = Math.max(0.4, Math.min(35, oldZoom * factor));
+  const ratio = newZoom / oldZoom;
+
+  const px = typeof pivotScreenX === 'number' ? pivotScreenX : (canvas ? canvas.width / 2 : 0);
+  const py = typeof pivotScreenY === 'number' ? pivotScreenY : (canvas ? canvas.height / 2 : 0);
+  const cx = (canvas ? canvas.width / 2 : 0) + state.view2D.panX;
+  const cy = (canvas ? canvas.height / 2 : 0) + state.view2D.panY;
+
+  state.view2D.panX += (px - cx) * (1 - ratio);
+  state.view2D.panY += (py - cy) * (1 - ratio);
+  state.view2D.zoom = newZoom;
+
+  updateZoom2DBadge();
+  render2DSlice();
+}
+
+// Permite hacer zoom con la rueda, arrastrar para desplazarse por el tablero y hacer clic en una isla para seleccionarla
+function setupCanvas2DInteraction() {
+  const canvas = document.getElementById('canvas2D');
+  if (!canvas) return;
+
+  // Zoom con la rueda del ratón centrado en la posición del cursor
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
+    const factor = e.deltaY < 0 ? 1.15 : 0.87;
+    zoom2DBy(factor, px, py);
+  }, { passive: false });
+
+  // Doble clic para acercar al punto clicado
+  canvas.addEventListener('dblclick', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    zoom2DBy(1.6, e.clientX - rect.left, e.clientY - rect.top);
+  });
+
+  // Inicio de arrastre (Pan) o clic de selección
+  canvas.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 && e.button !== 1) return;
+    state.view2D.isDragging = true;
+    state.view2D.hasMoved = false;
+    state.view2D.startX = e.clientX;
+    state.view2D.startY = e.clientY;
+    state.view2D.startPanX = state.view2D.panX;
+    state.view2D.startPanY = state.view2D.panY;
+    canvas.setPointerCapture(e.pointerId);
+  });
+
+  // Movimiento de arrastre (Pan)
+  canvas.addEventListener('pointermove', (e) => {
+    if (!state.view2D.isDragging) return;
+    const dx = e.clientX - state.view2D.startX;
+    const dy = e.clientY - state.view2D.startY;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+      state.view2D.hasMoved = true;
+    }
+    state.view2D.panX = state.view2D.startPanX + dx;
+    state.view2D.panY = state.view2D.startPanY + dy;
+    render2DSlice();
+  });
+
+  // Fin de arrastre; si fue un clic limpio sin arrastrar en modo tablero, selecciona la isla clicada
+  const finishPointer = (e) => {
+    if (!state.view2D.isDragging) return;
+    state.view2D.isDragging = false;
+    try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+
+    if (!state.view2D.hasMoved && state.carrierEnabled && state.nestedCarriers.length > 0) {
+      const carrier = state.nestedCarriers[state.activeCarrierIndex];
+      if (!carrier) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+
+      const pad = 36;
+      const baseScale = Math.min((canvas.width - pad * 2) / carrier.width, (canvas.height - pad * 2) / carrier.height);
+      const scale = baseScale * state.view2D.zoom;
+      const centerX = canvas.width / 2 + state.view2D.panX;
+      const centerY = canvas.height / 2 + state.view2D.panY;
+
+      const cx = (px - centerX) / scale + carrier.width / 2;
+      const cy = (centerY - py) / scale + carrier.height / 2;
+
+      let hitSliceIdx = -1;
+      let hitBoardIdx = -1;
+      let hitSectorCode = null;
+      let minArea = Infinity;
+      carrier.boardPlacements.forEach((bPl) => {
+        bPl.transformedPlacements.forEach((pl) => {
+          if (isPointInIslandMaterial({ x: cx, y: cy }, pl.outerPoints, pl.holes)) {
+            if (pl.island.outerArea < minArea) {
+              minArea = pl.island.outerArea;
+              hitSliceIdx = pl.island.sliceIndex;
+              hitBoardIdx = bPl.boardIndex;
+              hitSectorCode = pl.island.sectorCode || null;
+            }
+          }
+        });
+      });
+
+      if (hitSliceIdx !== -1) {
+        state.activeSliceIndex = hitSliceIdx;
+        state.activeSectorCode = hitSectorCode;
+        if (hitBoardIdx !== -1) state.activeBoardIndex = hitBoardIdx;
+        update2DInspectorHeader();
+        update3DSlicesTransforms();
+        highlightActiveCardInStrip();
+        render2DSlice();
+      }
+      return;
+    }
+
+    if (!state.view2D.hasMoved && state.nestingEnabled && state.nestedBoards.length > 0) {
+      const board = state.nestedBoards[state.activeBoardIndex];
+      if (!board) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+
+      // Comprobar primero si se pulsó una parte (A1, A2, A3...) dentro del recuadro del Mapa de Lámina Dividida
+      if (Array.isArray(state._lastSplitInsetHitBoxes) && state._lastSplitInsetHitBoxes.length > 0) {
+        for (let i = 0; i < state._lastSplitInsetHitBoxes.length; i++) {
+          const hb = state._lastSplitInsetHitBoxes[i];
+          if (px >= hb.x && px <= hb.x + hb.w && py >= hb.y && py <= hb.y + hb.h) {
+            if (typeof jumpToSliceBoard === 'function') {
+              jumpToSliceBoard(hb.sliceIndex, hb.sectorCode, hb.boardIndex);
+            }
+            return;
+          }
+        }
+      }
+
+      const pad = 36;
+      const baseScale = Math.min((canvas.width - pad * 2) / board.width, (canvas.height - pad * 2) / board.height);
+      const scale = baseScale * state.view2D.zoom;
+      const centerX = canvas.width / 2 + state.view2D.panX;
+      const centerY = canvas.height / 2 + state.view2D.panY;
+
+      const boardX = (px - centerX) / scale + board.width / 2;
+      const boardY = (centerY - py) / scale + board.height / 2;
+
+      // Buscar la isla más pequeña que contenga el punto clicado
+      let hitSliceIdx = -1;
+      let hitSectorCode = null;
+      let minArea = Infinity;
+      board.placements.forEach((pl) => {
+        if (isPointInIslandMaterial({ x: boardX, y: boardY }, pl.outerPoints, pl.holes)) {
+          if (pl.island.outerArea < minArea) {
+            minArea = pl.island.outerArea;
+            hitSliceIdx = pl.island.sliceIndex;
+            hitSectorCode = pl.island.sectorCode || null;
+          }
+        }
+      });
+
+      if (hitSliceIdx !== -1) {
+        state.activeSliceIndex = hitSliceIdx;
+        state.activeSectorCode = hitSectorCode;
+        update2DInspectorHeader();
+        update3DSlicesTransforms();
+        highlightActiveCardInStrip();
+        render2DSlice();
+      }
+      return;
+    }
+
+    // En vista de lasca individual (Tablero: OFF): permitir clic sobre el banner de tablero o sobre una parte dividida (A1, A2...)
+    if (!state.view2D.hasMoved && !state.nestingEnabled && state.slices && state.slices.length > 0) {
+      const rect = canvas.getBoundingClientRect();
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+
+      if (state._lastSliceBoardBannerRect) {
+        const br = state._lastSliceBoardBannerRect;
+        if (px >= br.x && px <= br.x + br.w && py >= br.y && py <= br.y + br.h) {
+          if (typeof jumpToSliceBoard === 'function') {
+            jumpToSliceBoard(state.activeSliceIndex, state.activeSectorCode || null);
+          }
+          return;
+        }
+      }
+
+      const slice = state.slices[state.activeSliceIndex];
+      if (!slice || !slice.loops || slice.loops.length === 0) return;
+      const docB = getModelBounds2D();
+      const pad = 42;
+      const baseScale = Math.min((canvas.width - pad * 2) / docB.width, (canvas.height - pad * 2) / docB.height);
+      const scale = baseScale * state.view2D.zoom;
+      const centerX = canvas.width / 2 + state.view2D.panX;
+      const centerY = canvas.height / 2 + state.view2D.panY;
+      const worldX = (px - centerX) / scale + docB.cx;
+      const worldY = (centerY - py) / scale + docB.cy;
+
+      let clickedSec = null;
+      for (let i = 0; i < slice.loops.length; i++) {
+        const l = slice.loops[i];
+        if (!l.isHole && l.points && l.points.length >= 3 && isPointInPolygon({ x: worldX, y: worldY }, l.points)) {
+          clickedSec = l.sectorCode || 'A1';
+          break;
+        }
+      }
+      if (!clickedSec && state.splitModelEnabled && slice.splitGrid && slice.splitGrid.totalParts > 1) {
+        const g = slice.splitGrid;
+        if (worldX >= g.minX && worldX <= g.maxX && worldY >= g.minY && worldY <= g.maxY) {
+          let colIdx = 0;
+          for (let c = 0; c < g.xCuts.length; c++) {
+            if (worldX > g.xCuts[c]) colIdx = c + 1;
+          }
+          let rowIdx = 0;
+          for (let r = 0; r < g.yCuts.length; r++) {
+            if (worldY > g.yCuts[r]) rowIdx = r + 1;
+          }
+          const displayRow = (g.rows - 1) - rowIdx;
+          const rowLetter = String.fromCharCode(65 + Math.max(0, Math.min(25, displayRow)));
+          clickedSec = rowLetter + (colIdx + 1);
+        }
+      }
+      if (clickedSec) {
+        selectActiveSlice(state.activeSliceIndex, clickedSec);
+      }
+    }
+  };
+
+  canvas.addEventListener('pointerup', finishPointer);
+  canvas.addEventListener('pointercancel', finishPointer);
+}
+
+function resetCamera3D() {
+  if (!camera || !controls) return;
+  const maxDim = Math.max(state.dimsMM.x, state.dimsMM.y, state.dimsMM.z, 50);
+  const dist = maxDim * 1.75;
+  camera.near = Math.max(0.1, maxDim * 0.002);
+  camera.far = Math.max(10000, maxDim * 30);
+  camera.updateProjectionMatrix();
+  camera.position.set(dist, -dist * 1.15, dist * 0.85);
+  controls.target.set(0, 0, 0);
+  controls.update();
+
+  if (gridHelper3D) {
+    scene.remove(gridHelper3D);
+    gridHelper3D = new THREE.GridHelper(maxDim * 2.5, 20, 0x1e293b, 0x0f172a);
+    gridHelper3D.rotation.x = Math.PI / 2;
+    gridHelper3D.position.z = -state.dimsMM.z / 2;
+    scene.add(gridHelper3D);
+  }
+}
+
+// =========================================================================
+// INSPECTOR 2D Y GALERÍA DE LASCAS
+// =========================================================================
+// Devuelve los límites 2D totales de la pieza completa según el eje de corte de la lasca o el eje activo
+function getModelBounds2D(axisOverride) {
+  const activeSlice = state.slices && state.slices[state.activeSliceIndex];
+  const ax = axisOverride || (activeSlice && activeSlice.sliceAxis) || state.axis;
+  let w = state.dimsMM.x;
+  let h = state.dimsMM.y;
+  if (ax === 'x') {
+    w = state.dimsMM.y;
+    h = state.dimsMM.z;
+  } else if (ax === 'y') {
+    w = state.dimsMM.x;
+    h = state.dimsMM.z;
+  }
+  w = Math.max(1, Number(w) || 100);
+  h = Math.max(1, Number(h) || 100);
+  if (state.slicerFrameEnabled && typeof getSlicerFrameDimensionsForAxis === 'function') {
+    const fDims = getSlicerFrameDimensionsForAxis(ax);
+    w = Math.max(w, fDims.outerW);
+    h = Math.max(h, fDims.outerH);
+  }
+  return {
+    minX: -w / 2,
+    minY: -h / 2,
+    maxX: w / 2,
+    maxY: h / 2,
+    width: w,
+    height: h,
+    cx: 0,
+    cy: 0
+  };
+}
+
+function getSliceBounds2D(slice) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  const expandWithLoops = (loops) => {
+    (loops || []).forEach((l) => {
+      (l.points || []).forEach((p) => {
+        if (p.x < minX) minX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y > maxY) maxY = p.y;
+      });
+    });
+  };
+
+  if (slice) expandWithLoops(slice.loops);
+
+  if (!Number.isFinite(minX)) {
+    return { minX: -25, minY: -25, maxX: 25, maxY: 25, width: 50, height: 50, cx: 0, cy: 0 };
+  }
+  return {
+    minX, minY, maxX, maxY,
+    width: Math.max(0.5, maxX - minX),
+    height: Math.max(0.5, maxY - minY),
+    cx: (minX + maxX) / 2,
+    cy: (minY + maxY) / 2
+  };
+}
+
+function getAlignmentHoles2D(slice) {
+  if (state.constructionMode === 'puzzle3d') return [];
+  if (!state.rodCount || state.rodCount <= 0 || !slice || !slice.loops || slice.loops.length === 0) return [];
+  const b = getModelBounds2D(slice.sliceAxis);
+  if (state.rodCount === 1) {
+    return [{ x: b.cx, y: b.cy }];
+  }
+  const offset = b.width * 0.22;
+  return [
+    { x: b.cx - offset, y: b.cy },
+    { x: b.cx + offset, y: b.cy }
+  ];
+}
+
+function selectActiveSlice(idx, preferredSectorCode = null) {
+  if (state.slices.length === 0) return;
+  state.activeSliceIndex = Math.max(0, Math.min(state.slices.length - 1, idx));
+  state.activeSectorCode = preferredSectorCode || null;
+
+  if (state.carrierEnabled && state.nestedCarriers.length > 0) {
+    const foundCarrierIdx = state.nestedCarriers.findIndex((c) =>
+      c.boardPlacements.some((bPl) =>
+        bPl.transformedPlacements.some((pl) =>
+          pl.island.sliceIndex === state.activeSliceIndex &&
+          (!preferredSectorCode || pl.island.sectorCode === preferredSectorCode)
+        )
+      )
+    );
+    if (foundCarrierIdx !== -1) {
+      state.activeCarrierIndex = foundCarrierIdx;
+      const sliderEl = document.getElementById('currentSliceSlider');
+      if (sliderEl) sliderEl.value = state.activeCarrierIndex;
+    }
+  } else if (!state.nestingEnabled) {
+    document.getElementById('currentSliceSlider').value = state.activeSliceIndex;
+  } else {
+    // Si estamos en vista de tablero, saltar al tablero donde se encuentra esta pieza (y su sector específico si está dividida)
+    let foundBoardIdx = -1;
+    if (preferredSectorCode) {
+      foundBoardIdx = state.nestedBoards.findIndex((b) =>
+        b.placements.some((pl) => pl.island.sliceIndex === state.activeSliceIndex && pl.island.sectorCode === preferredSectorCode)
+      );
+    }
+    if (foundBoardIdx === -1) {
+      foundBoardIdx = state.nestedBoards.findIndex((b) =>
+        b.placements.some((pl) => pl.island.sliceIndex === state.activeSliceIndex)
+      );
+    }
+    if (foundBoardIdx !== -1) {
+      state.activeBoardIndex = foundBoardIdx;
+      document.getElementById('currentSliceSlider').value = state.activeBoardIndex;
+    }
+  }
+
+  update2DInspectorHeader();
+  if (state.splitModelEnabled && typeof syncSplitModelUI === 'function') {
+    syncSplitModelUI();
+  }
+  if (typeof updatePieceBoardLocationUI === 'function') {
+    updatePieceBoardLocationUI();
+  }
+  update3DSlicesTransforms();
+  render2DSlice();
+  highlightActiveCardInStrip();
+}
+
+// Dibuja el texto de una isla en el Canvas 2D ajustando exactamente el tamaño para no exceder nunca la caja interior
+function drawAdaptiveIslandTextOnCanvas(ctx, tLayout, toScreenX, toScreenY, scale) {
+  if (!tLayout || !tLayout.lines || tLayout.lines.length === 0 || tLayout.fontSizeMM <= 0.04) return;
+
+  let fontPx = tLayout.fontSizeMM * scale;
+  ctx.save();
+  ctx.font = 'bold ' + fontPx.toFixed(2) + 'px monospace';
+
+  // Verificar con la métrica real de la fuente del navegador que ninguna línea supere el ancho seguro
+  let maxMeasuredW = 0;
+  for (let i = 0; i < tLayout.lines.length; i++) {
+    const w = ctx.measureText(tLayout.lines[i]).width;
+    if (w > maxMeasuredW) maxMeasuredW = w;
+  }
+  const allowedPxW = tLayout.maxBoxW * scale * 0.88;
+  const allowedPxH = (tLayout.maxBoxH * scale * 0.88) / tLayout.lines.length;
+
+  if (maxMeasuredW > allowedPxW && maxMeasuredW > 0) {
+    fontPx *= (allowedPxW / maxMeasuredW);
+  }
+  if (fontPx > allowedPxH) {
+    fontPx = allowedPxH;
+  }
+
+  if (fontPx < 1.2) {
+    ctx.restore();
+    return;
+  }
+
+  ctx.font = 'bold ' + fontPx.toFixed(2) + 'px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#34d399';
+
+  const sx = toScreenX(tLayout.x);
+  const sy = toScreenY(tLayout.y);
+  const lineStepPx = fontPx * 1.12;
+  const n = tLayout.lines.length;
+
+  for (let i = 0; i < n; i++) {
+    const offsetY = (i - (n - 1) * 0.5) * lineStepPx;
+    ctx.fillText(tLayout.lines[i], sx, sy + offsetY);
+  }
+  ctx.restore();
+}
+
+// Dibuja un contorno 2D en el Canvas respetando las micro-uniones (holding tabs) si están activas (salvo en el marco configurable)
+function drawContourWithTabsOnCanvas(ctx, pts, isHole, strokeColor, lineWidth, toScreenX, toScreenY, skipTabs = false) {
+  if (!pts || pts.length < 3) return;
+  const tabRes = computeLoopWithHoldingTabs(pts, isHole, Boolean(skipTabs || pts.isFrame));
+
+  ctx.save();
+  ctx.strokeStyle = strokeColor;
+  ctx.lineWidth = lineWidth;
+
+  if (tabRes.isClosed) {
+    ctx.beginPath();
+    pts.forEach((pt, i) => {
+      if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+      else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+    });
+    ctx.closePath();
+    ctx.stroke();
+  } else {
+    ctx.lineCap = 'butt';
+    ctx.beginPath();
+    tabRes.subpaths.forEach((poly) => {
+      if (!poly || poly.length < 2) return;
+      poly.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+        else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+      });
+    });
+    ctx.stroke();
+
+    // Resaltar visualmente los puentes de sujeción sin cortar si el indicador está activo
+    if (state.tabShowMarkers && tabRes.tabBridges.length > 0) {
+      tabRes.tabBridges.forEach((br) => {
+        const sx = toScreenX(br.x);
+        const sy = toScreenY(br.y);
+        ctx.beginPath();
+        ctx.arc(sx, sy, 3.2, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(250, 204, 21, 0.25)';
+        ctx.fill();
+        ctx.strokeStyle = '#facc15';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      });
+    }
+  }
+  ctx.restore();
+}
+
+// Dibuja el Marco Configurable 2D alrededor del tablero o lienzo 2D en el Inspector 2D
+function draw2DBoardFrameOnCanvas(ctx, frameGeom, toScreenX, toScreenY) {
+  if (!frameGeom) return;
+
+  if (frameGeom.engraveLoops && frameGeom.engraveLoops.length > 0) {
+    ctx.save();
+    ctx.beginPath();
+    frameGeom.engraveLoops.forEach((el) => {
+      if (!el.points || el.points.length < 3) return;
+      el.points.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+        else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+      });
+      ctx.closePath();
+    });
+    ctx.fillStyle = 'rgba(16, 185, 129, 0.28)';
+    ctx.fill('evenodd');
+    ctx.strokeStyle = '#10b981';
+    ctx.lineWidth = 1.25;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  if (frameGeom.outerCutPts && frameGeom.outerCutPts.length >= 3) {
+    drawContourWithTabsOnCanvas(ctx, frameGeom.outerCutPts, false, '#f43f5e', 2.2, toScreenX, toScreenY, true);
+  }
+  if (frameGeom.innerCutPts && frameGeom.innerCutPts.length >= 3) {
+    drawContourWithTabsOnCanvas(ctx, frameGeom.innerCutPts, true, '#38bdf8', 1.7, toScreenX, toScreenY, true);
+  }
+  if (frameGeom.keyholePts && frameGeom.keyholePts.length >= 3) {
+    drawContourWithTabsOnCanvas(ctx, frameGeom.keyholePts, true, '#38bdf8', 1.5, toScreenX, toScreenY, true);
+  }
+}
+
+function render2DBoard(ctx, canvas) {
+  const board = state.nestedBoards[state.activeBoardIndex];
+  if (!board || board.placements.length === 0) {
+    ctx.fillStyle = '#f87171';
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'center';
+    const msg = state.unfitIslandsCount > 0
+      ? 'Las piezas (' + state.unfitIslandsCount + ') superan las dimensiones del tablero actual. Aumenta el tamaño del tablero.'
+      : 'No hay islas seleccionadas para distribuir en el tablero';
+    ctx.fillText(msg, canvas.width / 2, canvas.height / 2);
+    return;
+  }
+
+  const pad = 36;
+  const baseScale = Math.min((canvas.width - pad * 2) / board.width, (canvas.height - pad * 2) / board.height);
+  const scale = baseScale * state.view2D.zoom;
+  const centerX = canvas.width / 2 + state.view2D.panX;
+  const centerY = canvas.height / 2 + state.view2D.panY;
+  const toScreenX = (x) => centerX + (x - board.width / 2) * scale;
+  const toScreenY = (y) => centerY - (y - board.height / 2) * scale;
+
+  const bx = toScreenX(0);
+  const by = toScreenY(board.height);
+  const bw = board.width * scale;
+  const bh = board.height * scale;
+
+  // Fondo y borde del tablero físico
+  ctx.save();
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+  ctx.fillRect(bx, by, bw, bh);
+  ctx.strokeStyle = '#10b981';
+  ctx.lineWidth = 1.8;
+  ctx.strokeRect(bx, by, bw, bh);
+
+  // Margen útil interior
+  if (board.margin > 0) {
+    const mx = toScreenX(board.margin);
+    const my = toScreenY(board.height - board.margin);
+    const mw = (board.width - board.margin * 2) * scale;
+    const mh = (board.height - board.margin * 2) * scale;
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.22)';
+    ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 1;
+    ctx.strokeRect(mx, my, mw, mh);
+  }
+  ctx.restore();
+
+  // Marco configurable 2D de corte/grabado alrededor del tablero
+  if (state.slicerFrameEnabled && typeof get2DBoardFrameGeometry === 'function') {
+    const frameGeom = get2DBoardFrameGeometry(0, 0, board.width, board.height, board.placements, true);
+    draw2DBoardFrameOnCanvas(ctx, frameGeom, toScreenX, toScreenY);
+  }
+
+  // Dibujar cada isla anidada en el tablero
+  board.placements.forEach((pl) => {
+    const isCurrentSlice = pl.island.sliceIndex === state.activeSliceIndex;
+
+    // Relleno sombreado con regla evenodd
+    ctx.save();
+    ctx.beginPath();
+    pl.outerPoints.forEach((pt, i) => {
+      if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+      else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+    });
+    ctx.closePath();
+    pl.holes.forEach((h) => {
+      h.points.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+        else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+      });
+      ctx.closePath();
+    });
+    ctx.fillStyle = isCurrentSlice ? 'rgba(244, 63, 94, 0.26)' : 'rgba(14, 165, 233, 0.16)';
+    ctx.fill('evenodd');
+    ctx.restore();
+
+    // Contorno exterior (rojo) con soporte de micro-uniones (excepto si es marco configurable)
+    drawContourWithTabsOnCanvas(
+      ctx,
+      pl.outerPoints,
+      false,
+      isCurrentSlice ? '#fb7185' : '#f43f5e',
+      isCurrentSlice ? 2.4 : 1.7,
+      toScreenX,
+      toScreenY,
+      Boolean(pl.isFrame || (pl.island && pl.island.isFrame))
+    );
+
+    // Contornos de huecos interiores (azul) con soporte opcional de micro-uniones (excepto si es marco configurable)
+    pl.holes.forEach((h) => {
+      drawContourWithTabsOnCanvas(ctx, h.points, true, '#38bdf8', 1.4, toScreenX, toScreenY, Boolean(h.isFrame));
+    });
+
+    // Grabado vectorial u orla de marco 3D perteneciente a esta isla
+    if (pl.engraveLoops && pl.engraveLoops.length > 0) {
+      ctx.save();
+      ctx.beginPath();
+      pl.engraveLoops.forEach((el) => {
+        if (!el.points || el.points.length < 3) return;
+        el.points.forEach((pt, i) => {
+          if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+          else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+        });
+        ctx.closePath();
+      });
+      ctx.fillStyle = 'rgba(16, 185, 129, 0.30)';
+      ctx.fill('evenodd');
+      ctx.strokeStyle = '#10b981';
+      ctx.lineWidth = 1.15;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Zonas de pegado, pestañas y líneas de pliegue (Modo Recortable / Papercraft)
+    if (pl.papercraftGlueZones && pl.papercraftGlueZones.length > 0) {
+      ctx.save();
+      ctx.setLineDash([4, 3]);
+      ctx.fillStyle = 'rgba(245, 158, 11, 0.14)';
+      ctx.strokeStyle = 'rgba(245, 158, 11, 0.72)';
+      ctx.lineWidth = 1.0;
+      pl.papercraftGlueZones.forEach((gz) => {
+        if (!gz.polygon || gz.polygon.length < 3) return;
+        ctx.beginPath();
+        gz.polygon.forEach((pt, i) => {
+          if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+          else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+        });
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
+    if (pl.papercraftGlueTabs && pl.papercraftGlueTabs.length > 0) {
+      ctx.save();
+      ctx.fillStyle = 'rgba(245, 158, 11, 0.22)';
+      pl.papercraftGlueTabs.forEach((gt) => {
+        if (!gt.polygon || gt.polygon.length < 3) return;
+        ctx.beginPath();
+        gt.polygon.forEach((pt, i) => {
+          if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+          else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+        });
+        ctx.closePath();
+        ctx.fill();
+      });
+      ctx.restore();
+    }
+    if (pl.papercraftFoldLines && pl.papercraftFoldLines.length > 0) {
+      ctx.save();
+      pl.papercraftFoldLines.forEach((fl) => {
+        if (!fl.points || fl.points.length < 2) return;
+        const isValley = fl.type === 'valley';
+        ctx.setLineDash(isValley ? [6, 3, 2, 3] : [6, 4]);
+        ctx.strokeStyle = isValley ? '#a855f7' : '#22c55e';
+        ctx.lineWidth = 1.35;
+        ctx.beginPath();
+        fl.points.forEach((pt, i) => {
+          if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+          else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+        });
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
+
+    // Guía inferior (#N-1) si está activa
+    if (state.includePrevSliceGuide && pl.lowerPolys.length > 0) {
+      ctx.save();
+      ctx.setLineDash(getCanvasDashPattern(state.lowerGuideStyle));
+      ctx.beginPath();
+      pl.lowerPolys.forEach((poly) => {
+        poly.forEach((pt, i) => {
+          if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+          else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+        });
+      });
+      ctx.strokeStyle = '#d946ef';
+      ctx.lineWidth = 1.35;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Guía superior (#N+1) si está activa
+    if (state.includeNextSliceGuide && pl.upperPolys.length > 0) {
+      ctx.save();
+      ctx.setLineDash(getCanvasDashPattern(state.upperGuideStyle));
+      ctx.beginPath();
+      pl.upperPolys.forEach((poly) => {
+        poly.forEach((pt, i) => {
+          if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+          else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+        });
+      });
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 1.35;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Perforaciones de varillas guía
+    pl.rods.forEach((r) => {
+      ctx.beginPath();
+      ctx.arc(toScreenX(r.x), toScreenY(r.y), (state.rodDiameter / 2) * scale, 0, Math.PI * 2);
+      ctx.fillStyle = '#090d16';
+      ctx.fill();
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 1.3;
+      ctx.stroke();
+    });
+
+    // Grabado en cada isla autoajustado en tamaño y líneas para caber 100% en su interior
+    drawAdaptiveIslandTextOnCanvas(ctx, pl.textLayout, toScreenX, toScreenY, scale);
+  });
+
+  // Si el modo Gran Formato está activo y este tablero aloja una parte de una lámina dividida (ej. 72 cm en 3 partes A1..A3),
+  // dibujar un mini-mapa de ensamblaje de la lámina completa en la esquina superior derecha para visualizar todas sus partes
+  state._lastSplitInsetHitBoxes = [];
+  if (state.splitModelEnabled) {
+    drawSplitSliceOverviewInsetOnBoard(ctx, canvas, board);
+  }
+  if (typeof updatePieceBoardLocationUI === 'function') {
+    updatePieceBoardLocationUI();
+  }
+}
+
+// Dibuja un recuadro flotante en la vista de Tablero mostrando la lámina completa dividida en sus partes (A1, A2, A3...)
+// y resaltando qué parte se encuentra en el tablero actual (permitiendo pulsar cada parte para saltar a su tablero)
+function drawSplitSliceOverviewInsetOnBoard(ctx, canvas, board) {
+  state._lastSplitInsetHitBoxes = [];
+  if (!state.splitModelEnabled || !state.slices || state.slices.length === 0) return;
+
+  // Buscar una lámina dividida presente en este tablero (priorizando la lámina activa)
+  let targetSlice = null;
+  const activeSl = state.slices[state.activeSliceIndex];
+  if (activeSl && activeSl.splitGrid && activeSl.splitGrid.totalParts > 1 &&
+      board.placements.some((pl) => pl.island && pl.island.sliceIndex === state.activeSliceIndex)) {
+    targetSlice = activeSl;
+  }
+  if (!targetSlice) {
+    for (let i = 0; i < board.placements.length; i++) {
+      const pl = board.placements[i];
+      const sl = pl.island ? state.slices[pl.island.sliceIndex] : null;
+      if (sl && sl.splitGrid && sl.splitGrid.totalParts > 1) {
+        targetSlice = sl;
+        break;
+      }
+    }
+  }
+  if (!targetSlice && activeSl && activeSl.splitGrid && activeSl.splitGrid.totalParts > 1) {
+    targetSlice = activeSl;
+  }
+  if (!targetSlice || !targetSlice.loops || targetSlice.loops.length === 0) return;
+
+  const g = targetSlice.splitGrid;
+  const sectorsOnThisBoard = new Set();
+  board.placements.forEach((pl) => {
+    if (pl.island && pl.island.sliceIndex === targetSlice.index && pl.island.sectorCode) {
+      sectorsOnThisBoard.add(pl.island.sectorCode);
+    }
+  });
+
+  const boxW = Math.min(210, Math.max(150, Math.round(canvas.width * 0.28)));
+  const boxH = Math.min(130, Math.max(92, Math.round(canvas.height * 0.26)));
+  const boxX = canvas.width - boxW - 10;
+  const boxY = 10;
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+  ctx.strokeStyle = 'rgba(217, 70, 239, 0.65)';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(boxX, boxY, boxW, boxH, 8);
+  } else {
+    ctx.rect(boxX, boxY, boxW, boxH);
+  }
+  ctx.fill();
+  ctx.stroke();
+
+  const sliceName = targetSlice.puzzleCode ? ('Costilla ' + targetSlice.puzzleCode) : ('Lasca #' + (targetSlice.index + 1));
+  const spanWCm = (g.spanX / 10).toFixed(0);
+  const spanHCm = (g.spanY / 10).toFixed(0);
+  ctx.fillStyle = '#f0abfc';
+  ctx.font = 'bold 10px Inter, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText('🧩 ' + sliceName + ' (' + spanWCm + '×' + spanHCm + 'cm) → ' + g.cols + '×' + g.rows + ' partes', boxX + 8, boxY + 6);
+
+  const padIn = 10;
+  const drawAreaX = boxX + padIn;
+  const drawAreaY = boxY + 22;
+  const drawAreaW = boxW - padIn * 2;
+  const drawAreaH = boxH - 30;
+
+  const sScale = Math.min(drawAreaW / Math.max(1, g.spanX), drawAreaH / Math.max(1, g.spanY));
+  const sCx = drawAreaX + drawAreaW * 0.5;
+  const sCy = drawAreaY + drawAreaH * 0.5;
+  const toMiniX = (x) => sCx + x * sScale;
+  const toMiniY = (y) => sCy - y * sScale;
+
+  // Dibujar cada parte dividida de la lámina
+  targetSlice.loops.forEach((loop) => {
+    if (loop.isHole || !loop.points || loop.points.length < 3) return;
+    const isHere = sectorsOnThisBoard.has(loop.sectorCode || 'A1');
+    const parity = ((loop.sectorCol || 0) + (loop.sectorRow || 0)) % 2;
+
+    ctx.beginPath();
+    loop.points.forEach((pt, idx) => {
+      if (idx === 0) ctx.moveTo(toMiniX(pt.x), toMiniY(pt.y));
+      else ctx.lineTo(toMiniX(pt.x), toMiniY(pt.y));
+    });
+    ctx.closePath();
+    ctx.fillStyle = isHere
+      ? 'rgba(244, 63, 94, 0.52)'
+      : (parity === 0 ? 'rgba(14, 165, 233, 0.25)' : 'rgba(168, 85, 247, 0.25)');
+    ctx.fill();
+    ctx.strokeStyle = isHere ? '#fb7185' : 'rgba(148, 163, 184, 0.7)';
+    ctx.lineWidth = isHere ? 1.6 : 1.0;
+    ctx.stroke();
+  });
+
+  // Costuras de unión (colas de milano / espigas)
+  if (targetSlice.splitCutSeams && targetSlice.splitCutSeams.length > 0) {
+    ctx.strokeStyle = '#e879f9';
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    targetSlice.splitCutSeams.forEach((seam) => {
+      seam.forEach((pt, idx) => {
+        if (idx === 0) ctx.moveTo(toMiniX(pt.x), toMiniY(pt.y));
+        else ctx.lineTo(toMiniX(pt.x), toMiniY(pt.y));
+      });
+    });
+    ctx.stroke();
+  }
+
+  // Etiquetas de cada parte (A1, A2, A3...) con su número de Tablero (#N) y registro de zonas clicables
+  const targetBoardInfo = typeof getSliceBoardPlacementsInfo === 'function'
+    ? getSliceBoardPlacementsInfo(targetSlice.index)
+    : null;
+  ctx.font = 'bold 9px monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (let r = 0; r < g.rows; r++) {
+    const displayRow = (g.rows - 1) - r;
+    const rowLetter = String.fromCharCode(65 + Math.max(0, Math.min(25, displayRow)));
+    const cellMinY = r === 0 ? g.minY : g.yCuts[r - 1];
+    const cellMaxY = r === g.rows - 1 ? g.maxY : g.yCuts[r];
+    for (let c = 0; c < g.cols; c++) {
+      const cellMinX = c === 0 ? g.minX : g.xCuts[c - 1];
+      const cellMaxX = c === g.cols - 1 ? g.maxX : g.xCuts[c];
+      const secCode = rowLetter + (c + 1);
+      const isHere = sectorsOnThisBoard.has(secCode);
+      const secBoards = targetBoardInfo && targetBoardInfo.sectorMap && targetBoardInfo.sectorMap.get(secCode)
+        ? Array.from(targetBoardInfo.sectorMap.get(secCode)).sort((a, b) => a - b)
+        : [];
+      const bTag = secBoards.length > 0 ? (' (T#' + (secBoards[0] + 1) + ')') : '';
+      const mx = toMiniX((cellMinX + cellMaxX) * 0.5);
+      const my = toMiniY((cellMinY + cellMaxY) * 0.5);
+      ctx.fillStyle = isHere ? '#ffffff' : 'rgba(240, 171, 252, 0.92)';
+      ctx.fillText(secCode + bTag, mx, my);
+
+      const sx1 = toMiniX(cellMinX);
+      const sx2 = toMiniX(cellMaxX);
+      const sy1 = toMiniY(cellMaxY);
+      const sy2 = toMiniY(cellMinY);
+      state._lastSplitInsetHitBoxes.push({
+        sliceIndex: targetSlice.index,
+        sectorCode: secCode,
+        boardIdx: secBoards.length > 0 ? secBoards[0] : -1,
+        minX: Math.min(sx1, sx2),
+        maxX: Math.max(sx1, sx2),
+        minY: Math.min(sy1, sy2),
+        maxY: Math.max(sy1, sy2)
+      });
+    }
+  }
+  ctx.restore();
+}
+
+// Renderiza un Soporte Mayor (Apartado 6) conteniendo múltiples tableros completos en el Inspector 2D
+function render2DCarrier(ctx, canvas) {
+  const carrier = state.nestedCarriers[state.activeCarrierIndex];
+  if (!carrier || carrier.boardPlacements.length === 0) {
+    ctx.fillStyle = '#f87171';
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'center';
+    const msg = state.unfitBoardsCount > 0
+      ? 'Los tableros (' + state.unfitBoardsCount + ') superan las dimensiones del Soporte Mayor actual. Aumente el tamaño del soporte.'
+      : 'No hay tableros generados para distribuir en el Soporte Mayor';
+    ctx.fillText(msg, canvas.width / 2, canvas.height / 2);
+    return;
+  }
+
+  const pad = 36;
+  const baseScale = Math.min((canvas.width - pad * 2) / carrier.width, (canvas.height - pad * 2) / carrier.height);
+  const scale = baseScale * state.view2D.zoom;
+  const centerX = canvas.width / 2 + state.view2D.panX;
+  const centerY = canvas.height / 2 + state.view2D.panY;
+  const toScreenX = (x) => centerX + (x - carrier.width / 2) * scale;
+  const toScreenY = (y) => centerY - (y - carrier.height / 2) * scale;
+
+  const cx = toScreenX(0);
+  const cy = toScreenY(carrier.height);
+  const cw = carrier.width * scale;
+  const ch = carrier.height * scale;
+
+  // Fondo y borde del Soporte Mayor físico
+  ctx.save();
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+  ctx.fillRect(cx, cy, cw, ch);
+  ctx.strokeStyle = state.carrierCutOuterBorder ? '#f43f5e' : '#f59e0b';
+  ctx.lineWidth = state.carrierCutOuterBorder ? 2.2 : 1.9;
+  ctx.strokeRect(cx, cy, cw, ch);
+
+  // Margen útil interior del Soporte Mayor
+  if (carrier.margin > 0) {
+    const mx = toScreenX(carrier.margin);
+    const my = toScreenY(carrier.height - carrier.margin);
+    const mw = (carrier.width - carrier.margin * 2) * scale;
+    const mh = (carrier.height - carrier.margin * 2) * scale;
+    ctx.strokeStyle = 'rgba(251, 191, 36, 0.24)';
+    ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 1;
+    ctx.strokeRect(mx, my, mw, mh);
+  }
+  ctx.restore();
+
+  // Dibujar cada tablero anidado dentro del Soporte Mayor
+  carrier.boardPlacements.forEach((bPl) => {
+    const bx = toScreenX(bPl.x);
+    const by = toScreenY(bPl.y + bPl.h);
+    const bw = bPl.w * scale;
+    const bh = bPl.h * scale;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(30, 41, 59, 0.58)';
+    ctx.fillRect(bx, by, bw, bh);
+
+    if (state.carrierCutBoardBorders) {
+      if (bPl.boardFrameGeom) {
+        draw2DBoardFrameOnCanvas(ctx, bPl.boardFrameGeom, toScreenX, toScreenY);
+      } else {
+        ctx.strokeStyle = '#f43f5e';
+        ctx.lineWidth = 1.9;
+        ctx.strokeRect(bx, by, bw, bh);
+      }
+    } else {
+      ctx.strokeStyle = 'rgba(16, 185, 129, 0.55)';
+      ctx.setLineDash([5, 3]);
+      ctx.lineWidth = 1.2;
+      ctx.strokeRect(bx, by, bw, bh);
+      ctx.setLineDash([]);
+      if (bPl.boardFrameGeom) {
+        draw2DBoardFrameOnCanvas(ctx, bPl.boardFrameGeom, toScreenX, toScreenY);
+      }
+    }
+
+    // Etiqueta del número de tablero dentro del Soporte Mayor
+    if (state.carrierEngraveBoardLabels) {
+      const labelFontPx = Math.max(8, Math.min(13, Math.min(bw, bh) * 0.055));
+      ctx.font = 'bold ' + labelFontPx.toFixed(1) + 'px monospace';
+      ctx.fillStyle = '#34d399';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      const labelTxt = 'TABLERO #' + (bPl.boardIndex + 1) + (bPl.rotated ? ' ↻90°' : '');
+      ctx.fillText(labelTxt, bx + 5, by + 4);
+    }
+    ctx.restore();
+
+    // Dibujar todas las islas del tablero ya transformadas a las coordenadas del Soporte Mayor
+    bPl.transformedPlacements.forEach((pl) => {
+      const isCurrentSlice = pl.island.sliceIndex === state.activeSliceIndex;
+
+      ctx.save();
+      ctx.beginPath();
+      pl.outerPoints.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+        else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+      });
+      ctx.closePath();
+      pl.holes.forEach((h) => {
+        h.points.forEach((pt, i) => {
+          if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+          else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+        });
+        ctx.closePath();
+      });
+      ctx.fillStyle = isCurrentSlice ? 'rgba(244, 63, 94, 0.26)' : 'rgba(14, 165, 233, 0.16)';
+      ctx.fill('evenodd');
+      ctx.restore();
+
+      drawContourWithTabsOnCanvas(
+        ctx,
+        pl.outerPoints,
+        false,
+        isCurrentSlice ? '#fb7185' : '#f43f5e',
+        isCurrentSlice ? 2.2 : 1.5,
+        toScreenX,
+        toScreenY,
+        Boolean(pl.isFrame || (pl.island && pl.island.isFrame))
+      );
+
+      pl.holes.forEach((h) => {
+        drawContourWithTabsOnCanvas(ctx, h.points, true, '#38bdf8', 1.3, toScreenX, toScreenY, Boolean(h.isFrame));
+      });
+
+      if (pl.engraveLoops && pl.engraveLoops.length > 0) {
+        ctx.save();
+        ctx.beginPath();
+        pl.engraveLoops.forEach((el) => {
+          if (!el.points || el.points.length < 3) return;
+          el.points.forEach((pt, i) => {
+            if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+            else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+          });
+          ctx.closePath();
+        });
+        ctx.fillStyle = 'rgba(16, 185, 129, 0.30)';
+        ctx.fill('evenodd');
+        ctx.strokeStyle = '#10b981';
+        ctx.lineWidth = 1.1;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      if (pl.papercraftGlueZones && pl.papercraftGlueZones.length > 0) {
+        ctx.save();
+        ctx.setLineDash([4, 3]);
+        ctx.fillStyle = 'rgba(245, 158, 11, 0.14)';
+        ctx.strokeStyle = 'rgba(245, 158, 11, 0.72)';
+        ctx.lineWidth = 0.95;
+        pl.papercraftGlueZones.forEach((gz) => {
+          if (!gz.polygon || gz.polygon.length < 3) return;
+          ctx.beginPath();
+          gz.polygon.forEach((pt, i) => {
+            if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+            else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+          });
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+        });
+        ctx.restore();
+      }
+      if (pl.papercraftGlueTabs && pl.papercraftGlueTabs.length > 0) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(245, 158, 11, 0.22)';
+        pl.papercraftGlueTabs.forEach((gt) => {
+          if (!gt.polygon || gt.polygon.length < 3) return;
+          ctx.beginPath();
+          gt.polygon.forEach((pt, i) => {
+            if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+            else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+          });
+          ctx.closePath();
+          ctx.fill();
+        });
+        ctx.restore();
+      }
+      if (pl.papercraftFoldLines && pl.papercraftFoldLines.length > 0) {
+        ctx.save();
+        pl.papercraftFoldLines.forEach((fl) => {
+          if (!fl.points || fl.points.length < 2) return;
+          const isValley = fl.type === 'valley';
+          ctx.setLineDash(isValley ? [5, 3, 2, 3] : [5, 3]);
+          ctx.strokeStyle = isValley ? '#a855f7' : '#22c55e';
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          fl.points.forEach((pt, i) => {
+            if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+            else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+          });
+          ctx.stroke();
+        });
+        ctx.restore();
+      }
+
+      if (state.includePrevSliceGuide && pl.lowerPolys.length > 0) {
+        ctx.save();
+        ctx.setLineDash(getCanvasDashPattern(state.lowerGuideStyle));
+        ctx.beginPath();
+        pl.lowerPolys.forEach((poly) => {
+          poly.forEach((pt, i) => {
+            if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+            else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+          });
+        });
+        ctx.strokeStyle = '#d946ef';
+        ctx.lineWidth = 1.25;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      if (state.includeNextSliceGuide && pl.upperPolys.length > 0) {
+        ctx.save();
+        ctx.setLineDash(getCanvasDashPattern(state.upperGuideStyle));
+        ctx.beginPath();
+        pl.upperPolys.forEach((poly) => {
+          poly.forEach((pt, i) => {
+            if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+            else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+          });
+        });
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 1.25;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      pl.rods.forEach((r) => {
+        ctx.beginPath();
+        ctx.arc(toScreenX(r.x), toScreenY(r.y), (state.rodDiameter / 2) * scale, 0, Math.PI * 2);
+        ctx.fillStyle = '#090d16';
+        ctx.fill();
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      });
+
+      drawAdaptiveIslandTextOnCanvas(ctx, pl.textLayout, toScreenX, toScreenY, scale);
+    });
+  });
+}
+
+function render2DSlice() {
+  const canvas = document.getElementById('canvas2D');
+  if (!canvas) return;
+  const rect = canvas.parentElement.getBoundingClientRect();
+  canvas.width = rect.width || 500;
+  canvas.height = rect.height || 380;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (state.carrierEnabled) {
+    render2DCarrier(ctx, canvas);
+    return;
+  }
+
+  if (state.nestingEnabled) {
+    render2DBoard(ctx, canvas);
+    return;
+  }
+
+  const idx = state.activeSliceIndex;
+  const slice = state.slices[idx];
+  if (!slice || slice.loops.length === 0) {
+    ctx.fillStyle = '#64748b';
+    ctx.font = '13px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Lasca sin intersección geométrica en esta cota', canvas.width / 2, canvas.height / 2);
+    return;
+  }
+
+  const upperSlice = getAdjacentSlice(idx, 'next');
+  const lowerSlice = getAdjacentSlice(idx, 'prev');
+  // Escala y encuadre fijos basados en el tamaño total de la pieza (igual que el documento SVG) con soporte de Zoom y Pan
+  const docB = getModelBounds2D();
+  const pad = 42;
+  const baseScale = Math.min((canvas.width - pad * 2) / docB.width, (canvas.height - pad * 2) / docB.height);
+  const scale = baseScale * state.view2D.zoom;
+  const centerX = canvas.width / 2 + state.view2D.panX;
+  const centerY = canvas.height / 2 + state.view2D.panY;
+  const toScreenX = (x) => centerX + (x - docB.cx) * scale;
+  const toScreenY = (y) => centerY - (y - docB.cy) * scale;
+
+  // Marco de referencia que representa los bordes del documento SVG (tamaño de la pieza)
+  ctx.save();
+  ctx.strokeStyle = 'rgba(148, 163, 184, 0.25)';
+  ctx.setLineDash([4, 4]);
+  ctx.lineWidth = 1;
+  const docX = toScreenX(docB.minX);
+  const docY = toScreenY(docB.maxY);
+  ctx.strokeRect(docX, docY, docB.width * scale, docB.height * scale);
+  ctx.restore();
+
+  // Indicador visual de cota de suelo y elevación para costillas autosustentantes en Puzzle 3D
+  if (state.constructionMode === 'puzzle3d' && slice.sliceAxis !== 'z' && (slice.isFloatingAboveFloor || slice.isSelfSupporting)) {
+    const floorScreenY = toScreenY(docB.minY);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(16, 185, 129, 0.45)';
+    ctx.setLineDash([5, 4]);
+    ctx.lineWidth = 1.25;
+    ctx.beginPath();
+    ctx.moveTo(docX, floorScreenY);
+    ctx.lineTo(docX + docB.width * scale, floorScreenY);
+    ctx.stroke();
+
+    ctx.setLineDash([]);
+    ctx.font = 'bold 10px Inter, sans-serif';
+    ctx.fillStyle = 'rgba(52, 211, 153, 0.92)';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
+    const clrTxt = slice.floatingClearanceMM > 0
+      ? ('+' + Number(slice.floatingClearanceMM).toFixed(1) + ' mm sobre el suelo · Sujeta por la unión')
+      : 'Modo Autosustentante (sin bajar al suelo)';
+    ctx.fillText('🧲 ' + (slice.puzzleCode || 'Costilla') + ' Autosustentante (' + clrTxt + ')', docX + 6, floorScreenY - 4);
+    ctx.restore();
+  }
+
+  // Marco configurable 2D de corte/grabado alrededor del lienzo 2D
+  if (state.slicerFrameEnabled && typeof get2DBoardFrameGeometry === 'function') {
+    const frameGeom = get2DBoardFrameGeometry(docB.minX, docB.minY, docB.maxX, docB.maxY, slice.loops, false);
+    draw2DBoardFrameOnCanvas(ctx, frameGeom, toScreenX, toScreenY);
+  }
+
+  // Cuadrícula de Subdivisión Modular 3D (A1, A2, B1, B2...) si está activa
+  const isSplitMulti = Boolean(state.splitModelEnabled && slice.splitGrid && slice.splitGrid.totalParts > 1);
+  if (isSplitMulti) {
+    const g = slice.splitGrid;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(232, 121, 249, 0.38)';
+    ctx.setLineDash([6, 4]);
+    ctx.lineWidth = 1.2;
+
+    g.xCuts.forEach((cxVal) => {
+      ctx.beginPath();
+      ctx.moveTo(toScreenX(cxVal), toScreenY(g.minY));
+      ctx.lineTo(toScreenX(cxVal), toScreenY(g.maxY));
+      ctx.stroke();
+    });
+    g.yCuts.forEach((cyVal) => {
+      ctx.beginPath();
+      ctx.moveTo(toScreenX(g.minX), toScreenY(cyVal));
+      ctx.lineTo(toScreenX(g.maxX), toScreenY(cyVal));
+      ctx.stroke();
+    });
+
+    // Etiquetas de sector (A1, A2, B1, B2...) en la esquina superior izquierda de cada celda + Tablero donde se ubica
+    const sliceBoardInfo = typeof getSliceBoardPlacementsInfo === 'function'
+      ? getSliceBoardPlacementsInfo(slice.index)
+      : null;
+    ctx.setLineDash([]);
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    const partWCm = (g.partW / 10).toFixed(0);
+    const partHCm = (g.partH / 10).toFixed(0);
+    for (let r = 0; r < g.rows; r++) {
+      const displayRow = (g.rows - 1) - r;
+      const rowLetter = String.fromCharCode(65 + Math.max(0, Math.min(25, displayRow)));
+      const cellMaxY = r === g.rows - 1 ? g.maxY : g.yCuts[r];
+      for (let c = 0; c < g.cols; c++) {
+        const cellMinX = c === 0 ? g.minX : g.xCuts[c - 1];
+        const secCode = rowLetter + (c + 1);
+        const secBoards = sliceBoardInfo && sliceBoardInfo.sectorMap && sliceBoardInfo.sectorMap.get(secCode)
+          ? Array.from(sliceBoardInfo.sectorMap.get(secCode)).sort((a, b) => a - b)
+          : [];
+        const boardSuffix = secBoards.length > 0
+          ? (' → 🧩 Tablero ' + secBoards.map((b) => '#' + (b + 1)).join(', '))
+          : '';
+        const isActiveSec = state.activeSectorCode === secCode;
+        const sx = toScreenX(cellMinX) + 5;
+        const sy = toScreenY(cellMaxY) + 4;
+        ctx.fillStyle = isActiveSec ? '#fde047' : 'rgba(232, 121, 249, 0.90)';
+        ctx.fillText('Conjunto ' + secCode + ' (' + partWCm + '×' + partHCm + 'cm)' + boardSuffix, sx, sy);
+      }
+    }
+    ctx.restore();
+  }
+
+  // Relleno sombreado con regla evenodd (con color alterno por sector si está dividida en múltiples partes)
+  if (isSplitMulti) {
+    const holes = slice.loops.filter((l) => l.isHole);
+    slice.loops.forEach((loop) => {
+      if (loop.isHole) return;
+      const parity = ((loop.sectorCol || 0) + (loop.sectorRow || 0)) % 2;
+      ctx.save();
+      ctx.beginPath();
+      loop.points.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+        else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+      });
+      ctx.closePath();
+      holes.forEach((h) => {
+        if (h.sectorCode === loop.sectorCode) {
+          h.points.forEach((pt, i) => {
+            if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+            else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+          });
+          ctx.closePath();
+        }
+      });
+      ctx.fillStyle = parity === 0 ? 'rgba(14, 165, 233, 0.20)' : 'rgba(217, 70, 239, 0.22)';
+      ctx.fill('evenodd');
+      ctx.restore();
+    });
+  } else {
+    ctx.save();
+    ctx.beginPath();
+    slice.loops.forEach((loop) => {
+      loop.points.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+        else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+      });
+      ctx.closePath();
+    });
+    ctx.fillStyle = 'rgba(14, 165, 233, 0.16)';
+    ctx.fill('evenodd');
+    ctx.restore();
+  }
+
+  // Grabado vectorial procedente de imagen PNG/BMP si la lasca lo incluye
+  if (slice.hatchPolylines && slice.hatchPolylines.length > 0 && slice.engraveStyle === 'vector_hatch') {
+    ctx.save();
+    ctx.strokeStyle = '#10b981';
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    slice.hatchPolylines.forEach((seg) => {
+      ctx.moveTo(toScreenX(seg[0].x), toScreenY(seg[0].y));
+      ctx.lineTo(toScreenX(seg[1].x), toScreenY(seg[1].y));
+    });
+    ctx.stroke();
+    ctx.restore();
+  } else if (slice.engraveLoops && slice.engraveLoops.length > 0) {
+    ctx.save();
+    ctx.beginPath();
+    slice.engraveLoops.forEach((el) => {
+      if (!el.points || el.points.length < 3) return;
+      el.points.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+        else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+      });
+      ctx.closePath();
+    });
+    if (slice.engraveStyle !== 'vector_outline') {
+      ctx.fillStyle = 'rgba(16, 185, 129, 0.38)';
+      ctx.fill('evenodd');
+    }
+    ctx.strokeStyle = '#10b981';
+    ctx.lineWidth = 1.25;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  if (slice.fineEdgeLoops && slice.fineEdgeLoops.length > 0) {
+    ctx.save();
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 1.0;
+    ctx.beginPath();
+    slice.fineEdgeLoops.forEach((fl) => {
+      if (!fl.points || fl.points.length < 3) return;
+      fl.points.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+        else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+      });
+      ctx.closePath();
+    });
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Elementos de Recortable Escolar (Pestañas de pegamento 🧴, Ilustración, Zonas guía y Líneas de doblez)
+  if (slice.papercraftMeta) {
+    const pm = slice.papercraftMeta;
+    // 1. Pestañas trapezoidales de pegamento escolar
+    (pm.glueTabs || []).forEach((gt) => {
+      if (!gt.polygon || gt.polygon.length < 3) return;
+      ctx.save();
+      ctx.beginPath();
+      gt.polygon.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+        else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+      });
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(251, 191, 36, 0.24)';
+      ctx.fill();
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 1.1;
+      ctx.stroke();
+
+      if (gt.label && gt.center) {
+        const cx = toScreenX(gt.center.x);
+        const cy = toScreenY(gt.center.y);
+        let ang = -(gt.angleRad || 0);
+        if (ang > Math.PI * 0.5) ang -= Math.PI;
+        if (ang < -Math.PI * 0.5) ang += Math.PI;
+        ctx.translate(cx, cy);
+        ctx.rotate(ang);
+        ctx.fillStyle = '#fde047';
+        ctx.font = 'bold ' + Math.max(8, Math.min(11, 2.2 * scale)).toFixed(1) + 'px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🧴 ' + gt.label, 0, 0);
+      }
+      ctx.restore();
+    });
+
+    // 2. Ilustración interior de la pieza recortable (respetando huecos interiores mediante evenodd)
+    if (pm.artworkCanvas && pm.bodyPolygon && pm.bodyPolygon.length >= 3) {
+      ctx.save();
+      ctx.beginPath();
+      pm.bodyPolygon.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+        else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+      });
+      ctx.closePath();
+      (pm.holePolygons || []).forEach((hp) => {
+        if (!hp || hp.length < 3) return;
+        hp.forEach((pt, i) => {
+          if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+          else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+        });
+        ctx.closePath();
+      });
+      ctx.clip('evenodd');
+      const ab = pm.artworkBounds || getSliceBounds2D(slice);
+      ctx.globalAlpha = 0.72;
+      ctx.drawImage(
+        pm.artworkCanvas,
+        toScreenX(ab.minX),
+        toScreenY(ab.maxY),
+        ab.width * scale,
+        ab.height * scale
+      );
+      ctx.restore();
+    }
+
+    // 3. Zonas guía de recepción de pegamento (respetando huecos interiores)
+    (pm.glueTargetZones || []).forEach((gz) => {
+      if (!gz.polygon || gz.polygon.length < 3) return;
+      ctx.save();
+      ctx.beginPath();
+      gz.polygon.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+        else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+      });
+      ctx.closePath();
+      (gz.holePolygons || []).forEach((hp) => {
+        if (!hp || hp.length < 3) return;
+        hp.forEach((pt, i) => {
+          if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+          else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+        });
+        ctx.closePath();
+      });
+      ctx.fillStyle = 'rgba(16, 185, 129, 0.18)';
+      ctx.fill('evenodd');
+      ctx.strokeStyle = '#34d399';
+      ctx.setLineDash([5, 4]);
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+      ctx.restore();
+    });
+
+    // 4. Líneas de pliegue / doblez (Montaña / Valle)
+    (pm.foldLines || []).forEach((fl) => {
+      if (!fl.points || fl.points.length < 2) return;
+      ctx.save();
+      ctx.strokeStyle = fl.type === 'valley' ? '#c084fc' : '#38bdf8';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash(fl.type === 'valley' ? [7, 3, 2, 3] : [6, 4]);
+      ctx.beginPath();
+      fl.points.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+        else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+      });
+      ctx.stroke();
+      ctx.restore();
+    });
+  }
+
+  // Contornos exteriores (rojo) e interiores (azul) de la lasca actual con soporte de micro-uniones (salvo en marco configurable)
+  slice.loops.forEach((loop) => {
+    drawContourWithTabsOnCanvas(
+      ctx,
+      loop.points,
+      loop.isHole,
+      loop.isHole ? '#38bdf8' : '#f43f5e',
+      loop.isHole ? 1.6 : 2.2,
+      toScreenX,
+      toScreenY,
+      Boolean(loop.isFrame)
+    );
+  });
+
+  // Resaltar uniones de encaje modular (colas de milano / espigas) entre conjuntos
+  if (isSplitMulti && slice.splitCutSeams && slice.splitCutSeams.length > 0) {
+    ctx.save();
+    ctx.strokeStyle = '#e879f9';
+    ctx.lineWidth = 2.0;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    slice.splitCutSeams.forEach((seam) => {
+      seam.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+        else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+      });
+    });
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // 1. GUÍA DE LA LÁMINA INFERIOR (#N-1) - Violeta/Magenta en trazo continuo
+  if (lowerSlice && lowerSlice.loops.length > 0) {
+    const lowerPolys = getGuidePolylinesForSlice(slice, lowerSlice);
+    if (lowerPolys.length > 0) {
+      ctx.save();
+      ctx.setLineDash(getCanvasDashPattern(state.lowerGuideStyle));
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      lowerPolys.forEach((poly) => {
+        poly.forEach((pt, i) => {
+          if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+          else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+        });
+      });
+      ctx.strokeStyle = '#d946ef'; // Fucsia/Violeta para diferenciar la lámina inferior
+      ctx.lineWidth = 1.65;
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // 2. GUÍA DE LA LÁMINA SUPERIOR (#N+1) - Ámbar/Naranja en trazo continuo
+  if (upperSlice && upperSlice.loops.length > 0) {
+    const upperPolys = getGuidePolylinesForSlice(slice, upperSlice);
+    if (upperPolys.length > 0) {
+      ctx.save();
+      ctx.setLineDash(getCanvasDashPattern(state.upperGuideStyle));
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      upperPolys.forEach((poly) => {
+        poly.forEach((pt, i) => {
+          if (i === 0) ctx.moveTo(toScreenX(pt.x), toScreenY(pt.y));
+          else ctx.lineTo(toScreenX(pt.x), toScreenY(pt.y));
+        });
+      });
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 1.65;
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // Perforaciones de varillas
+  const rods = getAlignmentHoles2D(slice);
+  rods.forEach((r) => {
+    ctx.beginPath();
+    ctx.arc(toScreenX(r.x), toScreenY(r.y), (state.rodDiameter / 2) * scale, 0, Math.PI * 2);
+    ctx.fillStyle = '#090d16';
+    ctx.fill();
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  });
+
+  // Mostrar en modo Puzzle 3D el código de la costilla transversal que encaja en cada ranura (ej. ↳ Y1, ↳ Y2)
+  if (state.constructionMode === 'puzzle3d' && slice.slots && slice.slots.length > 0) {
+    ctx.save();
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    slice.slots.forEach((sl) => {
+      const mx = sl.uAxis === 'x' ? sl.uCenter : sl.vMouth;
+      const my = sl.uAxis === 'x' ? sl.vMouth : sl.uCenter;
+      const bx = sl.uAxis === 'x' ? sl.uCenter : sl.vMid;
+      const by = sl.uAxis === 'x' ? sl.vMid : sl.uCenter;
+
+      // Línea eje de inserción de la ranura
+      ctx.strokeStyle = 'rgba(251, 191, 36, 0.55)';
+      ctx.setLineDash([3, 3]);
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.moveTo(toScreenX(mx), toScreenY(my));
+      ctx.lineTo(toScreenX(bx), toScreenY(by));
+      ctx.stroke();
+
+      // Etiqueta de qué costilla encaja en esta ranura
+      const labelOffset = (sl.openPositive ? 1 : -1) * Math.max(4, 11 / scale);
+      const lx = sl.uAxis === 'x' ? mx : (mx + labelOffset);
+      const ly = sl.uAxis === 'x' ? (my + labelOffset) : my;
+      ctx.fillStyle = '#fbbf24';
+      ctx.fillText('↳' + sl.targetCode, toScreenX(lx), toScreenY(ly));
+    });
+    ctx.restore();
+  }
+
+  // Mostrar también en la vista individual la etiqueta por isla autoajustada al interior de cada isla
+  if (state.includeLabels) {
+    const sliceIslands = extractIslandsFromSlices([slice]);
+    sliceIslands.forEach((isl) => {
+      drawAdaptiveIslandTextOnCanvas(ctx, isl.textLayout, toScreenX, toScreenY, scale);
+    });
+  }
+
+  // Etiqueta flotante interactiva en la esquina superior izquierda del lienzo 2D indicando en qué Tablero (#N) está esta pieza
+  state._lastSliceBoardBannerRect = null;
+  if (typeof getSliceBoardPlacementsInfo === 'function') {
+    const bInfo = getSliceBoardPlacementsInfo(slice.index);
+    if (bInfo && bInfo.boardIndices && bInfo.boardIndices.length > 0) {
+      const pieceName = slice.puzzleCode ? ('Pieza ' + slice.puzzleCode) : ('Lasca #' + (slice.index + 1));
+      let bannerText = '';
+      if (isSplitMulti && bInfo.sectorMap && bInfo.sectorMap.size > 1) {
+        const secEntries = Array.from(bInfo.sectorMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+        const partsStr = secEntries.map(([sec, setB]) => {
+          const bNums = Array.from(setB).sort((x, y) => x - y).map((bi) => '#' + (bi + 1)).join(',');
+          return sec + '→T' + bNums;
+        }).join(' · ');
+        bannerText = '🧩 ' + pieceName + ' en Tableros: ' + partsStr + ' (clic para abrir)';
+      } else {
+        const bList = bInfo.boardIndices.map((bi) => 'Tablero #' + (bi + 1)).join(', ');
+        bannerText = '🧩 ' + pieceName + ' ubicada en ' + bList + ' (clic para ver en tablero)';
+      }
+      ctx.save();
+      ctx.font = 'bold 10px Inter, sans-serif';
+      const textW = ctx.measureText(bannerText).width;
+      const bx = 8;
+      const by = 8;
+      const bw = Math.min(canvas.width - 16, Math.ceil(textW + 18));
+      const bh = 22;
+      ctx.fillStyle = 'rgba(6, 78, 59, 0.90)';
+      ctx.strokeStyle = 'rgba(52, 211, 153, 0.75)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(bx, by, bw, bh, 6);
+      } else {
+        ctx.rect(bx, by, bw, bh);
+      }
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#a7f3d0';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(bannerText, bx + 9, by + bh * 0.5);
+      ctx.restore();
+      state._lastSliceBoardBannerRect = { x: bx, y: by, w: bw, h: bh };
+    }
+  }
+  if (typeof updatePieceBoardLocationUI === 'function') {
+    updatePieceBoardLocationUI();
+  }
+}
+
+function stepSlice(delta) {
+  if (state.carrierEnabled) {
+    if (state.nestedCarriers.length === 0) return;
+    selectActiveCarrier(state.activeCarrierIndex + delta);
+  } else if (state.nestingEnabled) {
+    if (state.nestedBoards.length === 0) return;
+    selectActiveBoard(state.activeBoardIndex + delta);
+  } else {
+    selectActiveSlice(state.activeSliceIndex + delta);
+  }
+}
+
+function togglePlaySlices() {
+  state.isPlaying = !state.isPlaying;
+  const btn = document.getElementById('playSlicesBtn');
+  if (state.isPlaying) {
+    btn.textContent = '⏸ Pausa';
+    state.playTimer = setInterval(() => {
+      if (state.carrierEnabled && state.nestedCarriers.length > 0) {
+        selectActiveCarrier((state.activeCarrierIndex + 1) % state.nestedCarriers.length);
+      } else if (state.nestingEnabled && state.nestedBoards.length > 0) {
+        selectActiveBoard((state.activeBoardIndex + 1) % state.nestedBoards.length);
+      } else {
+        const next = (state.activeSliceIndex + 1) % state.slices.length;
+        selectActiveSlice(next);
+      }
+    }, 260);
+  } else {
+    btn.textContent = '▶ Play';
+    clearInterval(state.playTimer);
+  }
+}
+
+function renderSliceStripUI() {
+  const container = document.getElementById('sliceStripContainer');
+  const titleEl = document.getElementById('bottomStripTitle');
+  container.innerHTML = '';
+
+  if (state.carrierEnabled) {
+    if (titleEl) {
+      titleEl.textContent = 'Soportes Mayores Generados (' + state.nestedCarriers.length + ') — Cada soporte agrupa múltiples tableros completos (clic para inspeccionar)';
+    }
+    state.nestedCarriers.forEach((carrier, cIdx) => {
+      const card = document.createElement('div');
+      card.id = 'carrierCard_' + cIdx;
+      card.className = 'slice-card shrink-0 w-40 h-16 rounded-lg border border-amber-500/40 bg-slate-800/75 p-1.5 flex flex-col justify-between cursor-pointer transition';
+      card.onclick = () => selectActiveCarrier(cIdx);
+
+      const topRow = document.createElement('div');
+      topRow.className = 'flex items-center justify-between text-[10px]';
+      topRow.innerHTML =
+        '<span class="font-bold text-amber-300">Soporte #' + (cIdx + 1) + '</span>' +
+        '<span class="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[9px] font-mono">' +
+        carrier.boardPlacements.length + ' tab</span>';
+
+      const bottomRow = document.createElement('div');
+      bottomRow.className = 'flex items-center justify-between text-[9px] text-slate-400 font-mono';
+      bottomRow.innerHTML =
+        '<span>' + carrier.totalIslands + ' islas</span>' +
+        '<span class="text-emerald-300">' + carrier.efficiency.toFixed(0) + '% uso</span>';
+
+      card.appendChild(topRow);
+      card.appendChild(bottomRow);
+      container.appendChild(card);
+    });
+    updateSelectedCountBadge();
+    highlightActiveCardInStrip();
+    return;
+  }
+
+  if (state.nestingEnabled) {
+    if (titleEl) {
+      titleEl.textContent = 'Tableros Generados (' + state.nestedBoards.length + ') — Cada tablero contiene solo las piezas que caben en sus dimensiones (clic para inspeccionar)';
+    }
+    state.nestedBoards.forEach((board, bIdx) => {
+      const card = document.createElement('div');
+      card.id = 'boardCard_' + bIdx;
+      card.className = 'slice-card shrink-0 w-36 h-16 rounded-lg border border-slate-700 bg-slate-800/70 p-1.5 flex flex-col justify-between cursor-pointer transition';
+      card.onclick = () => selectActiveBoard(bIdx);
+
+      const uniqueSlicesCount = new Set(board.placements.map((p) => p.island.sliceIndex)).size;
+      let boardSplitTag = '';
+      if (state.splitModelEnabled && board.placements.length > 0) {
+        const firstPl = board.placements[0];
+        const sl = firstPl.island ? state.slices[firstPl.island.sliceIndex] : null;
+        if (sl && sl.splitGrid && sl.splitGrid.totalParts > 1) {
+          const sCode = firstPl.island.puzzleCode || ('#' + (firstPl.island.sliceNum || 1));
+          const sec = firstPl.island.sectorCode || 'A1';
+          boardSplitTag = '<span class="text-fuchsia-300 font-bold">' + sCode + '·' + sec + '</span>';
+        }
+      }
+
+      const topRow = document.createElement('div');
+      topRow.className = 'flex items-center justify-between text-[10px]';
+      topRow.innerHTML =
+        '<span class="font-bold text-emerald-300">Tablero #' + (bIdx + 1) + '</span>' +
+        '<button onclick="event.stopPropagation(); openBoardInfoModal(' + bIdx + ')" class="px-1.5 py-0.5 rounded bg-sky-500/20 hover:bg-sky-500/40 text-sky-300 border border-sky-500/30 text-[9px] font-bold" title="Ver detalle de láminas de este tablero">ℹ️ Info</button>';
+
+      const bottomRow = document.createElement('div');
+      bottomRow.className = 'flex items-center justify-between text-[9px] text-slate-400 font-mono';
+      bottomRow.innerHTML =
+        (boardSplitTag ? boardSplitTag : ('<span>' + uniqueSlicesCount + ' lám / ' + board.placements.length + ' isl</span>')) +
+        '<span class="text-sky-300">' + board.efficiency.toFixed(0) + '%</span>';
+
+      card.appendChild(topRow);
+      card.appendChild(bottomRow);
+      container.appendChild(card);
+    });
+    updateSelectedCountBadge();
+    highlightActiveCardInStrip();
+    return;
+  }
+
+  if (titleEl) {
+    titleEl.textContent = state.constructionMode === 'puzzle3d'
+      ? 'Costillas del Puzzle 3D (Serie A ⊔ en azul + Serie B ⊓ en ámbar — clic para inspeccionar ranuras)'
+      : 'Secuencia de Lascas (clic para inspeccionar, casilla para incluir/excluir de exportación)';
+  }
+
+  state.slices.forEach((slice, idx) => {
+    const card = document.createElement('div');
+    card.id = 'sliceCard_' + idx;
+    const isHiddenInView = typeof isSliceHiddenInView === 'function' && isSliceHiddenInView(slice);
+    card.className = 'slice-card shrink-0 w-20 h-16 rounded-lg border border-slate-700 bg-slate-800/70 p-1.5 flex flex-col justify-between cursor-pointer transition' +
+      (isHiddenInView ? ' opacity-50' : '');
+    card.onclick = (e) => {
+      if (e.target.tagName.toLowerCase() !== 'input') selectActiveSlice(idx);
+    };
+
+    const topRow = document.createElement('div');
+    topRow.className = 'flex items-center justify-between text-[10px]';
+    const codeLabel = slice.puzzleCode ? slice.puzzleCode : ('#' + (idx + 1));
+    const codeColor = slice.puzzleSeries === 'A'
+      ? (slice.isPuzzleSolidCap ? 'text-cyan-200' : 'text-sky-300')
+      : (slice.puzzleSeries === 'B' ? (slice.isPuzzleSolidCap ? 'text-yellow-200' : 'text-amber-300') : 'text-slate-200');
+    const capTag = slice.isPuzzleSolidCap
+      ? '<span class="ml-0.5 px-1 py-0 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[8px] font-semibold" title="Tapa exterior duplicada con relleno completo para grabar">Tapa</span>'
+      : '';
+    const hiddenTag = isHiddenInView
+      ? '<span class="ml-0.5 text-[9px]" title="Oculta en la vista">🙈</span>'
+      : '';
+    const selfSupTag = (slice.isFloatingAboveFloor || slice.isSelfSupporting)
+      ? '<span class="ml-0.5 text-[9px]" title="Costilla autosustentante (sostenida por la unión, sin apoyar en el suelo)">🧲</span>'
+      : '';
+    const engraveTag = (slice.hasCustomImageEngraving || (slice.engraveLoops && slice.engraveLoops.length > 0))
+      ? '<span class="ml-0.5 text-[9px]" title="Contiene imagen grabada">🖼️</span>'
+      : '';
+    const splitPartsTag = (state.splitModelEnabled && slice.splitGrid && slice.splitGrid.totalParts > 1)
+      ? '<span class="ml-0.5 px-1 py-0 rounded bg-fuchsia-500/25 text-fuchsia-300 border border-fuchsia-500/40 text-[8px] font-bold" title="Lámina dividida en ' + slice.splitGrid.totalParts + ' partes (' + slice.splitGrid.cols + '×' + slice.splitGrid.rows + ')">' + slice.splitGrid.totalParts + 'p</span>'
+      : '';
+    topRow.innerHTML = '<span class="font-bold ' + codeColor + ' flex items-center">' + codeLabel + capTag + splitPartsTag + hiddenTag + selfSupTag + engraveTag + '</span>';
+
+    const chk = document.createElement('input');
+    chk.type = 'checkbox';
+    chk.checked = slice.selected;
+    chk.className = 'accent-emerald-500 cursor-pointer';
+    chk.onchange = (e) => {
+      slice.selected = e.target.checked;
+      if (idx === state.activeSliceIndex) {
+        document.getElementById('currentSliceSelectedCheck').checked = slice.selected;
+      }
+      updateSelectedCountBadge();
+      update3DSlicesTransforms();
+      if (state.nestingEnabled) {
+        recomputeBoardNesting();
+        update2DInspectorHeader();
+        render2DSlice();
+      }
+    };
+    topRow.appendChild(chk);
+
+    const bottomRow = document.createElement('div');
+    const offsetsMap = slice.puzzleSeries === 'B' ? (state.puzzleRibOffsetsBMM || {}) : (state.puzzleRibOffsetsAMM || {});
+    const customDelta = (slice.puzzleCode && typeof slice.seriesIndex === 'number' && Number.isFinite(offsetsMap[slice.seriesIndex]))
+      ? Number(offsetsMap[slice.seriesIndex])
+      : 0;
+    const isCustomMoved = Math.abs(customDelta) > 0.05;
+    bottomRow.className = 'flex items-center justify-between text-[9px] truncate font-mono ' + (isCustomMoved ? 'text-emerald-300 font-semibold' : 'text-slate-400');
+    const axTag = slice.puzzleCode ? ((slice.sliceAxis || '').toUpperCase() + ':') : '';
+    const coordStr = (isCustomMoved ? '↔' : '') + axTag + slice.coord.toFixed(0) + 'mm';
+
+    let boardBadgeHtml = '';
+    if (typeof getSliceBoardPlacementsInfo === 'function') {
+      const bInfo = getSliceBoardPlacementsInfo(idx);
+      if (bInfo && bInfo.boardIndices && bInfo.boardIndices.length > 0) {
+        const bText = bInfo.boardIndices.length === 1
+          ? ('T#' + (bInfo.boardIndices[0] + 1))
+          : ('T#' + (bInfo.boardIndices[0] + 1) + '..#' + (bInfo.boardIndices[bInfo.boardIndices.length - 1] + 1));
+        const bTitle = 'Ubicada en Tablero ' + bInfo.boardIndices.map((bi) => '#' + (bi + 1)).join(', ');
+        boardBadgeHtml = '<span class="px-1 py-0 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[8px] font-bold shrink-0" title="' + bTitle + '">' + bText + '</span>';
+      }
+    }
+    bottomRow.innerHTML = '<span class="truncate">' + coordStr + '</span>' + boardBadgeHtml;
+
+    card.appendChild(topRow);
+    card.appendChild(bottomRow);
+    container.appendChild(card);
+  });
+
+  updateSelectedCountBadge();
+  highlightActiveCardInStrip();
+}
+
+function highlightActiveCardInStrip() {
+  if (state.carrierEnabled) {
+    state.nestedCarriers.forEach((_, cIdx) => {
+      const c = document.getElementById('carrierCard_' + cIdx);
+      if (c) c.classList.toggle('active', cIdx === state.activeCarrierIndex);
+    });
+    return;
+  }
+  if (state.nestingEnabled) {
+    state.nestedBoards.forEach((_, bIdx) => {
+      const c = document.getElementById('boardCard_' + bIdx);
+      if (c) c.classList.toggle('active', bIdx === state.activeBoardIndex);
+    });
+    return;
+  }
+  state.slices.forEach((_, idx) => {
+    const c = document.getElementById('sliceCard_' + idx);
+    if (c) c.classList.toggle('active', idx === state.activeSliceIndex);
+  });
+}
+
+function toggleCurrentSliceSelection(checked) {
+  const s = state.slices[state.activeSliceIndex];
+  if (!s) return;
+  s.selected = checked;
+  if (state.nestingEnabled) recomputeBoardNesting();
+  renderSliceStripUI();
+  update3DSlicesTransforms();
+  render2DSlice();
+}
+
+function selectSlicesByFilter(mode) {
+  state.slices.forEach((s, i) => {
+    if (mode === 'all') s.selected = true;
+    else if (mode === 'none') s.selected = false;
+    else if (mode === 'odd') s.selected = ((i + 1) % 2 === 1);
+    else if (mode === 'even') s.selected = ((i + 1) % 2 === 0);
+  });
+  if (state.slices[state.activeSliceIndex]) {
+    document.getElementById('currentSliceSelectedCheck').checked = state.slices[state.activeSliceIndex].selected;
+  }
+  if (state.nestingEnabled) recomputeBoardNesting();
+  renderSliceStripUI();
+  update3DSlicesTransforms();
+  update2DInspectorHeader();
+  render2DSlice();
+}
+
+function updateSelectedCountBadge() {
+  const sel = state.slices.filter((s) => s.selected).length;
+  document.getElementById('selectedCountBadge').textContent = sel + ' / ' + state.slices.length;
+}
